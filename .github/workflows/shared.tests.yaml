@@ -75,6 +75,9 @@ jobs:
       - name: Check app status
         run: docker compose ps ${{ inputs.docker_compose_service }}
 
+      - name: LS
+        run: docker compose exec -T ${{ inputs.docker_compose_service }} ls
+
       - name: Prepare test environment
         run: docker compose exec -T ${{ inputs.docker_compose_service }} ${{ inputs.app_binary }} run test:setup
 
