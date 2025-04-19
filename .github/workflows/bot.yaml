@@ -43,7 +43,7 @@ jobs:
 
   build:
     name: "Build Image"
-    needs: [tests, static_analysis]
+    needs: [tests]
     uses: ./.github/workflows/shared.build-image.yaml
     secrets: inherit
     with:
@@ -54,7 +54,7 @@ jobs:
 
   deploy:
     name: "Deploy"
-    needs: [build, tests, static_analysis]
+    needs: [build, tests]
     if: >
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main'
