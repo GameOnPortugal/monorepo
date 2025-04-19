@@ -14,7 +14,7 @@ services:
     volumes:
       - ./:/app:rw
     env_file:
-      - .env.test
+      - .env
     depends_on:
       - mariadb
 
