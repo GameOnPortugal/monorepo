@@ -17,12 +17,9 @@ RUN bun install --frozen-lockfile
 COPY src ./src
 COPY prisma ./prisma
 COPY tsconfig.json ./
+COPY node_modules ./node_modules
 
 FROM bun_base AS app_base
-
-# Create a non-root user to run the application
-RUN addgroup --system --gid 1001 bunuser \
-    && adduser --system --uid 1001 --ingroup bunuser bunuser
 
 # Copy built application from builder stage
 COPY --from=builder --chown=bunuser:bunuser /app ./
@@ -39,8 +36,6 @@ RUN bunx prisma generate
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-USER bunuser
-
 ENTRYPOINT ["/entrypoint.sh"]
 
 FROM app_base AS prod
@@ -52,7 +47,5 @@ RUN bunx prisma generate
 
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
-
-USER bunuser
 
 ENTRYPOINT ["/entrypoint.sh"]
