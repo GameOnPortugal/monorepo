@@ -37,7 +37,7 @@ jobs:
     secrets: inherit
     with:
       working_directory: "discord-bot"
-      docker_compose_file: "discord-bot/docker-compose.yaml"
+      docker_compose_file: "discord-bot/docker-compose.yml"
       docker_compose_service: "discord-bot"
       app_binary: "bun"
 
