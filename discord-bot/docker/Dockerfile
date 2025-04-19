@@ -38,6 +38,8 @@ ENV APP_ENV=dev
 
 RUN bun install -g env-cmd
 
+RUN bunx prisma generate
+
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
