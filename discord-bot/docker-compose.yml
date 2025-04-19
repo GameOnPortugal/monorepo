@@ -3,7 +3,8 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
-      target: dev
+      args:
+        - APP_ENV=dev
     container_name: discord-bot-ts
     restart: unless-stopped
     ports:
