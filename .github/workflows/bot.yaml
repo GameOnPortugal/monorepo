@@ -1,4 +1,4 @@
-name: "discord-bot: CI/CD"
+name: "Bot: CI/CD"
 
 concurrency:
   group: "discord-bot-${{ github.ref }}"
@@ -24,7 +24,7 @@ on:
       - "main"
 
 jobs:
-  static_analysis:
+#  static_analysis:
 #    name: "Static Analysis"
 #    uses: TedcryptoOrg/github-actions/.github/workflows/shared.static-analysis.yaml@v0.2.0
 #    secrets: inherit
