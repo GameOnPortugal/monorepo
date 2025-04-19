@@ -27,10 +27,6 @@ RUN addgroup --system --gid 1001 bunuser \
 # Copy built application from builder stage
 COPY --from=builder --chown=bunuser:bunuser /app ./
 
-RUN bunx prisma generate
-
-
-
 FROM app_base AS dev
 
 ENV NODE_ENV=development
@@ -42,12 +38,17 @@ RUN bunx prisma generate
 
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
+
+USER bunuser
+
 ENTRYPOINT ["/entrypoint.sh"]
 
 FROM app_base AS prod
 
 ENV NODE_ENV=production
 ENV APP_ENV=prod
+
+RUN bunx prisma generate
 
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
