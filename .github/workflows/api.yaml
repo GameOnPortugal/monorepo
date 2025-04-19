@@ -33,7 +33,7 @@ jobs:
 
   tests:
     name: "Tests"
-    uses: ./.github/actions/shared.tests.yaml@main
+    uses: .github/actions/shared.tests.yaml@main
     secrets: inherit
     with:
       working_directory: "discord-bot"
