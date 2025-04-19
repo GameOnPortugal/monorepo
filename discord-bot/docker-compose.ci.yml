@@ -1,0 +1,41 @@
+services:
+  discord-bot:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: dev
+    container_name: discord-bot-ts
+    restart: unless-stopped
+    ports:
+      - "${SERVER_PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+    volumes:
+      - ./:/app:rw
+    env_file:
+      - .env.test
+    depends_on:
+      - mariadb
+
+  mariadb:
+    image: mariadb:11.7.2
+    container_name: discord-bot-mariadb
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: rootpassword
+      MARIADB_DATABASE: discord_bot
+      MARIADB_USER: botuser
+      MARIADB_PASSWORD: botpassword
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    ports:
+      - "${DATABASE_PORT:-3306}:3306"
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: [ "CMD", "/usr/local/bin/healthcheck.sh", "--su-mysql", "--connect", "--innodb_initialized" ]
+      interval: 2s
+      retries: 120
+
+volumes:
+  mariadb-data:
