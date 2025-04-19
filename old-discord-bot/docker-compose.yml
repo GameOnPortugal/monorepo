@@ -1,0 +1,36 @@
+version: '3.0'
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: ./docker/app/Dockerfile
+    links:
+      - db
+      - redis
+    container_name: playstationpt_bot
+    volumes:
+      - ./:/app:rw
+    env_file:
+      - .env
+
+  db:
+    image: mysql:5.6
+    platform: linux/x86_64
+    container_name: playstationpt_db
+    environment:
+      MYSQL_ROOT_PASSWORD: 'root'
+      MYSQL_DATABASE: 'bot'
+      MYSQL_USER: 'app'
+      MYSQL_PASSWORD: 'pw'
+    volumes:
+      - ./docker/db/data:/var/lib/mysql/data:rw
+    ports:
+      - "3306:3306"
+
+  redis:
+    image: redis:7.0.4
+    container_name: playstationpt_redis
+    volumes:
+      - ./docker/redis/redis-data:/var/lib/redis/data:rw
+    ports:
+      - "6379:6379"

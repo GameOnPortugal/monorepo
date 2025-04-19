@@ -1,0 +1,68 @@
+name: "discord-bot: CI/CD"
+
+concurrency:
+  group: "discord-bot-${{ github.ref }}"
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: "discord-bot"
+
+on:
+  workflow_dispatch: ~
+  pull_request:
+    paths:
+      - ".github/workflows/discord-bot.yaml"
+      - "discord-bot/**"
+  push:
+    paths:
+      - ".github/workflows/discord-bot.yaml"
+      - "discord-bot/**"
+    tags:
+      - 'discord-bot-v*'
+    branches:
+      - "main"
+
+jobs:
+  static_analysis:
+    name: "Static Analysis"
+    uses: TedcryptoOrg/github-actions/.github/workflows/shared.static-analysis.yaml@v0.2.0
+    secrets: inherit
+    with:
+      working_directory: "discord-bot"
+
+  tests:
+    name: "Tests"
+    uses: ./.github/actions/shared.tests.yaml
+    secrets: inherit
+    with:
+      working_directory: "discord-bot"
+      docker_compose_file: "discord-bot/docker-compose.yaml"
+      docker_compose_service: "discord-bot"
+      app_binary: "bun"
+
+  build:
+    name: "Build Image"
+    needs: [tests, static_analysis]
+    uses: ./.github/actions/shared.build-image.yaml
+    secrets: inherit
+    with:
+      working_directory: "discord-bot"
+      image_name: "joshlopes/game-on-portugal-bot"
+      dockerfile: "discord-bot/docker/node/Dockerfile"
+      tag_prefix: 'discord-bot'
+
+  deploy:
+    name: "Deploy"
+    needs: [build, tests, static_analysis]
+    if: >
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
+    uses: ./.github/actions/shared.deploy.yaml
+    secrets:
+      SERVER: ${{ secrets.CAPROVER_SERVER }}
+      APP: ${{ secrets.CAPROVER_DISCORD_BOT_APP }}
+      APP_TOKEN: ${{ secrets.CAPROVER_DISCORD_BOT_TOKEN }}
+    with:
+      image_name: "joshlopes/game-on-portugal-bot:latest"
+      telegram_app_name: "Game On Portugal discord-bot APP 🖥️️"

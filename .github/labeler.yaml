@@ -1,0 +1,26 @@
+# General
+
+Documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+        - "**/docs/**"
+        - "**/*.md"
+
+Workflows:
+  - changed-files:
+    - any-glob-to-any-file: ".github/workflows/**"
+
+# Libraries
+
+Bot:
+  - changed-files:
+    - any-glob-to-any-file: "discord-bot/**"
+
+Webpage:
+  - changed-files:
+    - any-glob-to-any-file: "webpage/**"
+
+Scheduler:
+  - changed-files:
+    - any-glob-to-any-file: "scheduler/**"
+

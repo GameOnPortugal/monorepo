@@ -1,0 +1,79 @@
+name: "Tests"
+
+on:
+  workflow_call:
+    inputs:
+      working_directory:
+        description: 'The working directory for the build'
+        required: true
+        type: string
+      docker_compose_file:
+        description: 'The Docker compose file location'
+        required: true
+        type: string
+      docker_compose_service:
+        description: 'The Docker compose service name'
+        required: true
+        type: string
+      app_binary:
+        description: 'The app library binary to use, e.g.: npm or bun'
+        required: true
+        type: string
+        default: 'npm'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
+
+    steps:
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - uses: actions/checkout@v4
+
+      - name: "Docker compose"
+        uses: isbang/compose-action@v2.0.2
+        with:
+          compose-file: ${{ inputs.docker_compose_file }}
+
+      - name: Wait for services to be healthy
+        run: |
+          cat << 'EOF' > /tmp/wait-for-services.sh
+          #!/bin/bash
+          set -e
+          
+          # Function to check health
+          check_health() {
+            docker compose ps | grep 'health: starting'
+          }
+          
+          # Wait for health checks to pass
+          until [ -z "$(check_health)" ]; do
+            echo 'Waiting for services to become healthy...'
+            sleep 10
+          done
+          
+          echo 'All services are healthy.'
+          EOF
+          
+          chmod +x /tmp/wait-for-services.sh
+          /tmp/wait-for-services.sh
+
+      - name: Display app logs
+        run: docker compose logs ${{ inputs.docker_compose_service }}
+
+      - name: Check app status
+        run: docker compose ps ${{ inputs.docker_compose_service }}
+
+      - name: Prepare test environment
+        run: docker compose exec -T ${{ inputs.docker_compose_service }} ${{ inputs.app_binary }} run test:setup
+
+      - name: Run tests
+        run: docker compose exec -T ${{ inputs.docker_compose_service }} ${{ inputs.app_binary }} test

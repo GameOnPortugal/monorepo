@@ -1,0 +1,51 @@
+name: "Scheduler: CI/CD"
+
+concurrency:
+  group: "scheduler-${{ github.ref }}"
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: "scheduler"
+
+on:
+  workflow_dispatch: ~
+  pull_request:
+    paths:
+      - ".github/workflows/scheduler.yaml"
+      - "scheduler/**"
+  push:
+    paths:
+      - ".github/workflows/scheduler.yaml"
+      - "scheduler/**"
+    tags:
+      - 'scheduler-v*'
+    branches:
+      - "main"
+
+jobs:
+  build:
+    name: "Build Image"
+    uses: TedcryptoOrg/github-actions/.github/workflows/shared.build-image.yaml@v0.2.0
+    secrets: inherit
+    with:
+      working_directory: "scheduler"
+      image_name: "joshlopes/game-on-portugal-scheduler"
+      dockerfile: "scheduler/docker/Dockerfile"
+      target: ''
+      tag_prefix: 'scheduler'
+
+  deploy:
+    name: "Deploy"
+    needs: [build]
+    if: >
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
+    uses: TedcryptoOrg/github-actions/.github/workflows/shared.deploy.yaml@v0.2.0
+    secrets:
+      SERVER: ${{ secrets.CAPROVER_SERVER }}
+      APP: ${{ secrets.CAPROVER_SCHEDULER_APP }}
+      APP_TOKEN: ${{ secrets.CAPROVER_SCHEDULER_TOKEN }}
+    with:
+      image_name: "joshlopes/game-on-portugal-scheduler:latest"
+      telegram_app_name: "Game on Portugal Scheduler 🕗️"
