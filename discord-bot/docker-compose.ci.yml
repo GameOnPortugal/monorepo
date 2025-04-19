@@ -4,6 +4,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
+      target: test
       args:
         - APP_ENV=test
     container_name: discord-bot-ts

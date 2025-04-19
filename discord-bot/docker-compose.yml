@@ -5,6 +5,7 @@ services:
       dockerfile: docker/Dockerfile
       args:
         - APP_ENV=dev
+      target: runtime
     container_name: discord-bot-ts
     restart: unless-stopped
     ports:

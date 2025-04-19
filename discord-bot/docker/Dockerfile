@@ -43,3 +43,9 @@ RUN chmod +x /entrypoint.sh
 EXPOSE 3000
 
 ENTRYPOINT ["/entrypoint.sh"]
+
+FROM runtime AS test
+
+COPY ../.env.test ./.env
+
+ENTRYPOINT ["/entrypoint.sh"]
