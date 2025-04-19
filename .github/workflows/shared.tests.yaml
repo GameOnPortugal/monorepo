@@ -76,10 +76,10 @@ jobs:
         run: docker compose ps ${{ inputs.docker_compose_service }}
 
       - name: LS
-        run: docker compose exec -T ${{ inputs.docker_compose_service }} ls
+        run: docker compose exec -T ${{ inputs.docker_compose_service }} ls -la
 
-      - name: Prepare test environment
-        run: docker compose exec -T ${{ inputs.docker_compose_service }} ${{ inputs.app_binary }} run test:setup
+#      - name: Prepare test environment
+#        run: docker compose exec -T ${{ inputs.docker_compose_service }} ${{ inputs.app_binary }} run test:setup
 
       - name: Run tests
         run: docker compose exec -T ${{ inputs.docker_compose_service }} ${{ inputs.app_binary }} test
