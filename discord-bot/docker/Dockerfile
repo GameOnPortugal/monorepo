@@ -36,7 +36,7 @@ FROM app_base AS dev
 ENV NODE_ENV=development
 ENV APP_ENV=dev
 
-RUN bun install -g env-cmd
+RUN bun install -g env-cmd prisma
 
 RUN bunx prisma generate
 
