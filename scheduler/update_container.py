@@ -1,6 +1,7 @@
 import docker
 import fileinput
 import subprocess
+import os
 
 from subprocess import PIPE
 
@@ -14,16 +15,18 @@ def run_command(command):
 
     return result
 
+if os.getenv('APP_CONTAINER_NAME') is None:
+    print('Container name not found in environment variables. Have you defined APP_CONTAINER_NAME?')
+    exit()
+
 client = docker.DockerClient(base_url='unix://var/run/docker.sock', version='auto')
 
 # Grab container id from name
 container = client.containers.list()
 container_name = None
 
-# Grab the right container name from all running containers
 for c in container:
-    # Check that name contains game-on-portugal-app
-    if 'game-on-portugal-app' in c.name:
+    if os.getenv('APP_CONTAINER_NAME') in c.name:
         # Grab container id
         container_name = c.name
 
@@ -36,8 +39,7 @@ print('Container name: ' + container_name)
 is_updated = False
 with fileinput.FileInput('config.ini', inplace=True, backup='.bak') as file:
     for line in file:
-        # Update container line with the right container name
-        if 'container' in line and 'game-on-portugal' in line and container_name not in line:
+        if 'container' in line and container_name not in line:
             print('container = ' + container_name)
             is_updated = True
         else:
@@ -46,4 +48,6 @@ with fileinput.FileInput('config.ini', inplace=True, backup='.bak') as file:
 if is_updated:
     # restart supervisord scheduler task
     run_command('supervisorctl restart scheduler')
-    print('Restarted scheduler')
+    print('Container name was updated since last time. Restarted scheduler!')
+else:
+    print('Scheduler doesn\'t need to be restarted')
