@@ -12,11 +12,11 @@ on:
   workflow_dispatch: ~
   pull_request:
     paths:
-      - ".github/workflows/discord-bot.yaml"
+      - ".github/workflows/bot.yaml"
       - "discord-bot/**"
   push:
     paths:
-      - ".github/workflows/discord-bot.yaml"
+      - ".github/workflows/bot.yaml"
       - "discord-bot/**"
     tags:
       - 'discord-bot-v*'
