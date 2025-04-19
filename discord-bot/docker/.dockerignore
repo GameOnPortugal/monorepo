@@ -1,0 +1,36 @@
+# Dependencies
+node_modules
+.npm
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Build outputs
+dist
+out
+*.tgz
+
+# Environment variables
+.env
+.env.*
+
+# Coverage directory
+coverage
+*.lcov
+
+# Cache directories
+.eslintcache
+.cache
+*.tsbuildinfo
+
+# IDE specific files
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS specific files
+.DS_Store
+Thumbs.db

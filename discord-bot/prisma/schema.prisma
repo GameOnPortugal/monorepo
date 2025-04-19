@@ -1,0 +1,171 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "darwin", "linux-musl-arm64-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// Ad model (migrated from Sequelize)
+model Ad {
+  id          String   @id @default(uuid())
+  name        String?
+  author_id   String?
+  channel_id  String?
+  message_id  String?
+  state       String
+  price       String
+  zone        String
+  dispatch    String?
+  warranty    String?
+  description String?  @db.Text
+  adType      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("ads")
+}
+
+// Other models from the original project
+// These can be implemented as needed
+
+model LFGProfile {
+  id             String             @id @default(uuid())
+  user_id        String?
+  is_banned      Boolean?           @default(false)
+  banned_at      DateTime?
+  points         Int?               @default(0)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  games          LFGGame[]
+  events         LFGEvent[]
+  participations LFGParticipation[]
+
+  @@map("lfgprofile")
+}
+
+model LFGGame {
+  id           String             @id @default(uuid())
+  game         String?            @db.Text
+  description  String?            @db.Text
+  players      Int?
+  playAt       DateTime?
+  message_id   String?
+  platform     String?
+  lfgProfile   String?
+  profile      LFGProfile?        @relation(fields: [lfgProfile], references: [id])
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  participants LFGParticipation[]
+  events       LFGEvent[]
+
+  @@map("lfggames")
+}
+
+model LFGParticipation {
+  id             String      @id @default(uuid())
+  lfg_game_id    String?
+  lfg_profile_id String?
+  lfgGame        LFGGame?    @relation(fields: [lfg_game_id], references: [id], onDelete: Cascade)
+  lfgProfile     LFGProfile? @relation(fields: [lfg_profile_id], references: [id], onDelete: Cascade)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@map("lfgparticipations")
+}
+
+model LFGEvent {
+  id             String      @id @default(uuid())
+  type           String?
+  points         Int?
+  detail         String?     @db.Text
+  is_addressed   Boolean?    @default(false)
+  admin_note     String?     @db.Text
+  report_user_id String?
+  admin_user_id  String?
+  is_parsed      Boolean?    @default(false)
+  lfg_profile_id String?
+  lfg_game_id    String?
+  lfgProfile     LFGProfile? @relation(fields: [lfg_profile_id], references: [id])
+  game           LFGGame?    @relation(fields: [lfg_game_id], references: [id])
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@map("lfgevents")
+}
+
+model Screenshot {
+  id         String   @id @default(uuid())
+  name       String?
+  author_id  String?
+  channel_id String?
+  message_id String?
+  plataform  String?
+  image      String?  @db.Text
+  image_md5  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("screenshots")
+}
+
+model TrophyProfile {
+  id         String     @id @default(uuid())
+  userId     String?
+  psnProfile String?
+  isBanned   Boolean?   @default(false)
+  hasLeft    Boolean?   @default(false)
+  isExcluded Boolean?   @default(false)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  trophies   Trophies[]
+
+  @@map("trophyprofiles")
+}
+
+model Trophies {
+  id             String         @id @default(uuid())
+  trophyProfile  String?
+  url            String?        @db.Text
+  points         Int?
+  completionDate DateTime?
+  profile        TrophyProfile? @relation(fields: [trophyProfile], references: [id])
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@map("trophies")
+}
+
+model StockUrls {
+  id           String   @id @default(uuid())
+  userId       String?
+  url          String?
+  is_validated Boolean? @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("stockurls")
+}
+
+model SpecialChannel {
+  id          String   @id @default(uuid())
+  channelId   String?
+  specialType String?
+  data        String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("specialchannels")
+}
+
+model CommandChannelLink {
+  id        String   @id @default(uuid())
+  command   String?
+  channelId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("commandchannellinks")
+}
