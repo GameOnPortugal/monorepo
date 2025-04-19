@@ -31,20 +31,16 @@ RUN bunx prisma generate
 
 
 
-FROM bun_base AS dev
+FROM app_base AS dev
 
 ENV NODE_ENV=development
 ENV APP_ENV=dev
-
-RUN bun install -g env-cmd
-
-RUN bun install
 
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
 
-FROM bun_base AS prod
+FROM app_base AS prod
 
 ENV NODE_ENV=production
 ENV APP_ENV=prod
