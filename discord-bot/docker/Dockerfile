@@ -1,4 +1,4 @@
-FROM oven/bun:1.2.5-alpine AS bun_base
+FROM oven/bun:1.2.10-alpine AS bun_base
 
 RUN apk --no-cache add mariadb-client openssl
 
