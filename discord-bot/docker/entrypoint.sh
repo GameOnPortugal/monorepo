@@ -29,9 +29,10 @@ bunx prisma migrate deploy
 
 # Start the app
 if [ "$APP_ENV" = "prod" ]; then
-  pm2-runtime bun run src/index.js
+  #pm2-runtime bun run src/index.js
+  bun run src/index.ts
 elif [ "$APP_ENV" = "dev" ]; then
-  bun run src/index.js
+  bun run src/index.ts
 else
-  bun run src/index.js
+  bun run src/index.ts
 fi
