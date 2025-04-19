@@ -38,8 +38,9 @@ describe('DeleteAdHandler Integration Test', () => {
     await commandHandlerManager.handle(command)
 
     // Assert
-    const deletedAd = await adRepository.get(ad.id)
-    expect(deletedAd).toBeNull()
+    await expect(adRepository.get(ad.id))
+      .rejects
+      .toThrow(RecordNotFound)
   })
 
   it('should throw RecordNotFound when ad does not exist', async () => {
