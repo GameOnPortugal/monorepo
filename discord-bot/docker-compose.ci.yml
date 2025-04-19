@@ -1,5 +1,6 @@
 services:
   discord-bot:
+    init: true
     build:
       context: .
       dockerfile: docker/Dockerfile
@@ -11,8 +12,6 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3000
-    volumes:
-      - ./:/app:rw
     env_file:
       - .env
     depends_on:
