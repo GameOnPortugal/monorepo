@@ -36,6 +36,8 @@ FROM bun_base AS dev
 ENV NODE_ENV=development
 ENV APP_ENV=dev
 
+RUN bun install
+
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
