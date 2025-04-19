@@ -14,10 +14,9 @@ RUN if [ "$APP_ENV" = "prod" ]; then \
         bun install --frozen-lockfile; \
     fi
 
-COPY prisma ./prisma/
-RUN bunx prisma generate
+COPY ../ .
 
-COPY . .
+RUN bunx prisma generate
 
 FROM oven/bun:1.2.10-alpine AS runtime
 
@@ -35,6 +34,7 @@ COPY --from=builder /app/package.json /app/bun.lock ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/src ./src
+COPY --from=builder /app/bin ./bin
 
 # Copy entrypoint script
 COPY docker/entrypoint.sh /entrypoint.sh
