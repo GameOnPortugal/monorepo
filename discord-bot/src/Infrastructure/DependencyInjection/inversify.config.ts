@@ -46,6 +46,7 @@ import { GetScreenshotWinnerHandler } from "../../Application/Query/Screenshot/G
 import type {GuildClient} from "../../Domain/Community/GuildClient.ts";
 import {DiscordGuildClient} from "../Community/Discord/DiscordGuildClient.ts";
 import WeekScreenshotWinner from "../../Ui/Cli/WeekScreenshotWinner.ts";
+import {InMemoryClient} from "../Bot/InMemory/InMemoryClient.ts";
 
 const myContainer = new Container()
 
@@ -122,12 +123,17 @@ myContainer.bind<GuildClient>(TYPES.GuildClient).toConstantValue(
     )
 )
 myContainer.bind(BotExecutor).toSelf()
-myContainer.bind(TYPES.Bot).toConstantValue(new DiscordBot(
-    process.env.DISCORD_TOKEN ?? '',
-    process.env.DISCORD_CLIENT_ID ?? '',
-    myContainer.get(TYPES.Logger),
-    myContainer.get(BotExecutor)
-))
+if (process.env.DISCORD_TOKEN) {
+    myContainer.bind(TYPES.Bot).toConstantValue(new DiscordBot(
+        process.env.DISCORD_TOKEN ?? '',
+        process.env.DISCORD_CLIENT_ID ?? '',
+        myContainer.get(TYPES.Logger),
+        myContainer.get(BotExecutor)
+    ))
+} else {
+    myContainer.bind(TYPES.Bot).toConstantValue(new InMemoryClient())
+}
+
 
 // Console Command
 myContainer.bind(WeekScreenshotWinner).toSelf()
