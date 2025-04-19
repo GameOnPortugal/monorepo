@@ -85,6 +85,7 @@ jobs:
           context: ./${{ inputs.working_directory }}
           file: ./${{ inputs.dockerfile }}
           build-args: APP_ENV=prod
+          target: runtime
           push: true
           tags: |
             ${{ (github.ref == 'refs/heads/main' || startsWith(github.ref, format('refs/tags/{0}-v', inputs.tag_prefix))) && format('{0}:{1}', inputs.image_name, steps.tag.outputs.tag) || '' }}

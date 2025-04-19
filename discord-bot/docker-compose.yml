@@ -15,8 +15,6 @@ services:
       - PORT=3000
     volumes:
       - ./:/app:rw
-    env_file:
-      - .env
     depends_on:
       - mariadb
 
