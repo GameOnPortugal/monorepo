@@ -14,8 +14,6 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3000
-    env_file:
-      - .env
     depends_on:
       - mariadb
 

@@ -46,6 +46,7 @@ ENTRYPOINT ["/entrypoint.sh"]
 
 FROM runtime AS test
 
-COPY ../.env.test ./.env
+# Copy everything for test (test and test env files)
+COPY ../ ./
 
 ENTRYPOINT ["/entrypoint.sh"]
