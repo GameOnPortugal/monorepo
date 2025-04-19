@@ -122,14 +122,12 @@ myContainer.bind<GuildClient>(TYPES.GuildClient).toConstantValue(
     )
 )
 myContainer.bind(BotExecutor).toSelf()
-if (process.env.DISCORD_TOKEN && process.env.DISCORD_CLIENT_ID) {
-  myContainer.bind(TYPES.Bot).toConstantValue(new DiscordBot(
-      process.env.DISCORD_TOKEN,
-      process.env.DISCORD_CLIENT_ID,
-      myContainer.get(TYPES.Logger),
-      myContainer.get(BotExecutor)
-  ))
-}
+myContainer.bind(TYPES.Bot).toConstantValue(new DiscordBot(
+    process.env.DISCORD_TOKEN ?? '',
+    process.env.DISCORD_CLIENT_ID ?? '',
+    myContainer.get(TYPES.Logger),
+    myContainer.get(BotExecutor)
+))
 
 // Console Command
 myContainer.bind(WeekScreenshotWinner).toSelf()
