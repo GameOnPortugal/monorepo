@@ -33,7 +33,7 @@ jobs:
 
   tests:
     name: "Tests"
-    uses: ./.github/workflows/shared.tests.yaml
+    uses: ./.github/actions/shared.tests.yaml@main
     secrets: inherit
     with:
       working_directory: "discord-bot"
@@ -44,7 +44,7 @@ jobs:
   build:
     name: "Build Image"
     needs: [tests, static_analysis]
-    uses: ./.github/actions/shared.build-image.yaml
+    uses: ./.github/actions/shared.build-image.yaml@main
     secrets: inherit
     with:
       working_directory: "discord-bot"
@@ -58,7 +58,7 @@ jobs:
     if: >
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main'
-    uses: ./.github/actions/shared.deploy.yaml
+    uses: ./.github/actions/shared.deploy.yaml@main
     secrets:
       SERVER: ${{ secrets.CAPROVER_SERVER }}
       APP: ${{ secrets.CAPROVER_DISCORD_BOT_APP }}
