@@ -22,7 +22,7 @@ export default class WeekScreenshotWinner implements ConsoleCommand {
 
   public async run (inputArgs: any): Promise<number> {
     const date = inputArgs[0] === undefined ? new Date() : new Date(inputArgs[0])
-    const dryRun = inputArgs[1] === 'true'
+    const dryRun = inputArgs[1] === undefined ? false : inputArgs[1] === 'true'
 
     this.logger.info('Running week screenshot winner command', { date, dryRun })
     if (dryRun) {
