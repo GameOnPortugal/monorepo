@@ -1,9 +1,10 @@
-import { inject, injectable } from 'inversify'
-import CommandHandlerManager from '../../../../CommandHandler/CommandHandlerManager'
-import { DeleteAd } from '../../../../../Application/Write/Marketplace/DeleteAd/DeleteAd'
-import { AdId } from '../../../../../Domain/Marketplace/AdId'
-import { UnauthorizedAdDeletion } from '../../../../../Domain/Marketplace/UnauthorizedAdDeletion'
-import RecordNotFound from '../../../../../Domain/RecordNotFound'
+import { inject, injectable } from 'inversify';
+import type { SlashCommandContext } from '../../../../../Domain/Bot/SlashCommandContext';
+import CommandHandlerManager from '../../../../CommandHandler/CommandHandlerManager';
+import { DeleteAd } from '../../../../../Application/Write/Marketplace/DeleteAd/DeleteAd';
+import { AdId } from '../../../../../Domain/Marketplace/AdId';
+import { UnauthorizedAdDeletion } from '../../../../../Domain/Marketplace/UnauthorizedAdDeletion';
+import RecordNotFound from '../../../../../Domain/RecordNotFound';
 
 @injectable()
 export class DeleteAdSubcommand {
@@ -11,7 +12,8 @@ export class DeleteAdSubcommand {
     @inject(CommandHandlerManager) private readonly commandHandlerManager: CommandHandlerManager
   ) {}
 
-  public async handle(interaction: any): Promise<void> {
+  public async handle(context: SlashCommandContext): Promise<void> {
+    const interaction = context.interaction
     const adId = AdId.fromString(interaction.options.getString('id', true))
     const userId = interaction.user.id
 
