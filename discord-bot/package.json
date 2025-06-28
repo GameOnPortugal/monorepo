@@ -12,7 +12,8 @@
     "test:local": "env-cmd -f .env.local bun test",
     "test:db:drop": "env-cmd -f .env.test bunx prisma migrate reset --force --skip-generate",
     "test:db:push": "env-cmd -f .env.test bunx prisma db push --skip-generate",
-    "test:setup": "bun run test:db:drop && bun run test:db:push"
+    "test:setup": "bun run test:db:drop && bun run test:db:push",
+    "run:command": "bun bin/console.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.6.0",
