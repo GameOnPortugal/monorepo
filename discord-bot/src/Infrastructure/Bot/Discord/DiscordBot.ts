@@ -41,7 +41,7 @@ export class DiscordBot implements Bot {
             try {
                 await this.botExecutor.execute(slashCommandContext)
             } catch (error: any) {
-                this.logger.error('error happened' , error);
+                this.logger.error('error happened', { error });
                 if (interaction.replied || interaction.deferred) {
                     await interaction.followUp({ content: 'There was an error while executing this command!', flags: MessageFlags.Ephemeral });
                 } else {
