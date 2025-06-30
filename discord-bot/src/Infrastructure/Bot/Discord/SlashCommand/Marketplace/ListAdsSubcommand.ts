@@ -64,6 +64,7 @@ export class ListAdsSubcommand {
                         `💰 Price: ${ad.price}`,
                         `📍 Location: ${ad.zone}`,
                         `🚚 Dispatch: ${ad.dispatch}`,
+                        `🆔 ID: ${ad.id.toString()}`,
                         ad.warranty ? `⚡ Warranty: ${ad.warranty}` : null,
                         ad.description ? `📝 ${ad.description}` : null,
                         `\n[View Listing](https://discord.com/channels/${context.interaction.guildId}/${ad.channelId}/${ad.messageId})`
