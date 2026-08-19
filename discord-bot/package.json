@@ -24,7 +24,6 @@
     },
     "dependencies": {
         "@prisma/client": "^6.6.0",
-        "axios": "^1.8.4",
         "dayjs": "^1.11.13",
         "discord.js": "^14.27.0",
         "inversify": "^7.5.0",

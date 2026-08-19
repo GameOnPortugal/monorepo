@@ -1,6 +1,6 @@
 import { type HttpClient } from '../../Domain/Http/HttpClient';
 import { inject, injectable } from 'inversify';
-import AxiosHttpClient from './AxiosHttpClient';
+import FetchHttpClient from './FetchHttpClient';
 import { sleep } from '../../Application/Shared/sleep';
 import { TYPES } from '../DependencyInjection/types';
 import Logger from '../../Application/Logger/Logger';
@@ -10,15 +10,15 @@ import Logger from '../../Application/Logger/Logger';
 // dead code: it exists in anticipation of the PSNProfiles crawler (GLOBAL-PLAN M7.1),
 // which will be the first consumer. Keep it. See docs/known-issues.md #17 / M1.8.
 @injectable()
-export default class RetryAxiosHttpClient implements HttpClient {
+export default class RetryHttpClient implements HttpClient {
     constructor(
-        @inject(AxiosHttpClient) private readonly axios: AxiosHttpClient,
+        @inject(FetchHttpClient) private readonly httpClient: FetchHttpClient,
         @inject(TYPES.Logger) private readonly logger: Logger,
     ) {}
 
     async get(url: string, options?: any, attempt: number = 1): Promise<any> {
         try {
-            return await this.axios.get(url, options);
+            return await this.httpClient.get(url, options);
         } catch (error: any) {
             const sleepMs = attempt ** 2 * 1000;
             this.logger.error(`Retrying ${attempt}, url: ${url}, sleep: ${sleepMs}`, {
@@ -39,7 +39,7 @@ export default class RetryAxiosHttpClient implements HttpClient {
 
     async post(url: string, body: any, attempt: number = 1): Promise<any> {
         try {
-            return await this.axios.post(url, body);
+            return await this.httpClient.post(url, body);
         } catch (error: any) {
             this.logger.error('Failed to post', {
                 error_message: error.message,
@@ -57,7 +57,7 @@ export default class RetryAxiosHttpClient implements HttpClient {
 
     async put(url: string, body: string, attempt: number = 1): Promise<any> {
         try {
-            return await this.axios.put(url, body);
+            return await this.httpClient.put(url, body);
         } catch (error: any) {
             this.logger.error('Failed to put', {
                 error_message: error.message,
@@ -75,7 +75,7 @@ export default class RetryAxiosHttpClient implements HttpClient {
 
     async delete(url: string, attempt: number = 1): Promise<any> {
         try {
-            return await this.axios.delete(url);
+            return await this.httpClient.delete(url);
         } catch (error: any) {
             this.logger.error('Failed to delete', {
                 error_message: error.message,

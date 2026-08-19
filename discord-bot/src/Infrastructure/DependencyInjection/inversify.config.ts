@@ -10,8 +10,8 @@ import LokiLogProvider from '../Logger/LokiLogProvider.ts';
 import type Logger from '../../Application/Logger/Logger.ts';
 import EventDispatcher from '../../Application/Event/EventDispatcher/EventDispatcher.ts';
 import type { HttpClient } from '../../Domain/Http/HttpClient.ts';
-import RetryAxiosHttpClient from '../Http/RetryAxiosHttpClient.ts';
-import AxiosHttpClient from '../Http/AxiosHttpClient.ts';
+import RetryHttpClient from '../Http/RetryHttpClient.ts';
+import FetchHttpClient from '../Http/FetchHttpClient.ts';
 import { PingHandler } from '../../Application/Query/Ping/PingHandler.ts';
 import { DiscordBot } from '../Bot/Discord/DiscordBot.ts';
 import { BotExecutor } from '../Bot/BotExecutor.ts';
@@ -114,9 +114,9 @@ myContainer.bind<EventDispatcher>(EventDispatcher).toSelf();
 // Security
 
 // Services
-myContainer.bind(AxiosHttpClient).toSelf();
-myContainer.bind(RetryAxiosHttpClient).toSelf();
-myContainer.bind<HttpClient>(TYPES.HttpClient).to(RetryAxiosHttpClient);
+myContainer.bind(FetchHttpClient).toSelf();
+myContainer.bind(RetryHttpClient).toSelf();
+myContainer.bind<HttpClient>(TYPES.HttpClient).to(RetryHttpClient);
 
 // Bot
 myContainer
