@@ -1,0 +1,30 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "timezone": "Europe/Lisbon",
+  "schedule": ["before 6am on monday"],
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"]
+  },
+  "packageRules": [
+    {
+      "description": "All patch/minor updates land together in one weekly PR. Majors are deliberately left out of this rule — with no group of their own, Renovate opens one PR per major bump so each can be reviewed in isolation.",
+      "matchUpdateTypes": ["patch", "minor"],
+      "groupName": "all non-major dependencies",
+      "matchPackageNames": ["*"]
+    },
+    {
+      "description": "discord.js and its @discordjs/* satellite packages must move together.",
+      "groupName": "discord.js",
+      "matchPackageNames": ["discord.js", "@discordjs/**"]
+    },
+    {
+      "description": "Prisma CLI and client must stay on the same version — they refuse to work otherwise.",
+      "groupName": "prisma",
+      "matchPackageNames": ["prisma", "@prisma/**"]
+    }
+  ]
+}

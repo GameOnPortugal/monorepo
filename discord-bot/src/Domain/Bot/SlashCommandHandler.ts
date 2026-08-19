@@ -1,4 +1,4 @@
-import type {SlashCommandContext} from "./SlashCommandContext";
+import type { SlashCommandContext } from './SlashCommandContext';
 
 export interface SlashCommandHandler {
     getName: () => string;

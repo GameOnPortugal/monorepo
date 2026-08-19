@@ -1,18 +1,18 @@
-import {myContainer} from "../../src/Infrastructure/DependencyInjection/inversify.config";
-import { PrismaClient } from "@prisma/client";
-import {TYPES} from "../../src/Infrastructure/DependencyInjection/types";
-import {ScreenshotId} from "../../src/Domain/Screenshot/ScreenshotId.ts";
-import { Screenshot } from "../../src/Domain/Screenshot/Screenshot.ts";
-import type {ScreenshotRepository} from "../../src/Domain/Screenshot/ScreenshotRepository.ts";
-import { TrophyProfile } from "../../src/Domain/Trophy/TrophyProfile.ts";
-import {TrophyProfileId} from "../../src/Domain/Trophy/TrophyProfileId.ts";
-import type {TrophyProfileRepository} from "../../src/Domain/Trophy/TrophyProfileRepository.ts";
-import {TrophyId} from "../../src/Domain/Trophy/TrophyId.ts";
-import type {TrophyRepository} from "../../src/Domain/Trophy/TrophyRepository.ts";
-import {Trophy} from "../../src/Domain/Trophy/Trophy.ts";
-import { AdId } from "../../src/Domain/Marketplace/AdId.ts";
-import { Ad } from "../../src/Domain/Marketplace/Ad.ts";
-import type { AdRepository } from "../../src/Domain/Marketplace/AdRepository.ts";
+import { myContainer } from '../../src/Infrastructure/DependencyInjection/inversify.config';
+import { PrismaClient } from '@prisma/client';
+import { TYPES } from '../../src/Infrastructure/DependencyInjection/types';
+import { ScreenshotId } from '../../src/Domain/Screenshot/ScreenshotId.ts';
+import { Screenshot } from '../../src/Domain/Screenshot/Screenshot.ts';
+import type { ScreenshotRepository } from '../../src/Domain/Screenshot/ScreenshotRepository.ts';
+import { TrophyProfile } from '../../src/Domain/Trophy/TrophyProfile.ts';
+import { TrophyProfileId } from '../../src/Domain/Trophy/TrophyProfileId.ts';
+import type { TrophyProfileRepository } from '../../src/Domain/Trophy/TrophyProfileRepository.ts';
+import { TrophyId } from '../../src/Domain/Trophy/TrophyId.ts';
+import type { TrophyRepository } from '../../src/Domain/Trophy/TrophyRepository.ts';
+import { Trophy } from '../../src/Domain/Trophy/Trophy.ts';
+import { AdId } from '../../src/Domain/Marketplace/AdId.ts';
+import { Ad } from '../../src/Domain/Marketplace/Ad.ts';
+import type { AdRepository } from '../../src/Domain/Marketplace/AdRepository.ts';
 
 const prismaClient: PrismaClient = myContainer.get(TYPES.OrmClient);
 
@@ -38,7 +38,7 @@ export const createScreenshot = async (
         image ?? 'https://placehold.co/600x400/png',
         imageMd5 ?? '5eb63bbbe01eeed093cb22bb8f5acdc3',
         createdAt ?? new Date(),
-        updatedAt ?? new Date()
+        updatedAt ?? new Date(),
     );
 
     await myContainer.get<ScreenshotRepository>(TYPES.ScreenshotRepository).save(screenshot);
@@ -52,7 +52,7 @@ export const createTrophyProfile = async (
     psnProfile?: string,
     isBanned?: boolean,
     hasLeft?: boolean,
-    isExcluded?: boolean
+    isExcluded?: boolean,
 ): Promise<TrophyProfile> => {
     const trophyProfile = new TrophyProfile(
         id ?? TrophyProfileId.generate(),
@@ -62,10 +62,12 @@ export const createTrophyProfile = async (
         hasLeft ?? false,
         isExcluded ?? false,
         new Date(),
-        new Date()
+        new Date(),
     );
 
-    await myContainer.get<TrophyProfileRepository>(TYPES.TrophyProfileRepository).save(trophyProfile);
+    await myContainer
+        .get<TrophyProfileRepository>(TYPES.TrophyProfileRepository)
+        .save(trophyProfile);
 
     return trophyProfile;
 };
@@ -75,7 +77,7 @@ export const createTrophy = async (
     trophyProfile?: string | TrophyProfile,
     url?: string,
     points?: number,
-    completionDate?: Date
+    completionDate?: Date,
 ): Promise<Trophy> => {
     // Handle trophyProfile parameter
     let profileId: string | null = null;
@@ -93,7 +95,7 @@ export const createTrophy = async (
         points ?? 15,
         completionDate ?? new Date(),
         new Date(),
-        new Date()
+        new Date(),
     );
 
     await myContainer.get<TrophyRepository>(TYPES.TrophyRepository).save(trophy);
@@ -104,17 +106,13 @@ export const createTrophy = async (
 export const createTrophySetup = async (
     userId?: string,
     psnProfile?: string,
-    trophyCount: number = 3
+    trophyCount: number = 3,
 ): Promise<{
-    profile: TrophyProfile,
-    trophies: Trophy[]
+    profile: TrophyProfile;
+    trophies: Trophy[];
 }> => {
     // Create trophy profile
-    const profile = await createTrophyProfile(
-        undefined,
-        userId,
-        psnProfile
-    );
+    const profile = await createTrophyProfile(undefined, userId, psnProfile);
 
     // Create trophies
     const trophies: Trophy[] = [];
@@ -123,15 +121,15 @@ export const createTrophySetup = async (
             undefined,
             profile,
             `https://example.com/trophy${i}.png`,
-            10 + (i * 5), // 10, 15, 20, etc.
-            new Date(Date.now() - (i * 86400000)) // Different dates
+            10 + i * 5, // 10, 15, 20, etc.
+            new Date(Date.now() - i * 86400000), // Different dates
         );
         trophies.push(trophy);
     }
 
     return {
         profile,
-        trophies
+        trophies,
     };
 };
 
@@ -165,7 +163,7 @@ export const createAd = async (
         description ?? 'Test ad description',
         adType ?? 'sale',
         createdAt ?? new Date(),
-        updatedAt ?? new Date()
+        updatedAt ?? new Date(),
     );
 
     await myContainer.get<AdRepository>(TYPES.AdRepository).save(ad);

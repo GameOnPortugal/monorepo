@@ -1,4 +1,3 @@
-import { Id } from '../Id'
+import { Id } from '../Id';
 
-export class TrophyId extends Id<TrophyId> {
-}
+export class TrophyId extends Id<TrophyId> {}

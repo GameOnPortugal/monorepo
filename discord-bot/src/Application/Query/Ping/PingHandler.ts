@@ -1,6 +1,6 @@
-import {injectable} from "inversify";
-import type {Ping} from "./Ping.ts";
-import type CommandHandler from "../../../Domain/Command/CommandHandler.ts";
+import { injectable } from 'inversify';
+import type { Ping } from './Ping.ts';
+import type CommandHandler from '../../../Domain/Command/CommandHandler.ts';
 
 @injectable()
 export class PingHandler implements CommandHandler<Ping> {

@@ -71,18 +71,18 @@ Then use it to interact with your models:
 ```typescript
 // Create a new ad
 const ad = await prisma.ad.create({
-  data: {
-    name: 'PlayStation 5',
-    price: '499€',
-    // ...other fields
-  }
+    data: {
+        name: 'PlayStation 5',
+        price: '499€',
+        // ...other fields
+    },
 });
 
 // Query ads
 const ads = await prisma.ad.findMany({
-  where: {
-    state: 'active'
-  }
+    where: {
+        state: 'active',
+    },
 });
 ```
 
@@ -95,9 +95,9 @@ import { AdService } from '../models/ad';
 
 // Create a new ad
 const ad = await AdService.create({
-  name: 'PlayStation 5',
-  price: '499€',
-  // ...other fields
+    name: 'PlayStation 5',
+    price: '499€',
+    // ...other fields
 });
 
 // List active ads

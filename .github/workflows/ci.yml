@@ -61,6 +61,23 @@ jobs:
         working-directory: discord-bot
         run: bunx tsc --noEmit
 
+      # Schema-drift gate: fails if prisma/schema.prisma no longer produces the
+      # same shape as replaying prisma/migrations. Uses the CI MariaDB (defined
+      # below and reused by the Test step) as scratch space for a shadow
+      # database — brought up empty here, diffed, and handed off to the Test
+      # step which applies the real migrations on top.
+      - name: Check schema drift
+        working-directory: discord-bot
+        run: |
+          docker compose -f docker-compose.ci.yml up -d mariadb
+          timeout 120 bash -c 'until docker compose -f docker-compose.ci.yml exec -T mariadb mariadb-admin ping -uroot -prootpassword --silent 2>/dev/null; do sleep 2; done'
+          docker compose -f docker-compose.ci.yml exec -T mariadb mariadb -uroot -prootpassword -e "CREATE DATABASE IF NOT EXISTS discord_bot_shadow"
+          bunx prisma migrate diff \
+            --from-migrations prisma/migrations \
+            --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url "mysql://root:rootpassword@127.0.0.1:3306/discord_bot_shadow" \
+            --exit-code
+
       # Integration tests need MariaDB. Run them inside the CI compose network so
       # the DB is reachable at `mariadb:3306` — no host port-mapping assumptions.
       - name: Test
@@ -83,10 +100,53 @@ jobs:
         working-directory: discord-bot
         run: docker compose -f docker-compose.ci.yml down -v
 
+  quality:
+    name: Bot — lint, format & audit
+    needs: changes
+    if: ${{ needs.changes.outputs.bot == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.2"
+
+      # Prisma's preinstall hook requires Node >= 18.18.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        working-directory: discord-bot
+        run: bun install --frozen-lockfile
+
+      - name: Lint
+        working-directory: discord-bot
+        run: bun run lint
+
+      - name: Format check
+        working-directory: discord-bot
+        run: bun run format:check
+
+      # Supply-chain gate: reports high/critical advisories in the resolved
+      # dependency tree on every run. Deliberately non-blocking
+      # (continue-on-error) today: there are 26 known pre-existing advisories
+      # (2 critical, 24 high) in axios, protobufjs (via winston-loki), lodash
+      # and ws/undici (both via discord.js). Clearing them is M3.2-M3.5 —
+      # undici is pinned exactly by discord.js/@discordjs/rest, so that
+      # advisory can't be patched with an override; bumping discord.js
+      # (M3.2) is the only supported remedy. The PR that clears the last of
+      # these MUST flip continue-on-error back off, or this gate is theatre.
+      - name: Audit dependencies
+        working-directory: discord-bot
+        run: bun run audit
+        continue-on-error: true
+
   # Single required status check — green when every triggered job is.
   ci:
     name: CI
-    needs: [bot]
+    needs: [bot, quality]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:

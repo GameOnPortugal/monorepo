@@ -1,4 +1,4 @@
-import type Command from "../../../../Domain/Command/Command";
+import type Command from '../../../../Domain/Command/Command';
 
 export type RankType = 'monthly' | 'creation' | 'lifetime' | 'user';
 export type MonthOption = 'current' | 'last' | number; // 1-12 for specific months

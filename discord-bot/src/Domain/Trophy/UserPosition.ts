@@ -9,7 +9,7 @@ export interface UserPosition {
     ranks: [
         RankData, // monthly
         RankData, // creation
-        RankData  // lifetime
+        RankData, // lifetime
     ];
     totalTrophies: number;
     totalPoints: number;

@@ -1,4 +1,4 @@
-import type {MentionContext} from "./MentionContext";
+import type { MentionContext } from './MentionContext';
 
 export interface MentionHandler {
     handle: (context: MentionContext) => Promise<void>;

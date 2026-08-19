@@ -1,6 +1,6 @@
-import {PrismaClient} from "@prisma/client";
-import {myContainer} from "../../src/Infrastructure/DependencyInjection/inversify.config";
-import {TYPES} from "../../src/Infrastructure/DependencyInjection/types";
+import { PrismaClient } from '@prisma/client';
+import { myContainer } from '../../src/Infrastructure/DependencyInjection/inversify.config';
+import { TYPES } from '../../src/Infrastructure/DependencyInjection/types';
 
 export default class DatabaseUtil {
     public static async truncateAllTables(prismaClient?: PrismaClient) {

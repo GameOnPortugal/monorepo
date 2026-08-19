@@ -1,3 +1,3 @@
 export enum CommunityChannels {
-    SCREENSHOTS = 'screenshots'
+    SCREENSHOTS = 'screenshots',
 }

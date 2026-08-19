@@ -1,5 +1,5 @@
-import type {Bot} from "../../../Domain/Bot/Bot.ts";
-import {injectable} from "inversify";
+import type { Bot } from '../../../Domain/Bot/Bot.ts';
+import { injectable } from 'inversify';
 
 @injectable()
 export class InMemoryClient implements Bot {

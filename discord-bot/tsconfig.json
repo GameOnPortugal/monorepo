@@ -1,29 +1,33 @@
 {
-  "compilerOptions": {
-    // Environment setup & latest features
-    "lib": ["esnext"],
-    "target": "ESNext",
-    "module": "ESNext",
-    "moduleDetection": "force",
-    "jsx": "react-jsx",
-    "allowJs": true,
+    "compilerOptions": {
+        // Environment setup & latest features
+        "lib": ["esnext"],
+        "target": "ESNext",
+        "module": "ESNext",
+        "moduleDetection": "force",
+        "jsx": "react-jsx",
+        "allowJs": true,
 
-    // Bundler mode
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
-    "noEmit": true,
-    "experimentalDecorators": true,
+        // Bundler mode
+        "moduleResolution": "bundler",
+        "allowImportingTsExtensions": true,
+        "verbatimModuleSyntax": true,
+        "noEmit": true,
+        "experimentalDecorators": true,
 
-    // Best practices
-    "strict": true,
-    "skipLibCheck": true,
-    "noFallthroughCasesInSwitch": true,
-    "noUncheckedIndexedAccess": true,
+        // Best practices
+        "strict": true,
+        "skipLibCheck": true,
+        "noFallthroughCasesInSwitch": true,
+        "noUncheckedIndexedAccess": true,
 
-    // Some stricter flags (disabled by default)
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noPropertyAccessFromIndexSignature": false
-  }
+        // Some stricter flags (disabled by default)
+        "noUnusedLocals": false,
+        "noUnusedParameters": false,
+        "noPropertyAccessFromIndexSignature": false
+    },
+    // Tooling config lives at the repo root and isn't part of the app build;
+    // it also imports untyped packages (e.g. eslint-config-prettier) that
+    // would otherwise trip `allowJs`.
+    "exclude": ["node_modules", "eslint.config.js"]
 }

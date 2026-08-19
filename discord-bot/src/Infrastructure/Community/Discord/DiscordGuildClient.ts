@@ -1,27 +1,29 @@
-import type {GuildClient} from "../../../Domain/Community/GuildClient.ts";
-import {injectable} from "inversify";
-import {Client, type Message, TextChannel} from 'discord.js';
-import {CommunityChannels} from "../../../Domain/Community/CommunityChannels.ts";
-import {CustomEmoji} from "../../../Domain/Community/CustomEmoji.ts";
-import {convertChannel} from "./DiscordChannels.ts";
-import {convertEmoji} from "./DiscordEmoji.ts";
-import {ClientError} from "../../../Domain/Community/ClientError.ts";
+import type { GuildClient } from '../../../Domain/Community/GuildClient.ts';
+import { injectable } from 'inversify';
+import { Client, type Message, TextChannel } from 'discord.js';
+import { CommunityChannels } from '../../../Domain/Community/CommunityChannels.ts';
+import { CustomEmoji } from '../../../Domain/Community/CustomEmoji.ts';
+import { convertChannel } from './DiscordChannels.ts';
+import { convertEmoji } from './DiscordEmoji.ts';
+import { ClientError } from '../../../Domain/Community/ClientError.ts';
 
 @injectable()
 export class DiscordGuildClient implements GuildClient {
-    private client: Client|undefined = undefined;
+    private client: Client | undefined = undefined;
 
-    constructor(
-        private readonly token: string,
-    ) {
-    }
+    constructor(private readonly token: string) {}
 
-    async getTotalReactionsByEmoji(channel: CommunityChannels, messageId: string, emoji: CustomEmoji): Promise<number> {
+    async getTotalReactionsByEmoji(
+        channel: CommunityChannels,
+        messageId: string,
+        emoji: CustomEmoji,
+    ): Promise<number> {
         const discordEmoji = convertEmoji(emoji);
 
         const message = await this.getMessage(channel, messageId);
-        const reactions = message.reactions.cache
-            .filter(reaction => reaction.emoji.id === discordEmoji);
+        const reactions = message.reactions.cache.filter(
+            (reaction) => reaction.emoji.id === discordEmoji,
+        );
         const reaction = reactions.first();
         if (!reaction) {
             throw new ClientError('Reaction not found');
@@ -49,14 +51,14 @@ export class DiscordGuildClient implements GuildClient {
 
     private async getMessage(channel: CommunityChannels, messageId: string): Promise<Message> {
         const client = await this.getClient();
-        const discordChannel = await client.channels.fetch(convertChannel(channel))
+        const discordChannel = await client.channels.fetch(convertChannel(channel));
 
         if (!discordChannel?.isTextBased()) {
-            throw new ClientError('Channel not found or is not a text channel')
+            throw new ClientError('Channel not found or is not a text channel');
         }
         const message = await discordChannel.messages.fetch(messageId);
         if (!message) {
-            throw new ClientError('Message not found')
+            throw new ClientError('Message not found');
         }
 
         return message;
