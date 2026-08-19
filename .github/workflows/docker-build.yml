@@ -1,0 +1,46 @@
+name: Docker Build
+
+# Validates that the production image builds (no push). Runs only when the
+# relevant files changed. The real build-and-push happens in deploy.yml on
+# merge to main.
+on:
+  pull_request:
+
+concurrency:
+  group: docker-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      bot: ${{ steps.filter.outputs.bot }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            bot:
+              - 'discord-bot/**'
+
+  bot:
+    name: Build bot image
+    needs: changes
+    if: ${{ needs.changes.outputs.bot == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: |
+          docker build \
+            -f discord-bot/docker/Dockerfile \
+            --target runtime \
+            --build-arg APP_ENV=prod \
+            -t game-on-portugal-bot:ci \
+            discord-bot

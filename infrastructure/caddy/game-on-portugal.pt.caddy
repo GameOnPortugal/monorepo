@@ -1,0 +1,34 @@
+# Game On Portugal — HTZ1 Caddy vhosts (195.201.192.35)
+#
+# Drop these blocks into the host's central Caddyfile (/opt/caddy/Caddyfile —
+# the same file serving docpal.pt / invoices.ez-web.pt / smart-table.pt), then:
+#
+#   docker exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+#
+# The referenced containers must share the external `proxy` network with Caddy.
+# Caddy auto-provisions TLS on first hit.
+#
+# Requires DNS (OVH zone `game-on-portugal.pt` — use the `ovhcloud` skill):
+#   @      IN  A  195.201.192.35
+#   www    IN  A  195.201.192.35
+#   media  IN  A  195.201.192.35
+#
+# NOTE: the apex currently points at GitHub Pages (185.199.108-111.153) serving
+# the 2021 site from GameOnPortugal/gameonportugal.github.io. Repointing it is
+# the cutover step — see docs/plans/04-infrastructure-migration.md.
+
+game-on-portugal.pt, www.game-on-portugal.pt {
+	# The SPA container also proxies /api/ to the portal API, so the public
+	# origin stays single-origin (no CORS, no preflight).
+	reverse_proxy gop-portal-web:80
+}
+
+# Public media bucket — re-hosted screenshots and marketplace photos.
+# The bucket is anonymous-download; the MinIO console is not exposed.
+media.game-on-portugal.pt {
+	reverse_proxy gop-minio:9000
+
+	# Long cache: object keys are content-addressed, so a changed image is a
+	# changed URL.
+	header /gop-media/* Cache-Control "public, max-age=31536000, immutable"
+}

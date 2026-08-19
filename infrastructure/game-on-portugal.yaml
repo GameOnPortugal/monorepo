@@ -1,0 +1,155 @@
+# Game On Portugal — Portainer Stack Definition (HTZ1, 195.201.192.35)
+#
+# Deployed via GitHub Actions (.github/workflows/deploy.yml) → Portainer API
+# over an SSH tunnel. Secrets (Discord token, DB password, MinIO keys) are
+# managed as Portainer **stack environment variables**, NOT in this file.
+# `${APP_VERSION}` is substituted by the deploy action with the commit SHA.
+#
+# Public URLs (Caddy on the host terminates TLS — see infrastructure/caddy/):
+#   https://game-on-portugal.pt        → gop-portal-web:80   (added by plan 03)
+#   https://media.game-on-portugal.pt  → gop-minio:9000      (public-read bucket)
+#
+# Migration status: see docs/plans/04-infrastructure-migration.md. Until cutover
+# the live bot still runs on TedRelayer under ~/game-on-portugal/.
+
+services:
+  # --- Discord bot ---------------------------------------------------------
+  bot:
+    image: docker.io/joshlopes/game-on-portugal-bot:${APP_VERSION:-latest}
+    container_name: gop-bot
+    environment:
+      APP_ENV: prod
+      # entrypoint.sh waits for the DB, runs `prisma migrate deploy`, then boots.
+      DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in the Portainer stack env}@db:3306/discord-bot
+      # Absent DISCORD_TOKEN silently binds InMemoryClient — the bot starts and
+      # does nothing. Fail the deploy instead.
+      DISCORD_TOKEN: ${DISCORD_TOKEN:?set DISCORD_TOKEN in the Portainer stack env}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:?set DISCORD_CLIENT_ID in the Portainer stack env}
+      # Object storage for re-hosted screenshots and marketplace photos.
+      S3_ENDPOINT: http://minio:9000
+      S3_PUBLIC_URL: ${S3_PUBLIC_URL:-https://media.game-on-portugal.pt}
+      S3_BUCKET: ${S3_BUCKET:-gop-media}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-gameonportugal}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY in the Portainer stack env (min 8 chars)}
+      # Optional Grafana Loki shipping. Leave unset to log to stdout only.
+      LOKI_HOST: ${LOKI_HOST:-}
+      LOKI_AUTH: ${LOKI_AUTH:-}
+      APP_VERSION: ${APP_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      createbuckets:
+        condition: service_completed_successfully
+    networks:
+      - internal
+
+  # --- MariaDB -------------------------------------------------------------
+  # 11.7 to match the version the test suite runs against. The data is restored
+  # from a logical dump of the 11.5.2 instance on TedRelayer (see plan 04).
+  db:
+    image: mariadb:11.7.2
+    container_name: gop-db
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in the Portainer stack env}
+      MARIADB_DATABASE: discord-bot
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--su-mysql", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    networks:
+      - internal
+
+  # --- Object storage (MinIO, S3-compatible) -------------------------------
+  # Holds re-hosted screenshots and marketplace photos. Discord CDN URLs expire,
+  # which is why all 624 historical screenshot images are dead (issue #19) —
+  # nothing user-visible may ever again depend on a Discord-hosted URL.
+  minio:
+    image: minio/minio:latest
+    container_name: gop-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-gameonportugal}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?set S3_SECRET_KEY in the Portainer stack env (min 8 chars)}
+      # Rewrites presigned/console URLs to the public origin behind Caddy.
+      MINIO_BROWSER_REDIRECT_URL: ${S3_CONSOLE_URL:-https://media.game-on-portugal.pt/console}
+    volumes:
+      - minio_data:/data
+    restart: unless-stopped
+    networks:
+      - proxy      # Caddy serves the bucket at media.game-on-portugal.pt
+      - internal
+
+  # One-shot: wait for MinIO, create the media bucket, make it public-read.
+  # Idempotent — safe on every deploy.
+  createbuckets:
+    image: minio/mc:latest
+    container_name: gop-createbuckets
+    depends_on:
+      - minio
+    environment:
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-gameonportugal}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY in the Portainer stack env (min 8 chars)}
+      S3_BUCKET: ${S3_BUCKET:-gop-media}
+    entrypoint: >
+      /bin/sh -c "set -e;
+      until mc alias set local http://minio:9000 $$S3_ACCESS_KEY $$S3_SECRET_KEY; do echo 'waiting for minio…'; sleep 1; done;
+      mc mb --ignore-existing local/$$S3_BUCKET;
+      mc anonymous set download local/$$S3_BUCKET;
+      echo 'bucket ready (public read)'"
+    networks:
+      - internal
+
+  # --- Nightly database backup --------------------------------------------
+  backup:
+    image: databack/mysql-backup:v0.12.0
+    container_name: gop-db-backup
+    environment:
+      DB_SERVER: db
+      DB_PORT: "3306"
+      DB_USER: root
+      DB_PASS: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in the Portainer stack env}
+      DB_DUMP_TARGET: ${DB_DUMP_TARGET:-/backup}
+      DB_DUMP_BY_SCHEMA: "true"
+      DB_DUMP_FREQ: "1440"        # daily
+      DB_DUMP_RETENTION: "30d"
+    volumes:
+      - backup_data:/backup
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - internal
+
+  # --- Portal (added by docs/plans/03-portal.md) ---------------------------
+  # Deliberately absent until the images exist — Portainer fails a stack whose
+  # image cannot be pulled, which would take the bot down with it. Add these
+  # together with the portal-api / portal-web release-please components.
+  #
+  # portal-api:
+  #   image: docker.io/joshlopes/game-on-portugal-portal-api:${APP_VERSION:-latest}
+  #   container_name: gop-portal-api
+  #   networks: [internal]
+  #
+  # portal-web:
+  #   image: docker.io/joshlopes/game-on-portugal-portal-web:${APP_VERSION:-latest}
+  #   container_name: gop-portal-web
+  #   networks: [proxy, internal]
+
+networks:
+  # Shared with the host's Caddy; must already exist (`docker network create proxy`).
+  proxy:
+    external: true
+  internal:
+    driver: bridge
+
+volumes:
+  db_data:
+  minio_data:
+  backup_data:
