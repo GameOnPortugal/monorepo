@@ -1,8 +1,12 @@
 # Revival programme — plan index
 
-Three workstreams, drafted 2026-08-19. Each plan below is written to be handed to
-an agent working independently; read this page first for the shared context and
-the dependencies between them.
+Each plan below is written to be handed to an agent working independently; read
+this page first for the shared context and the dependencies between them.
+
+> **Sequencing lives in [`GLOBAL-PLAN.md`](GLOBAL-PLAN.md)**, not here. That file
+> is the master work queue: it folds every plan below — plus `known-issues.md`
+> and `discord-bot-feature-gap.md` — into one ordered set of numbered work items.
+> These plans hold the *design*; the global plan holds the *order*.
 
 | Plan                                                       | Owner-agent scope                              | Depends on |
 | ---------------------------------------------------------- | ---------------------------------------------- | ---------- |
@@ -10,6 +14,9 @@ the dependencies between them.
 | [02 — Scheduler & lifecycle](02-scheduler-and-lifecycle.md)| Job runner, ad bump/expiry, screenshot recovery | 01, 04     |
 | [03 — Community portal](03-portal.md)                      | Public site + admin portal                      | 02, 04     |
 | [04 — Infrastructure migration](04-infrastructure-migration.md) | TedRelayer → HTZ1, Portainer, CI/CD, releases | —      |
+| [05 — Bot audit & hardening](05-bot-audit-and-hardening.md) | Security (A1–A8), correctness (B1–B10), API (C1–C7) findings | — |
+| [06 — Discord API modernisation](06-discord-api-modernisation.md) | Deprecations, deferred replies, components, registration | 05 |
+| [07 — Dependency upgrades](07-dependency-upgrades.md) | Version inventory, hygiene defects, Prisma 6→7 | — |
 
 Plan 04's repo-side work is **already built and lint-clean** in this branch —
 workflows, composite actions, release-please config, the Portainer stack file and
@@ -25,9 +32,9 @@ the Caddy vhosts. What remains there is a credentials-and-DNS runbook.
   [`../operations.md`](../operations.md).
 - **CI does not deploy** (it targets a decommissioned host). Shipping means
   building an image and running `docker compose pull && up -d` by hand.
-- Before claiming done: `bunx prisma generate && bunx tsc --noEmit && bun test`.
-  Type checking currently fails with 6 pre-existing errors — do not add more, and
-  fix the ones your plan touches.
+- Before claiming done: `bun run typecheck && bun test` (the script runs
+  `prisma generate` for you). Both are **clean as of 2026-08-19** and `ci.yml`
+  enforces the type check, so a PR that does not compile cannot merge.
 
 ## The community
 

@@ -141,7 +141,11 @@ Plus the accumulated rot: 6 type errors, no linter, no release ever cut. See
 [`docs/known-issues.md`](docs/known-issues.md) for the itemised list (24 items)
 and [`docs/revival-plan.md`](docs/revival-plan.md) for the order to attack it in.
 
-**If you are an agent picking up a workstream**, start at
-[`docs/plans/00-overview.md`](docs/plans/00-overview.md) — it carries the shared
-context (brand assets, the real state of the data, settled decisions) that the
-four active plans assume you have read.
+**If you are an agent picking up work**, start at
+[`docs/plans/GLOBAL-PLAN.md`](docs/plans/GLOBAL-PLAN.md) — the master work queue.
+It sequences every known defect and gap into numbered work items (`M0.1`, `M4.7`,
+…) across ten milestones, says what blocks what, and traces each item back to the
+evidence for it. Then read
+[`docs/plans/00-overview.md`](docs/plans/00-overview.md) for the shared context
+(brand assets, the real state of the data, settled decisions) that every plan
+assumes you have.
