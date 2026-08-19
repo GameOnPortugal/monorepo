@@ -15,9 +15,14 @@ model Ad {
   author_id   String?
   channel_id  String?
   message_id  String?
-  state       String
-  price       String
-  zone        String
+  // Nullable to match the migrations and production. `schema.prisma` had these
+  // as NOT NULL while 20250416170150_init created them nullable and nothing
+  // since changed them — so `prisma db push` (tests) and `prisma migrate deploy`
+  // (production) produced different shapes. The legacy Sequelize model had all
+  // three nullable, so the migrations are right. See docs/known-issues.md #1.
+  state       String?
+  price       String?
+  zone        String?
   dispatch    String?
   warranty    String?
   description String?  @db.Text
