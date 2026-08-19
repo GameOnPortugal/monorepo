@@ -84,7 +84,7 @@ deployment real → modernise → build.** Resist starting at M8.
 | **M6** | [Jobs, lifecycle & media durability](#m6--jobs-lifecycle--media-durability) | Recovers 624 screenshots; stops ads accumulating forever | M8 | 8 PRs |
 | **M7** | [Trophies — make the leaderboard true](#m7--trophies--make-the-leaderboard-true-again) | A shipped feature that silently lies | — | 8 PRs |
 | **M8** | [Community portal](#m8--community-portal) | The public face; makes moderation possible without SSH | — | 15 PRs, largest |
-| **M9** | [Close the feature gap, retire the dead weight](#m9--close-the-feature-gap-retire-the-dead-weight) | Finish the port so `old-discord-bot/` can die | — | Open-ended |
+| **M9** | [Close the feature gap, retire the dead weight](#m9--close-the-feature-gap-retire-the-dead-weight) | Finish the port so `old-discord-bot/` can die | — | 3 PRs — **LFG and stock alerts dropped, see decisions** |
 
 ```
 M0 ──▶ M1 ──▶ M3 ──▶ M4 ──┬──▶ M5 ──▶ M6 ──▶ M8
@@ -327,7 +327,7 @@ flags are written as well as read.
 | **M7.5** | **`/trophy create` accepts both URL shapes** — bare profile and the 6-segment trophy URL. | [§4.6](../discord-bot-feature-gap.md) |
 | **M7.6** | **Rank presentation parity** — the guild's custom plat/gold/silver/bronze emojis for positions 1/2/3/rest, and pagination buttons instead of a `limit` option capped at 10. | [§4.7](../discord-bot-feature-gap.md), C4 |
 | **M7.7** | **`fix-old-trophies` backfill** as a console command, for rows with a null `completionDate`. | [§4.4](../discord-bot-feature-gap.md) |
-| **M7.8** | **Decide the trophy webhook**: reinstate `TROPHY_WEBHOOK` announcements ("Parabéns \<@user\>! Acabaste de receber N TP…") or drop the env var. | [§7.7](../discord-bot-feature-gap.md), [#8](../known-issues.md) |
+| **M7.8** | **Trophy announcements through the bot, not a webhook.** Post "Parabéns \<@user\>! Acabaste de receber N TP…" via `GuildClient` to a channel from the M1.7 config; delete `TROPHY_WEBHOOK`. **Decided** — see [Decisions taken](#decisions-taken). | [§7.7](../discord-bot-feature-gap.md), [#8](../known-issues.md) |
 
 ---
 
@@ -375,16 +375,22 @@ ads, screenshots and jobs from a browser; a shared link previews with the brand.
 **Goal**: everything in `old-discord-bot/` is either ported or explicitly
 dropped, so the directory can be deleted and the feature-gap document closed.
 
+**This milestone shrank by roughly two thirds on 2026-08-19.** LFG (M9.3) and
+stock alerting (M9.4) are dropped outright, `commandchannellink` (M9.2) with
+them, and channel moderation (M9.1) is reimplemented on Discord AutoMod instead
+of ported. See [Decisions taken](#decisions-taken) for the reasoning behind each.
+What remains is deletion work plus the privacy flag.
+
 **Depends on**: M1.10 (permissions) and M4 throughout.
 
 | ID | Item | Evidence | Notes |
 | -- | ---- | -------- | ----- |
-| **M9.1** | **Channel restrictions + message validator** — the `regex` and `only_commands` handlers, admin bypass, offending message deleted and DM'd back. | [G16 / §6.1](../discord-bot-feature-gap.md) | Arguably the highest-value non-LFG gap, and the enforcement layer the marketplace and screenshot channels were designed around. **Needs the `MessageContent` intent and a message-event pipeline — the rewrite has neither.** Weigh that intent against M4.6's minimal-intents position before starting. |
-| **M9.2** | **`commandchannellink`**, *or* the explicit decision to drop it in favour of the static channel config from M1.7. | [G17 / §6.2](../discord-bot-feature-gap.md) | M5.1 already hardcodes the marketplace channel. If static config is enough, **decide and delete the table** rather than leaving a third unused model. |
-| **M9.3** | **LFG** — 11 subcommands, the points model (+20 create / +10 participate / +5 commend / −10 leave / −30 miss / −20 cancel, doubled under 1h), the aggregation cron, and banned-user enforcement. **Needs its own spec document before any code.** | [G13, G14 / §5](../discord-bot-feature-gap.md) | The largest single gap, ~40% of the old bot's surface. The four Prisma models already exist and the tables are **empty** — greenfield, no migration, but also no continuity with the community's old rankings, which is worth telling users. **Open question for Luis: is LFG actually wanted back, or was dropping it deliberate?** |
-| **M9.4** | **Stock alerts + Telegram bridge** — the fan-out ladder (immediate Telegram Prime + Discord premium ping → +3 min `@everyone` free channel → +5 min Telegram everyone). | [G15 / §7.5](../discord-bot-feature-gap.md) | **Decide first whether the community still uses it.** Lowest value in the gap list; a legitimate candidate for "explicitly dropped". Note the legacy `setTimeout` implementation silently lost pending alerts on restart — a port needs durable scheduling (M6.1). |
-| **M9.5** | **Sentry vs Loki decision**, and delete whichever env vars lose. | [G22 / §7.6](../discord-bot-feature-gap.md), [#8](../known-issues.md) | Recommend: Loki only. Then `SENTRY_DSN`, `REDIS_DSN`, `TROPHY_WEBHOOK` and `TELEGRAM_ACCESS_TOKEN` all leave `.env.example` and the compose file for good. |
-| **M9.6** | **Retire `old-discord-bot/`** — move to `reference/` when the port is done so it stops looking like something that builds, then delete once M9.3/M9.4 are settled. | revival plan item 25 | It is the only spec for the scraper, LFG and stock. Do not delete it early. |
+| **M9.1** | **Channel rules — reimplemented as Discord AutoMod, not a message pipeline.** Define the guild's AutoMod rules (keyword/regex blocking) as checked-in JSON applied through `@discordjs/rest`, and express "commands only" channels as channel *permissions* (deny `SendMessages`, allow `UseApplicationCommands`) rather than deleting messages after the fact. | [G16 / §6.1](../discord-bot-feature-gap.md) | **Redesigned — see decision 4.** The straight port needed the `MessageContent` privileged intent and a message-event pipeline the rewrite does not have, and it contradicted M4.6's minimal-intents position. AutoMod does the same job server-side, with no intent, no gateway traffic, no bot latency, and it keeps enforcing while the bot is down. The `specialchannels` table is **empty** — drop the model with M9.6. |
+| **M9.2** | ~~`commandchannellink`~~ — **dropped.** Delete the `CommandChannelLink` model and its table. | [G17 / §6.2](../discord-bot-feature-gap.md) | **Decided.** The table is **empty**; M1.7's static channel config covers every real use. Keeping a third unused model would only invite someone to wire it up later. |
+| **M9.3** | ~~**LFG**~~ — **dropped, will not be ported.** Delete the four LFG models (`LfgProfile`, `LfgGame`, `LfgEvent`, `LfgParticipation`) and their tables. | [G13, G14 / §5](../discord-bot-feature-gap.md) | **Decided by Luis, 2026-08-19: he is not interested in moving LFG.** This closes the single largest item in the plan (~40% of the old bot's surface) and removes the one work item that needed its own spec document. All four tables are **empty**, so there is no data to preserve and no migration risk. |
+| **M9.4** | ~~**Stock alerts + Telegram bridge**~~ — **dropped.** Delete the `StockUrls` model and its table, and the `TELEGRAM_ACCESS_TOKEN` env var. | [G15 / §7.5](../discord-bot-feature-gap.md) | **Decided.** `stockurls` holds **0 rows** — the feature has not been used once since the rewrite went live in April 2025. The legacy implementation also lost every pending alert on restart (bare `setTimeout`), so a port would have been a rewrite, not a port. |
+| **M9.5** | **Loki, not Sentry.** Delete `SENTRY_DSN`, `REDIS_DSN`, `TROPHY_WEBHOOK` and `TELEGRAM_ACCESS_TOKEN` from `.env.example` and the compose files. | [G22 / §7.6](../discord-bot-feature-gap.md), [#8](../known-issues.md) | **Decided.** Loki is already half-wired and there is an existing Grafana Cloud stack to ship to; Sentry would be a second vendor for the same signal. Do **not** enable `LOKI_HOST` until M0.7 lands — the entrypoint prints the database password on the first line, and enabling Loki first ships it to Grafana Cloud. Fix the `job: 'tedcrypto-campaign'` label bug in M3.5. |
+| **M9.6** | **Retire `old-discord-bot/`** — move to `reference/` once M7 has taken what it needs from the scraper, then delete. Drop the six now-dead Prisma models in one migration (4 LFG + `StockUrls` + `CommandChannelLink` + `SpecialChannel`). | revival plan item 25 | With M9.1–M9.4 settled, the only thing `old-discord-bot/` is still the sole specification for is the **PSNProfiles scraper and points ladder** (M7.1, M7.2). Once those are ported it can go. |
 | **M9.7** | **Privacy**: a single `public_opt_out` flag honoured by **both** the bot and the portal, a short privacy page, and a deletion request path that removes portal content too. | [03 decision 5](03-portal.md) | The community is EU-based. Cheap now, expensive to retrofit — do it with M8.7, not after. |
 
 ---
@@ -427,15 +433,15 @@ Update this table as items land. `—` = not started.
 | --------- | ----- | ---- | ------ |
 | M0 Stop the bleeding | 9 | 0 | — |
 | M1 Restore the signal | 10 | 0 | partial: `tsc --noEmit`, CodeQL/Trivy/Gitleaks and PR-title linting are already in CI |
-| M2 Infrastructure cutover | 6 | 0 | repo side **built**; needs credentials, Portainer stack and DNS |
+| M2 Infrastructure cutover | 6 | 5 | **cut over 2026-08-19** — production is HTZ1, Portainer stack 46. M2.5 (decommission TedRelayer) due 2026-09-02 |
 | M3 Dependencies & container | 8 | 0 | — |
 | M4 Discord API modernisation | 10 | 0 | — |
 | M5 Marketplace overhaul | 11 | 0 | — |
 | M6 Jobs, lifecycle & media | 8 | 0 | — |
 | M7 Trophies | 8 | 0 | — |
 | M8 Community portal | 15 | 0 | — |
-| M9 Feature gap & dead weight | 7 | 0 | — |
-| **Total** | **92** | **0** | |
+| M9 Feature gap & dead weight | 7 | 3 | M9.2/M9.3/M9.4 **decided as dropped**; M9.1 redesigned onto AutoMod |
+| **Total** | **92** | **8** | |
 
 Already closed before this plan was written: [#1](../known-issues.md) (schema
 drift), [#4](../known-issues.md) (6 type errors), and the repo side of
@@ -444,21 +450,55 @@ release-please reconfigured).
 
 ---
 
-## Open questions for Luis
+## Decisions taken
 
-Four decisions this plan cannot make on its own. Everything else has been
-decided and is recorded in the per-area plans.
+The four questions this plan could not answer on its own were settled on
+**2026-08-19**. They are recorded here rather than in a side document because
+each one deletes work from the milestones above.
 
-1. **Is LFG wanted back?** (M9.3) It is ~40% of the old bot's surface and its
-   tables are empty, so it is a greenfield build, not a restoration.
-2. **Is stock alerting still used?** (M9.4) If not, delete `StockUrls` and the
-   Telegram dependency rather than porting them.
-3. **Sentry or Loki?** (M9.5) Both are currently half-configured; neither is
-   fully wired.
-4. **How long is screenshot retention a requirement?** It drives the MinIO
-   sizing in M2.3 and the thumbnail strategy in M8.8.
+**1. LFG is not coming back.** Luis: *not interested in moving LFG.* This was the
+largest single item in the plan and the only one that needed its own spec before
+any code could be written. The four tables are empty, so there is nothing to
+preserve; the models get dropped with M9.6. Worth telling the community
+explicitly, because the old rankings are gone and will not be reconstructed.
 
----
+**2. Stock alerting is dropped.** Not a judgement call in the end — `stockurls`
+holds **0 rows**, so the feature has been dead for the entire life of the
+rewrite. Dropping it also removes the last reason to keep a Telegram dependency
+in the bot.
+
+**3. Loki, not Sentry.** One log pipeline, one vendor, and Loki is the one
+already half-wired. `SENTRY_DSN` leaves with `REDIS_DSN`, `TROPHY_WEBHOOK` and
+`TELEGRAM_ACCESS_TOKEN`.
+
+**4. Channel moderation is reimplemented, not ported.** The old bot read every
+message through a `regex` / `only_commands` validator backed by the
+`specialchannels` table. Reproducing that means the `MessageContent` privileged
+intent, a gateway message pipeline the rewrite does not have, and per-message bot
+latency — to do something **Discord now does natively**. AutoMod rules cover the
+regex case server-side, and a channel permission overwrite (deny `SendMessages`,
+allow `UseApplicationCommands`) covers "commands only" with no code at all. Both
+keep working when the bot is down, which the old validator did not. The rule
+definitions still belong in the repo so the configuration is reviewable.
+
+**5. Screenshots are kept indefinitely.** 624 images at a few MB each is single-
+digit gigabytes against 394 GB free on HTZ1; a retention policy would cost more
+in argument than in disk. No expiry for v1. What *does* matter is generating a
+thumbnail at ingest (M8.8) so a phone does not download a 4 MB PNG per grid
+tile. Revisit only if the bucket passes 50 GB.
+
+### Two smaller calls made in passing
+
+**M7.8 — the trophy webhook is not reinstated.** Trophy announcements should go
+through the bot's own `GuildClient` to a channel named in the M1.7 config, not
+through a `TROPHY_WEBHOOK` URL. Same message, one fewer secret, one fewer thing
+that breaks silently when someone regenerates the webhook, and the announcement
+gets the bot's identity and embed styling for free.
+
+**`RELEASE_PLEASE_TOKEN` is still unset.** `release-please.yml` falls back to
+`GITHUB_TOKEN`, which works — it cut the 1.0.0 release PR — but PRs opened with
+that token do not trigger downstream workflows, so the release PR itself gets no
+CI run. Minting a fine-grained PAT needs a browser; it is left for Luis.
 
 ## Traceability
 
@@ -526,16 +566,16 @@ The machine-configuration note is **out of repo scope** and tracked separately.
 
 | Row | Item | Row | Item |
 | --- | ---- | --- | ---- |
-| G1 ping | ✅ | G14 LFG points cron | M9.3 |
-| G2 sell | M0.1, M5.1–M5.5 | G15 stock alerts | M9.4 *(decide first)* |
-| G3 wanted ads | M5.7 | G16 channel restrictions | M9.1 |
-| G4 list / delete | M5.2, M5.8, M5.10 | G17 command→channel link | M9.2 |
+| G1 ping | ✅ | G14 LFG points cron | M9.3 — **dropped** |
+| G2 sell | M0.1, M5.1–M5.5 | G15 stock alerts | M9.4 — **dropped** |
+| G3 wanted ads | M5.7 | G16 channel restrictions | M9.1 — **AutoMod** |
+| G4 list / delete | M5.2, M5.8, M5.10 | G17 command→channel link | M9.2 — **dropped** |
 | G5 has-been-sold cron | M6.5 | G18 command prefix | ✅ obsolete by design |
 | G6 screenshot CRUD | M6.2 | G19 permission checks | M1.10 |
 | G7 weekly winner | M6.4 | G20 DM wizards | superseded — preview/confirm lands with M5.6 |
 | G8 link PSN profile | M7.5 | G21 message chunking | M4.10 |
 | G9 check profile | M7.4 | G22 Sentry | M9.5 |
-| G10 ranks | M0.8, M7.6 | G23 Telegram bridge | M9.4 |
-| G11 PSN crawler | **M7.1** | G24 trophy webhook | M7.8 |
+| G10 ranks | M0.8, M7.6 | G23 Telegram bridge | M9.4 — **dropped** |
+| G11 PSN crawler | **M7.1** | G24 trophy webhook | M7.8 — **dropped for a channel post** |
 | G12 fix-old-trophies | M7.7 | G25 Redis / Keyv | ✅ dropped — M1.6 removes the container |
-| G13 LFG subsystem | M9.3 | | |
+| G13 LFG subsystem | M9.3 — **dropped** | | |
