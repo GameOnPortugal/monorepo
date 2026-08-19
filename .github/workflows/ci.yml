@@ -83,10 +83,39 @@ jobs:
         working-directory: discord-bot
         run: docker compose -f docker-compose.ci.yml down -v
 
+  quality:
+    name: Bot — lint & format
+    needs: changes
+    if: ${{ needs.changes.outputs.bot == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.2"
+
+      # Prisma's preinstall hook requires Node >= 18.18.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        working-directory: discord-bot
+        run: bun install --frozen-lockfile
+
+      - name: Lint
+        working-directory: discord-bot
+        run: bun run lint
+
+      - name: Format check
+        working-directory: discord-bot
+        run: bun run format:check
+
   # Single required status check — green when every triggered job is.
   ci:
     name: CI
-    needs: [bot]
+    needs: [bot, quality]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
