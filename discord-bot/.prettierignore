@@ -1,0 +1,14 @@
+node_modules
+dist
+prisma/generated
+coverage
+bun.lock
+
+# Infra config, not part of the JS/TS style unification this tooling exists
+# for — leave docker-compose formatting to whoever owns that file.
+*.yml
+*.yaml
+
+# release-please owns this file end to end and rewrites it on every
+# release — reformatting it here just means fighting release-please forever.
+CHANGELOG.md

@@ -25,5 +25,9 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false
-  }
+  },
+  // Tooling config lives at the repo root and isn't part of the app build;
+  // it also imports untyped packages (e.g. eslint-config-prettier) that
+  // would otherwise trip `allowJs`.
+  "exclude": ["node_modules", "eslint.config.js"]
 }
