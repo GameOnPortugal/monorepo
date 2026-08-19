@@ -69,8 +69,14 @@ jobs:
       - name: Check schema drift
         working-directory: discord-bot
         run: |
-          docker compose -f docker-compose.ci.yml up -d mariadb
-          timeout 120 bash -c 'until docker compose -f docker-compose.ci.yml exec -T mariadb mariadb-admin ping -uroot -prootpassword --silent 2>/dev/null; do sleep 2; done'
+          # `--wait` blocks on the healthcheck the compose file already declares.
+          # Do NOT replace this with a hand-rolled `mariadb-admin ping` loop: during
+          # initialisation the MariaDB entrypoint runs a *temporary* server to apply
+          # setup, and that server answers ping before the root password exists — so
+          # the ping succeeds and the very next statement fails with
+          # `ERROR 1045 Access denied for user 'root'@'localhost'`. It is a race, so
+          # it passes most of the time, which is the worst way for a gate to be wrong.
+          docker compose -f docker-compose.ci.yml up -d --wait mariadb
           docker compose -f docker-compose.ci.yml exec -T mariadb mariadb -uroot -prootpassword -e "CREATE DATABASE IF NOT EXISTS discord_bot_shadow"
           bunx prisma migrate diff \
             --from-migrations prisma/migrations \
