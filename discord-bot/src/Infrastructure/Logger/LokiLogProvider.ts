@@ -1,5 +1,5 @@
 import type LogProviderInterface from '../../Application/Logger/LogProviderInterface';
-import LokiTransport from 'winston-loki';
+import LokiHttpTransport from './LokiHttpTransport.ts';
 import winston from 'winston';
 
 export default class LokiLogProvider implements LogProviderInterface {
@@ -11,11 +11,13 @@ export default class LokiLogProvider implements LogProviderInterface {
     ) {
         this.logger = winston.createLogger();
         this.logger.add(
-            new LokiTransport({
+            new LokiHttpTransport({
                 host: address,
-                json: true,
                 ...(basicAuth !== undefined ? { basicAuth } : {}),
-                labels: { job: 'tedcrypto-campaign' },
+                // Was 'tedcrypto-campaign' — a copy-pasted label from a
+                // different project entirely, which mislabelled every log
+                // this bot ever sent to Loki (M3.5).
+                labels: { job: 'game-on-portugal-bot' },
             }),
         );
     }
