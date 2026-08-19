@@ -19,9 +19,7 @@ export default class AxiosHttpClient implements HttpClient {
     }
 
     async get(url: string, options?: any): Promise<any> {
-        /* eslint-disable @typescript-eslint/no-unsafe-argument */
         return (await this.axios.get(url, options)).data;
-        /* eslint-enable @typescript-eslint/no-unsafe-argument */
     }
 
     async post(url: string, body: any): Promise<any> {

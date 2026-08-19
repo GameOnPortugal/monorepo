@@ -63,6 +63,5 @@ export class BotExecutor {
 }
 
 function isMentionContext(context: any): context is MentionContext {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- is just to facilitate
     return (context as MentionContext).event !== undefined;
 }

@@ -6,7 +6,6 @@ import { TYPES } from './Infrastructure/DependencyInjection/types.ts';
 const logger = myContainer.get<Logger>(TYPES.Logger);
 const app = myContainer.get<Bot>(TYPES.Bot);
 
-// eslint-disable-next-line @typescript-eslint/no-floating-promises -- cuz we want it this way
 (async () => {
     try {
         await app.start();
