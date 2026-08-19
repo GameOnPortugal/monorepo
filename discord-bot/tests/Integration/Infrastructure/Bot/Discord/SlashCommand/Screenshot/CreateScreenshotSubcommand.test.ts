@@ -62,6 +62,14 @@ function createFakeInteraction() {
             this.replied = true;
             return fakeMessage;
         },
+        deferReply: async function (this: any, payload?: unknown) {
+            calls.push({ method: 'deferReply', payload });
+            this.deferred = true;
+        },
+        editReply: async function (this: any, payload: unknown) {
+            calls.push({ method: 'editReply', payload });
+            return fakeMessage;
+        },
         followUp: async (payload: unknown) => {
             calls.push({ method: 'followUp', payload });
         },
@@ -80,8 +88,10 @@ describe('CreateScreenshotSubcommand', () => {
 
         await subcommand.handle(interaction);
 
-        expect(interaction.calls).toHaveLength(1);
-        const { payload } = interaction.calls[0]!;
+        expect(interaction.calls).toHaveLength(2);
+        expect(interaction.calls[0]!.method).toBe('deferReply');
+        expect(interaction.calls[1]!.method).toBe('editReply');
+        const { payload } = interaction.calls[1]!;
         const { content, allowedMentions } = payload as {
             content: string;
             allowedMentions: unknown;

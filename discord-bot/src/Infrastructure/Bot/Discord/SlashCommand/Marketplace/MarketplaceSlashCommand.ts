@@ -1,7 +1,7 @@
 import { inject, injectable } from 'inversify';
 import type { SlashCommandHandler } from '../../../../../Domain/Bot/SlashCommandHandler';
 import type { SlashCommandContext } from '../../../../../Domain/Bot/SlashCommandContext';
-import { SlashCommandBuilder } from 'discord.js';
+import { MessageFlags, SlashCommandBuilder } from 'discord.js';
 import { TYPES } from '../../../../DependencyInjection/types';
 import type Logger from '../../../../../Application/Logger/Logger';
 import { SellSubcommand } from './SellSubcommand';
@@ -119,7 +119,7 @@ export class MarketplaceSlashCommand implements SlashCommandHandler {
                 this.logger.error('Unknown subcommand', { subcommand });
                 await context.interaction.reply({
                     content: 'Unknown subcommand',
-                    ephemeral: true,
+                    flags: MessageFlags.Ephemeral,
                 });
         }
     }
