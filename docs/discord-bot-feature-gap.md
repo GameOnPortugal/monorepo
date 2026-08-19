@@ -15,7 +15,15 @@ Method: full read of `old-discord-bot/src` (commands, subcommands, services, uti
 
 ## 1. Summary
 
-Legend: ✅ ported · 🟡 partially ported (behaviour differs / degraded) · ❌ missing entirely
+Legend: ✅ ported · 🟡 partially ported (behaviour differs / degraded) · ❌ missing entirely ·
+🚫 **decided not to port** (2026-08-19 — see [the decisions in the global plan](plans/GLOBAL-PLAN.md#decisions-taken))
+
+> **Six of these rows are now closed by decision rather than by work.** LFG (13,
+> 14), stock alerts and the Telegram bridge (15, 23), command→channel links (17)
+> and the trophy webhook (24) will not be ported. Channel restrictions (16) will
+> be reimplemented on Discord AutoMod rather than ported. The reasoning for each
+> is in the global plan; the detail sections below are kept because they remain
+> the only written record of what the old bot did.
 
 | # | Feature | Legacy entry point | New bot | Status |
 |---|---------|--------------------|---------|--------|
@@ -31,18 +39,18 @@ Legend: ✅ ported · 🟡 partially ported (behaviour differs / degraded) · �
 | 10 | Trophy — ranks (monthly/creation/lifetime/user) | `commands/trophy/trophy.js` (`rank`) | `/trophy rank` | 🟡 |
 | 11 | Trophy — PSNProfiles crawler + points engine | `service/trophy/psnCrawlService.js`, `trophyManager.js`, `scripts/parse-psn-profile.js` | — | ❌ |
 | 12 | Trophy — backfill missing completion dates | `scripts/fix-old-trophies.js` | — | ❌ |
-| 13 | LFG — whole subsystem (11 subcommands) | `commands/lfg/lfg.js` + `subcommands/lfg/*` | — | ❌ |
-| 14 | LFG — points recalculation cron | `scripts/lfg-update-points.js` | — | ❌ |
-| 15 | Stock alerts (Discord + Telegram) | `commands/stock/stock.js` | — | ❌ |
-| 16 | Channel restrictions (`setchannel`) + message validator | `commands/channel/setChannel.js`, `util/MessageValidator.js` | — | ❌ |
-| 17 | Command→channel routing (`commandchannellink`) | `commands/channel/commandChannelLink.js` | — | ❌ |
+| 13 | LFG — whole subsystem (11 subcommands) | `commands/lfg/lfg.js` + `subcommands/lfg/*` | — | 🚫 §5 |
+| 14 | LFG — points recalculation cron | `scripts/lfg-update-points.js` | — | 🚫 §5 |
+| 15 | Stock alerts (Discord + Telegram) | `commands/stock/stock.js` | — | 🚫 §7.5 |
+| 16 | Channel restrictions (`setchannel`) + message validator | `commands/channel/setChannel.js`, `util/MessageValidator.js` | — | 🚫 §6.1 — replaced by AutoMod |
+| 17 | Command→channel routing (`commandchannellink`) | `commands/channel/commandChannelLink.js` | — | 🚫 §6.2 |
 | 18 | Configurable command prefix | `commands/prefix.js`, `util/prefixUtil.js` | — | ❌ (obsolete by design, see §7.1) |
 | 19 | Admin / moderator permission checks | `util/permissionsUtil.js` | — | ❌ |
 | 20 | DM conversational wizards + interaction lock | `util/messageCreatorUtil.js` | — | ❌ (superseded, see §7.2) |
 | 21 | 2000-char message chunking | `util/messageCreatorUtil.js` `sendMessage` | — | ❌ |
 | 22 | Sentry error reporting | `src/index.js` | — | ❌ (Loki logging instead) |
-| 23 | Telegram bridge | `service/stock/stockUrlManager.js` | — | ❌ |
-| 24 | Trophy webhook announcements | `scripts/parse-psn-profile.js` (`TROPHY_WEBHOOK`) | — | ❌ |
+| 23 | Telegram bridge | `service/stock/stockUrlManager.js` | — | 🚫 §7.5 |
+| 24 | Trophy webhook announcements | `scripts/parse-psn-profile.js` (`TROPHY_WEBHOOK`) | — | 🚫 §7.7 — replaced by a channel post |
 | 25 | Redis / Keyv caching | `util/prefixUtil.js`, `MessageValidator.js`, `commandChannelLinkManager.js` | — | ❌ |
 
 ---
@@ -167,7 +175,17 @@ Legacy rendered ranks with the guild's custom trophy emojis (plat/gold/silver/br
 
 ---
 
-## 5. LFG (Looking For Group) — ❌ entirely missing
+## 5. LFG (Looking For Group) — 🚫 will not be ported
+
+> **Decided 2026-08-19: Luis is not interested in moving LFG.** This was the
+> largest single item in the revival plan — roughly 40% of the old bot's command
+> surface — and it is now closed. The four Prisma models (`LFGProfile`,
+> `LFGGame`, `LFGParticipation`, `LFGEvent`) and their tables are **empty**, so
+> there is no data to preserve; they get dropped with M9.6. Nothing below is
+> scheduled work. It is kept as the only written record of what the old
+> subsystem did, in case the decision is ever revisited — note that if it is,
+> this is a greenfield build with **no continuity** with the community's old
+> rankings, which is worth telling members explicitly.
 
 The largest missing subsystem. Legacy: `commands/lfg/lfg.js` + 11 subcommands +
 `service/lfg/{lfgEventManager,lfgGamesManager,lfgProfileManager}.js`. Prisma already has
@@ -219,9 +237,9 @@ which currently only knows `SCREENSHOTS`.
 
 ---
 
-## 6. Moderation / channel configuration — ❌ entirely missing
+## 6. Moderation / channel configuration — 🚫 reimplemented, not ported
 
-### 6.1 `setchannel` + message validator
+### 6.1 `setchannel` + message validator — replaced by Discord AutoMod
 `commands/channel/setChannel.js` (admin/mod only) attached restrictions to a channel, stored in
 `SpecialChannel`, with `info` / `delete <id>` / `delete all` management. Enforcement lived in the
 `message` event via `util/MessageValidator.js`:
@@ -233,12 +251,36 @@ which currently only knows `SCREENSHOTS`.
 - offending message is deleted and DM'd back to the author with a "fala com o ModMail" note;
 - restrictions cached in Keyv, invalidated on every `setchannel` write.
 
-This is the enforcement layer for the marketplace/screenshot channels — arguably the highest-value
-non-LFG gap. Note it needs the `MessageContent` gateway intent; the new `DiscordBot` only requests
-`GatewayIntentBits.Guilds` and only handles `InteractionCreate`, so there is currently **no message
-event pipeline at all**.
+This is the enforcement layer the marketplace and screenshot channels were designed around, and it
+is worth having. **It is not worth having this way.** A straight port needs the `MessageContent`
+privileged intent, a gateway message-event pipeline the rewrite does not have at all (it requests
+only `GatewayIntentBits.Guilds` and handles only `InteractionCreate`), and a per-message round trip
+through the bot — in order to do something Discord has since built in.
 
-### 6.2 `commandchannellink`
+**Decided 2026-08-19 — reimplement on Discord AutoMod instead** (work item M9.1):
+
+- the **`regex`** handler maps directly onto an AutoMod rule with a regex trigger, applied through
+  `@discordjs/rest`, with the rule definitions checked into this repo so the configuration is
+  reviewable rather than living only in the Discord UI;
+- **`only_commands`** is not a moderation problem at all — it is a channel permission overwrite
+  (deny `SendMessages`, allow `UseApplicationCommands`). No code, and it cannot be raced;
+- admin bypass comes free — AutoMod rules take `exempt_roles`.
+
+What this buys beyond simplicity: AutoMod **blocks the message instead of deleting it after the
+fact**, so nothing is ever briefly visible, and it keeps enforcing while the bot is down or
+redeploying — which the old validator did not. What it costs: the custom "fala com o ModMail" DM
+becomes AutoMod's standard block notice. That is an acceptable trade.
+
+The `specialchannels` table holds **0 rows**, so nothing is being migrated. The model is dropped
+with M9.6.
+
+### 6.2 `commandchannellink` — 🚫 dropped
+
+> **Decided 2026-08-19.** The `commandchannellinks` table holds **0 rows** and the static channel
+> configuration from M1.7 covers every real use — M5.1 already routes ads to `📖anuncios` that way.
+> A configurable indirection nobody configured is worse than a constant. The model is dropped with
+> M9.6 rather than left lying around inviting someone to wire it up.
+
 Mapped a command name to a target channel so all content generated by that command was posted
 there (`CommandChannelLink` table, Keyv-cached, `info`/`delete`/`delete all`). Used by sell, wanted,
 screenshot and LFG create. Without it the rewrite always answers in the invoking channel (§2.4, §3).
@@ -266,7 +308,12 @@ exists in the rewrite, so every admin-gated behaviour (§2.3, §5, §6) is block
 `MessageCreatorUtil.sendMessage` split output at 1800 chars to respect Discord's 2000-char limit.
 Relevant for long ad/screenshot/rank listings.
 
-### 7.5 Stock alerts + Telegram bridge — ❌ missing
+### 7.5 Stock alerts + Telegram bridge — 🚫 dropped
+
+> **Decided 2026-08-19.** `stockurls` holds **0 rows** — the feature has not been used once in the
+> sixteen months the rewrite has been live. This also removes the only reason for the bot to carry a
+> Telegram dependency, and `TELEGRAM_ACCESS_TOKEN` leaves `.env.example` with it. Had it been kept,
+> it would have needed rebuilding rather than porting anyway: see the `setTimeout` note below.
 `|stock create|verify|alert <url>` (`commands/stock/stock.js`, `service/stock/stockUrlManager.js`):
 - store/validate stock URLs (`StockUrls.is_validated`, validated out-of-band);
 - `alert` fan-out ladder: immediate Telegram *Alertas Prime* + Discord premium channel ping
@@ -279,17 +326,29 @@ Needs `node-telegram-bot-api` (or equivalent), `TELEGRAM_ACCESS_TOKEN` (still pr
 
 ### 7.6 Sentry — ❌ missing
 `old-discord-bot/src/index.js` initialised `@sentry/node` (+ tracing). The rewrite ships Winston +
-Loki (`LokiLogProvider`) instead. `SENTRY_DSN` is still in `.env.example` but unused — either wire
-Sentry back up or drop the var.
+Loki (`LokiLogProvider`) instead. **Decided 2026-08-19: Loki, and `SENTRY_DSN` is dropped.** One
+pipeline for one signal, and Loki is the one already half-wired with a Grafana Cloud stack behind
+it. Two caveats for whoever finishes the wiring: `LokiLogProvider` currently tags this bot's logs
+`job: 'tedcrypto-campaign'` (fix in M3.5), and **`LOKI_HOST` must not be enabled until M0.7 lands**
+— the entrypoint prints the database password on its first line, and turning Loki on first ships
+that password to Grafana Cloud.
 
-### 7.7 Trophy webhook — ❌ missing
+### 7.7 Trophy webhook — 🚫 dropped, but the announcement is kept
+
 `TROPHY_WEBHOOK` (discord-webhook-node) announced each newly-credited trophy. Still in
 `.env.example`, unused.
+
+> **Decided 2026-08-19.** The announcement is worth restoring; the webhook is not. It should be
+> posted by the bot itself through `GuildClient`, to a channel named in the M1.7 channel config.
+> Same message to the member, one fewer secret to manage, one fewer thing that breaks silently when
+> someone regenerates a webhook URL — and the post gets the bot's identity and embed styling rather
+> than an anonymous webhook avatar. Tracked as **M7.8**; `TROPHY_WEBHOOK` is deleted.
 
 ### 7.8 Redis / Keyv caching — ❌ missing
 Legacy cached channel restrictions, command→channel links, the prefix and interaction locks
 (`REDIS_DSN`, still in `.env.example`, unused; the old `docker-compose.yml` ran a Redis container,
-the new one does not). Only needed if §6 comes back.
+the new one does not). §6 is not coming back in a form that needs it — AutoMod holds its own rules
+and channel permissions are enforced by Discord — so `REDIS_DSN` is dropped with the rest.
 
 ### 7.9 Scheduled jobs
 `scheduler/config.ini` currently runs exactly one job:
