@@ -61,6 +61,15 @@ jobs:
         working-directory: discord-bot
         run: bunx tsc --noEmit
 
+      # Both docker-compose.ci.yml services declare env_file: .env, and Compose
+      # resolves env_file for every service up front when it parses the file --
+      # even for `docker compose up -d --wait mariadb`, which never touches the
+      # discord-bot service's env_file at all. So .env has to exist before the
+      # *first* docker compose invocation in this job, not just before Test.
+      - name: Prepare test environment
+        working-directory: discord-bot
+        run: cp .env.test .env
+
       # Schema-drift gate: fails if prisma/schema.prisma no longer produces the
       # same shape as replaying prisma/migrations. Uses the CI MariaDB (defined
       # below and reused by the Test step) as scratch space for a shadow
@@ -89,7 +98,6 @@ jobs:
       - name: Test
         working-directory: discord-bot
         run: |
-          cp .env.test .env
           docker compose -f docker-compose.ci.yml up -d
           # Wait for the app container to be ready, then set up the test DB.
           timeout 300 bash -c 'until docker compose -f docker-compose.ci.yml exec -T discord-bot true 2>/dev/null; do sleep 3; done'

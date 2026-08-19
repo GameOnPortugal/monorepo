@@ -13,6 +13,14 @@ services:
     # container explicitly. One source of truth: the same .env the
     # Makefile/CI already require (copied from .env.example, or from
     # .env.test in CI) rather than duplicating the URL here.
+    # `.env` must exist before Compose parses this file (Compose resolves
+    # env_file for every service up front, not just the one being started),
+    # so ci.yml creates it (`cp .env.test .env`) in its own step before any
+    # docker compose command runs, and local dev/Makefile usage requires a
+    # real .env already (copied from .env.example) for the same reason.
+    # Deliberately required (not the optional env_file form): an absent
+    # .env should fail loudly here rather than silently boot with no
+    # DATABASE_URL, which is exactly the hang M0.7 exists to remove.
     env_file: .env
     ports:
       - "${SERVER_PORT:-3000}:3000"
