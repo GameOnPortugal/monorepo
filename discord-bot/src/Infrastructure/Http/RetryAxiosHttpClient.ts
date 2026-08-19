@@ -5,6 +5,10 @@ import { sleep } from '../../Application/Shared/sleep';
 import { TYPES } from '../DependencyInjection/types';
 import Logger from '../../Application/Logger/Logger';
 
+// Bound to TYPES.HttpClient in inversify.config.ts but currently has no callers —
+// nothing in the codebase injects TYPES.HttpClient yet. This is intentional, not
+// dead code: it exists in anticipation of the PSNProfiles crawler (GLOBAL-PLAN M7.1),
+// which will be the first consumer. Keep it. See docs/known-issues.md #17 / M1.8.
 @injectable()
 export default class RetryAxiosHttpClient implements HttpClient {
     constructor(

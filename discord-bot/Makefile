@@ -68,12 +68,6 @@ install:
 bun-command:
 	$(DOCKER_COMPOSE_EXEC) discord-bot bun $(COMMAND)
 
-.PHONY: create-user create.user
-## [App] Create Initial Admin user
-create-user create.user:
-	$(DOCKER_COMPOSE_EXEC) discord-bot bunx ts-node bin/console create-user "admin" true true true admin
-	echo "User: admin@example.com Password: admin created."
-
 .PHONY: test run.test
 ## [Tests] Run tests
 test run.test:
@@ -91,7 +85,7 @@ console-command console.command:
 	if [ -z "$(COMMAND)" ]; then \
 		read -p "Enter command name: " COMMAND; \
     fi; \
-	$(DOCKER_COMPOSE_EXEC) discord-bot bunx ts-node bin/console $(COMMAND)
+	$(DOCKER_COMPOSE_EXEC) discord-bot bun run:command $(COMMAND)
 
 .PHONY: db-diff db.diff
 ## [Database] Create migration with name (NAME=name-migration make db-create-migration)
@@ -126,8 +120,3 @@ db-test-setup db.test.setup db.tests.setup:
 ## [DATABASE] Reset Database for dev
 db-dev-setup db.dev.setup:
 	$(DOCKER_COMPOSE_EXEC) discord-bot bun run dev:setup
-
-.PHONY: db-seed db.seed
-## [DATABASE] Seed Database
-db-seed db.seed:
-	$(DOCKER_COMPOSE_EXEC) discord-bot bunx prisma db seed
