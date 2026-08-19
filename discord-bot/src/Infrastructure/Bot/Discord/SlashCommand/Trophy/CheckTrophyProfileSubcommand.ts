@@ -6,6 +6,7 @@ import type Logger from '../../../../../Application/Logger/Logger';
 import CommandHandlerManager from '../../../../CommandHandler/CommandHandlerManager';
 import { GetProfile } from '../../../../../Application/Query/Trophy/GetProfile/GetProfile';
 import { ProfileNotFound } from '../../../../../Application/Query/Trophy/GetProfile/ProfileNotFound';
+import { safeReply } from '../../../../../Domain/Bot/safeReply';
 
 @injectable()
 export class CheckTrophyProfileSubcommand {
@@ -53,7 +54,7 @@ export class CheckTrophyProfileSubcommand {
             });
         } catch (error) {
             if (error instanceof ProfileNotFound) {
-                await context.interaction.reply({
+                await safeReply(context.interaction, {
                     content:
                         targetUser.id === context.interaction.user.id
                             ? '❌ You have not registered your PSN profile yet. Use `/trophy create` to register.'
@@ -68,7 +69,7 @@ export class CheckTrophyProfileSubcommand {
                 userId: targetUser.id,
             });
 
-            await context.interaction.reply({
+            await safeReply(context.interaction, {
                 content: '⚠️ An error occurred while retrieving the PSN profile.',
                 flags: MessageFlags.Ephemeral,
             });
