@@ -7,27 +7,46 @@ services:
       target: test
       args:
         - APP_ENV=test
-    container_name: discord-bot-ts
     restart: unless-stopped
+    # entrypoint.sh runs as /bin/sh and does not source Bun's
+    # auto-loaded .env, so DATABASE_URL etc. must be handed to the
+    # container explicitly. One source of truth: the same .env the
+    # Makefile/CI already require (copied from .env.example, or from
+    # .env.test in CI) rather than duplicating the URL here.
+    env_file: .env
+    # No `container_name` here (unlike docker-compose.yml): a hardcoded name
+    # overrides Compose's project-name namespacing, so `docker compose -p
+    # <name>` can no longer isolate two concurrent runs -- they collide on
+    # the container name. This file is used by CI/local verification, which
+    # now runs multiple branches' test suites in parallel, so it must stay
+    # project-name-safe. (Host port mappings are left as-is, parameterised
+    # via ${SERVER_PORT:-3000}/${DATABASE_PORT:-3306} -- the schema-drift CI
+    # step needs `mariadb` published to `127.0.0.1:3306` on the host, so
+    # dropping that mapping would break it. Removing `container_name` is the
+    # change that actually buys parallel-safety; pass a different
+    # DATABASE_PORT/SERVER_PORT per concurrent run if the defaults collide.)
+    #
+    # `command: sleep infinity` overrides the default "start the bot"
+    # behaviour (see entrypoint.sh): entrypoint.sh still waits for the DB and
+    # runs `prisma migrate deploy`, then execs this instead of the bot.
+    # Needed because CI runs without a real DISCORD_TOKEN, so the bot binds
+    # InMemoryClient, `app.start()` resolves immediately, the process exits,
+    # and -- combined with `restart: unless-stopped` -- the container was
+    # restart-looping fast enough to make `docker compose exec` racy/flaky.
+    # CI never needed the live bot process anyway; it drives the DB and the
+    # test suite entirely through `docker compose exec` (test:setup, bun
+    # test), so this just keeps the container alive for that.
+    command: ["sleep", "infinity"]
     ports:
       - "${SERVER_PORT:-3000}:3000"
     environment:
       - NODE_ENV=development
       - PORT=3000
-    healthcheck:
-      # No HTTP endpoint exists yet (see docker/Dockerfile / entrypoint.sh
-      # notes), so this is a process check: is the bot's main process alive.
-      test: [ "CMD-SHELL", "pgrep -f 'bun run src/index.ts' > /dev/null || exit 1" ]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
     depends_on:
       - mariadb
 
   mariadb:
     image: mariadb:11.7.2
-    container_name: discord-bot-mariadb
     restart: unless-stopped
     environment:
       MARIADB_ROOT_PASSWORD: rootpassword
@@ -36,6 +55,10 @@ services:
       MARIADB_PASSWORD: botpassword
     volumes:
       - mariadb-data:/var/lib/mysql
+    # Published to the host (unlike a from-scratch design) because the
+    # schema-drift CI step runs `prisma migrate diff` from the host against
+    # `mysql://root:rootpassword@127.0.0.1:3306/discord_bot_shadow`. See the
+    # discord-bot service comment re: parallel-run port collisions.
     ports:
       - "${DATABASE_PORT:-3306}:3306"
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci

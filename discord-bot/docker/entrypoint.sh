@@ -115,12 +115,21 @@ ulimit -c 0
 # Run migrations
 bunx prisma migrate deploy
 
-# Start the app
+# If a command was given (docker-compose.ci.yml uses this to keep the
+# container alive for `docker compose exec` -- see the comment there for
+# why), run that instead of starting the bot.
+if [ "$#" -gt 0 ]; then
+  exec "$@"
+fi
+
+# Start the app. `exec` replaces this shell with the app process so it
+# becomes PID 1: signals reach it directly and it is the process whose exit
+# status the container reports.
 if [ "$APP_ENV" = "prod" ]; then
   #pm2-runtime bun run src/index.js
-  bun run src/index.ts
+  exec bun run src/index.ts
 elif [ "$APP_ENV" = "dev" ]; then
-  bun run src/index.ts
+  exec bun run src/index.ts
 else
-  bun run src/index.ts
+  exec bun run src/index.ts
 fi
