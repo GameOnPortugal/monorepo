@@ -7,6 +7,7 @@ import CommandHandlerManager from '../../../../CommandHandler/CommandHandlerMana
 import { CreateProfile } from '../../../../../Application/Write/Trophy/CreateProfile/CreateProfile';
 import { TrophyProfileId } from '../../../../../Domain/Trophy/TrophyProfileId';
 import { ProfileAlreadyExists } from '../../../../../Application/Write/Trophy/CreateProfile/ProfileAlreadyExists';
+import { safeReply } from '../../../../../Domain/Bot/safeReply';
 
 @injectable()
 export class CreateTrophyProfileSubcommand {
@@ -51,14 +52,14 @@ export class CreateTrophyProfileSubcommand {
         } catch (error) {
             if (error instanceof ProfileAlreadyExists) {
                 if (error.userId === context.interaction.user.id) {
-                    await context.interaction.reply({
+                    await safeReply(context.interaction, {
                         content: 'You have already registered this PSN profile.',
                         flags: MessageFlags.Ephemeral,
                     });
                     return;
                 }
 
-                await context.interaction.reply({
+                await safeReply(context.interaction, {
                     content:
                         'Someone else has already registered this PSN profile. If you think this is an error please report to an administrator',
                     flags: MessageFlags.Ephemeral,
@@ -72,7 +73,7 @@ export class CreateTrophyProfileSubcommand {
                 psnProfile,
             });
 
-            await context.interaction.reply({
+            await safeReply(context.interaction, {
                 content: 'An error occurred while registering your PSN profile.',
                 flags: MessageFlags.Ephemeral,
             });

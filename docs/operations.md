@@ -205,9 +205,6 @@ export DATABASE_URL='mysql://root:rootpassword@127.0.0.1:3399/discord_bot_test'
 bunx prisma db push --skip-generate && bun test
 ```
 
-Note `package.json` has a `test:local` script pointing at `.env.local`, a file
-that does not exist and is not documented anywhere.
-
 ## Migrations
 
 ```bash

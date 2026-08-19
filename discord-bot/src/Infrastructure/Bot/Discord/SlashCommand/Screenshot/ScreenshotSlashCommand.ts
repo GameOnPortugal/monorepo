@@ -7,6 +7,7 @@ import type Logger from '../../../../../Application/Logger/Logger.ts';
 import { CreateScreenshotSubcommand } from './CreateScreenshotSubcommand.ts';
 import { ListScreenshotSubcommand } from './ListScreenshotSubcommand.ts';
 import { DeleteScreenshotSubcommand } from './DeleteScreenshotSubcommand.ts';
+import { safeReply } from '../../../../../Domain/Bot/safeReply.ts';
 
 @injectable()
 export class ScreenshotSlashCommand implements SlashCommandHandler {
@@ -115,10 +116,15 @@ export class ScreenshotSlashCommand implements SlashCommandHandler {
                     });
             }
         } catch (error) {
-            await interaction.reply(
-                'There was an error processing your screenshot command. Please try again later.',
-                { flags: MessageFlags.Ephemeral },
-            );
+            // The subcommand handler may already have replied (or deferred)
+            // before throwing, so this must not blindly call `.reply()` —
+            // that would throw `InteractionAlreadyReplied` and swallow the
+            // real error above. See safeReply() for the branching logic.
+            await safeReply(interaction, {
+                content:
+                    'There was an error processing your screenshot command. Please try again later.',
+                flags: MessageFlags.Ephemeral,
+            });
             this.logger.error('Error processing screenshot command', { error });
         }
     }

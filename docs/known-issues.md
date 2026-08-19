@@ -316,18 +316,29 @@ Channel and emoji snowflakes are compile-time enums in
 `Infrastructure/Community/Discord/`. Only one channel is mapped (`SCREENSHOTS`).
 Any channel change needs a code change, image rebuild and redeploy.
 
-### 17. Small dead ends
+### 17. Small dead ends — partially ✅ FIXED (M1.8)
 
-- `package.json` has `test:local` pointing at `.env.local`, a file that does not
-  exist and is documented nowhere.
-- `Makefile` has `create-user`, `console-command` and `db-seed` targets invoking
-  `ts-node` (not a dependency) or `prisma db seed` (no seed script configured).
-- `RetryAxiosHttpClient` is bound and wired but nothing calls it.
+- ~~`package.json` has `test:local` pointing at `.env.local`, a file that does
+  not exist and is documented nowhere.~~ **Fixed**: no `.env.local` convention
+  ever existed, so the script was removed rather than repaired.
+- ~~`Makefile` has `create-user`, `console-command` and `db-seed` targets
+  invoking `ts-node` (not a dependency) or `prisma db seed` (no seed script
+  configured).~~ **Fixed**: `create-user` and `db-seed` removed (no such
+  console command or seed script exists anywhere in the codebase);
+  `console-command` repaired to call `bun run:command`, the real CLI entry
+  point (`bin/console.ts`) that already existed in `package.json`.
+- ~~`RetryAxiosHttpClient` is bound and wired but nothing calls it.~~ **Kept,
+  deliberately** — a comment now explains why (M7.1's PSNProfiles crawler is
+  the anticipated first caller). Not a dead end, just early.
+- ~~`README.md` in `discord-bot/` is still the unedited `bun init` boilerplate,
+  instructing you to run a file (`index.ts`) that does not exist at that
+  path.~~ **Fixed** — rewritten with real install/typecheck/run/test
+  instructions and pointers to `CLAUDE.md` / `docs/`.
 - Seven Prisma models (`LFGProfile`, `LFGGame`, `LFGParticipation`, `LFGEvent`,
   `StockUrls`, `SpecialChannel`, `CommandChannelLink`) have no repository and no
-  consumer.
-- `README.md` in `discord-bot/` is still the unedited `bun init` boilerplate,
-  instructing you to run a file (`index.ts`) that does not exist at that path.
+  consumer. **Not addressed here** — out of M1.8's scope; tracked separately
+  (`CommandChannelLink` is dropped outright per M9.2, the rest await the
+  features that would use them).
 
 ## Second batch — found while planning the marketplace and portal (2026-08-19)
 

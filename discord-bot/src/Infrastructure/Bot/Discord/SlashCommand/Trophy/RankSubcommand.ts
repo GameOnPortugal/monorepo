@@ -11,6 +11,7 @@ import {
 } from '../../../../../Application/Query/Trophy/GetRank/GetRank';
 import type { TrophyRankData } from '../../../../../Domain/Trophy/TrophyRankData';
 import type { UserPosition } from '../../../../../Domain/Trophy/UserPosition';
+import { safeReply } from '../../../../../Domain/Bot/safeReply';
 
 @injectable()
 export class RankSubcommand {
@@ -188,7 +189,7 @@ export class RankSubcommand {
                 stack: error instanceof Error ? error.stack : undefined,
             });
 
-            await context.interaction.reply({
+            await safeReply(context.interaction, {
                 content:
                     '⚠️ An error occurred while retrieving the trophy rankings. Please try again later.',
                 flags: MessageFlags.Ephemeral,

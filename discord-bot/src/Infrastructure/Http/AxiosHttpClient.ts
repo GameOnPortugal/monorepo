@@ -10,10 +10,7 @@ export default class AxiosHttpClient implements HttpClient {
 
     constructor() {
         this.axios = axios.create({
-            httpsAgent: new https.Agent({
-                rejectUnauthorized: false,
-                checkServerIdentity: () => undefined,
-            }),
+            httpsAgent: new https.Agent({}),
             httpAgent: new http.Agent({}),
         });
     }

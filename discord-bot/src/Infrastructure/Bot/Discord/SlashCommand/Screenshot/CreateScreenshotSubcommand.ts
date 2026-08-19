@@ -2,11 +2,12 @@ import { inject, injectable } from 'inversify';
 import CommandHandlerManager from '../../../../CommandHandler/CommandHandlerManager.ts';
 import type Logger from '../../../../../Application/Logger/Logger.ts';
 import { TYPES } from '../../../../DependencyInjection/types.ts';
-import { MessageFlags } from 'discord.js';
+import { escapeMarkdown, MessageFlags } from 'discord.js';
 import { ScreenshotId } from '../../../../../Domain/Screenshot/ScreenshotId.ts';
 import { CreateScreenshot } from '../../../../../Application/Write/Screenshot/CreateScreenshot/CreateScreenshot.ts';
 import { ScreenshotAlreadyExist } from '../../../../../Application/Write/Screenshot/CreateScreenshot/ScreenshotAlreadyExist.ts';
 import { DiscordEmoji } from '../../../../Community/Discord/DiscordEmoji.ts';
+import { safeReply } from '../../../../../Domain/Bot/safeReply.ts';
 
 @injectable()
 export class CreateScreenshotSubcommand {
@@ -23,7 +24,8 @@ export class CreateScreenshotSubcommand {
 
         // Validate required data
         if (!image || !name || !platform) {
-            await interaction.reply('Error: Missing required information for the screenshot.', {
+            await interaction.reply({
+                content: 'Error: Missing required information for the screenshot.',
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -31,7 +33,8 @@ export class CreateScreenshotSubcommand {
 
         // Validate image
         if (!image.contentType?.startsWith('image/')) {
-            await interaction.reply('Error: The attachment must be an image.', {
+            await interaction.reply({
+                content: 'Error: The attachment must be an image.',
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -52,15 +55,20 @@ export class CreateScreenshotSubcommand {
                 ),
             );
 
-            // Reply with the formatted message and the image
+            // Reply with the formatted message and the image. `name` is
+            // user-supplied and lands directly in message content, so it is
+            // escaped (markdown injection) and mentions are explicitly
+            // disabled on this reply (mention injection, M0.2/A1) in
+            // addition to the client-wide default set in DiscordBot.ts.
             const message = await interaction.reply({
                 content:
                     `📸 **Screenshot Submitted!**\n\n` +
                     `ID: #${screenshotId.toString()}\n` +
                     `Author: ${interaction.user.username}\n` +
-                    `Name: ${name}\n` +
+                    `Name: ${escapeMarkdown(name)}\n` +
                     `Platform: ${platform.charAt(0).toUpperCase() + platform.slice(1)}`,
                 files: [image.url],
+                allowedMentions: { parse: [] },
                 fetchReply: true, // This ensures we get the message object back
             });
 
@@ -88,7 +96,7 @@ export class CreateScreenshotSubcommand {
 
             // Check for specific error types
             if (error instanceof ScreenshotAlreadyExist) {
-                await interaction.reply({
+                await safeReply(interaction, {
                     content: '⚠️ Error: This screenshot has already been submitted.',
                     flags: MessageFlags.Ephemeral,
                 });
@@ -96,7 +104,7 @@ export class CreateScreenshotSubcommand {
             }
 
             // Generic error message for other errors
-            await interaction.reply({
+            await safeReply(interaction, {
                 content: 'There was an error submitting your screenshot. Please try again later.',
                 flags: MessageFlags.Ephemeral,
             });
