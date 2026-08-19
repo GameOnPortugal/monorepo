@@ -4,6 +4,25 @@ Everything here was reproduced on **2026-08-19** against commit `31f6699` and
 against the **live production deployment** on TedRelayer, not inferred from
 reading. Severity is about risk to the running community bot, not about tidiness.
 
+> **This list is not the whole picture.** A second audit pass — security,
+> correctness and Discord-API practice — produced findings that are *not*
+> numbered here, including two that belong in the 🔴 band:
+>
+> - **Mention injection (A1)** — `SellSubcommand` concatenates user-supplied text
+>   into message *content* and nothing sets `allowedMentions`, so an ad named
+>   `@everyone` makes the bot ping the server. Live exposure, today.
+> - **`/trophy rank` ranks the wrong people (B1)** — `OrmTrophyRepository` applies
+>   `take: limit` in the Prisma query *before* points are summed and sorted in JS,
+>   with no `orderBy`. "Top 10" is an arbitrary 10 profiles sorted among
+>   themselves. Affects all three rank modes and `findUserPosition`.
+>
+> Those live in [`plans/05-bot-audit-and-hardening.md`](plans/05-bot-audit-and-hardening.md)
+> (A1–A8, B1–B10, C1–C7), with the Discord-API and dependency detail in
+> [`06`](plans/06-discord-api-modernisation.md) and
+> [`07`](plans/07-dependency-upgrades.md). **Everything from all four documents is
+> sequenced together in [`plans/GLOBAL-PLAN.md`](plans/GLOBAL-PLAN.md)** — read
+> that to know what to do next.
+
 ## 🔴 High
 
 ### 0. `/marketplace sell` fails on every single use, in production, today

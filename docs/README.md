@@ -10,8 +10,17 @@ short version.
 | [architecture.md](architecture.md)                   | You are about to change `discord-bot/` code                                |
 | [operations.md](operations.md)                       | You need to build, release, deploy, or debug the running bot               |
 | [known-issues.md](known-issues.md)                   | You want the itemised list of what is broken or rotten, with severities    |
-| [revival-plan.md](revival-plan.md)                   | You are picking up the revival work and want a sequenced plan              |
-| [plans/](plans/00-overview.md)                       | You are an agent about to build one of the three current workstreams       |
+| [revival-plan.md](revival-plan.md)                   | You want the original narrative sequencing (superseded by the global plan) |
+| [session-log-2026-08-19.md](session-log-2026-08-19.md) | You want the record of how all of this was found, and why each call was made |
+| [plans/](plans/00-overview.md)                       | You are an agent about to build one of the workstreams                     |
+
+## ▶ Start here
+
+**[`plans/GLOBAL-PLAN.md`](plans/GLOBAL-PLAN.md) is the master work queue.** It
+sequences every finding in every document below into 92 numbered work items
+across 10 milestones, with a traceability appendix mapping each item back to its
+evidence. If you are about to do work on this repo, read that first and pick an
+item; everything else here is either evidence or per-area detail.
 
 ## Active workstreams
 
@@ -24,6 +33,9 @@ Detailed, self-contained plans written to be handed to independent agents:
 | [02 — Scheduler & lifecycle](plans/02-scheduler-and-lifecycle.md) | Job runner, ad bump/expiry, screenshot recovery |
 | [03 — Community portal](plans/03-portal.md) | Public site + admin portal |
 | [04 — Infrastructure migration](plans/04-infrastructure-migration.md) | TedRelayer → HTZ1 Portainer, CI/CD, release-please. **Repo side already built** |
+| [05 — Bot audit & hardening](plans/05-bot-audit-and-hardening.md) | Security, correctness and API findings across the whole bot |
+| [06 — Discord API modernisation](plans/06-discord-api-modernisation.md) | Deprecations, deferred replies, components, registration metadata |
+| [07 — Dependency upgrades](plans/07-dependency-upgrades.md) | Locked inventory, hygiene defects, the undici pin, Prisma 6→7 |
 
 ## The 60-second version
 
