@@ -25,11 +25,14 @@ export class DeleteAdSubcommand {
       if (/^\d+$/.test(identifier)) {
         const position = parseInt(identifier, 10) - 1
         const ads: Ad[] = await this.commandHandlerManager.handle(new ListUserAds(userId))
-        if (position < 0 || position >= ads.length) {
+        // Look the ad up rather than bounds-check then index: `noUncheckedIndexedAccess`
+        // types the element as possibly-undefined and cannot see the guard above.
+        const ad = ads[position]
+        if (!ad) {
           await interaction.reply({ content: 'Invalid ad position', ephemeral: true })
           return
         }
-        adId = ads[position].id
+        adId = ad.id
       } else {
         adId = AdId.fromString(identifier)
       }
@@ -56,7 +59,8 @@ export class DeleteAdSubcommand {
           ephemeral: true
         })
       } else {
-        await interaction.reply({ content: `Error deleting ad: ${error.message}`, ephemeral: true })
+        const message = error instanceof Error ? error.message : String(error)
+        await interaction.reply({ content: `Error deleting ad: ${message}`, ephemeral: true })
       }
     }
   }

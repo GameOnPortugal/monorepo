@@ -1,0 +1,30 @@
+name: Failure Notification
+
+# Pings Telegram whenever another workflow concludes in failure, so broken CI or
+# deploys surface without watching the Actions tab.
+on:
+  workflow_run:
+    workflows: ['CI', 'Deploy', 'Docker Build', 'Security', 'Release Please']
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Send failure message
+        uses: ./.github/actions/send-telegram-message
+        with:
+          bot-token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          chat-id: ${{ secrets.TELEGRAM_CHAT_ID }}
+          thread-id: ${{ secrets.TELEGRAM_THREAD_ID }}
+          message: |
+            ❌ Workflow "${{ github.event.workflow_run.name }}" failed
+            Repo: ${{ github.repository }}
+            Branch: ${{ github.event.workflow_run.head_branch }}
+            Run: ${{ github.event.workflow_run.html_url }}

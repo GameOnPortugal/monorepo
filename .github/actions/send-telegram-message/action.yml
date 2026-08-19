@@ -1,0 +1,44 @@
+name: 'Send Telegram Message'
+description: 'Send a message to a Telegram chat'
+
+inputs:
+  bot-token:
+    description: 'Telegram bot token'
+    required: true
+  chat-id:
+    description: 'Telegram chat ID'
+    required: true
+  thread-id:
+    description: 'Telegram message thread ID (optional)'
+    required: false
+  message:
+    description: 'Message text'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - shell: bash
+      env:
+        BOT_TOKEN: ${{ inputs.bot-token }}
+        CHAT_ID: ${{ inputs.chat-id }}
+        THREAD_ID: ${{ inputs.thread-id }}
+        MESSAGE: ${{ inputs.message }}
+      run: |
+        set -euo pipefail
+        # Skip silently when Telegram isn't configured (keeps deploys green
+        # before the secrets are wired up).
+        if [ -z "${BOT_TOKEN:-}" ] || [ -z "${CHAT_ID:-}" ]; then
+          echo "Telegram not configured — skipping notification."
+          exit 0
+        fi
+        # --data-urlencode, not -d "a=b&c=d": the old action interpolated the
+        # message straight into the query string, so any & or = in a commit
+        # message silently truncated or corrupted the notification.
+        ARGS=(--data-urlencode "chat_id=${CHAT_ID}" --data-urlencode "text=${MESSAGE}")
+        if [ -n "${THREAD_ID:-}" ]; then
+          ARGS+=(--data-urlencode "message_thread_id=${THREAD_ID}")
+        fi
+        curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" "${ARGS[@]}" >/dev/null \
+          && echo "Telegram notification sent." \
+          || echo "Telegram notification failed (non-fatal)."

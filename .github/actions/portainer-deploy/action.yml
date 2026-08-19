@@ -1,0 +1,173 @@
+name: 'Deploy to Portainer'
+description: 'Deploy a Docker Compose stack to Portainer over an SSH tunnel'
+
+# Portainer's API (:9000 on the host) is firewalled and NOT reachable from
+# GitHub Actions runner IPs — a direct curl just hangs ~137s and fails with
+# curl exit 28. The host *is* reachable over SSH, and Portainer answers on the
+# host's loopback, so we open a short-lived SSH tunnel
+# (runner:local-port -> host:127.0.0.1:9000) and drive the API through it.
+# The deploy key is locked down (forced command + permitopen=127.0.0.1:9000),
+# so it can ONLY open this one tunnel — no shell, no other ports.
+
+inputs:
+  portainer-access-token:
+    description: 'Portainer API access token'
+    required: true
+  stack-id:
+    description: 'Portainer stack ID to update'
+    required: true
+  endpoint-id:
+    description: 'Portainer endpoint ID'
+    required: true
+  stack-file:
+    description: 'Path to the stack file (docker-compose yaml)'
+    required: true
+  version:
+    description: 'Version to deploy (replaces ${APP_VERSION} in stack file)'
+    required: true
+  ssh-host:
+    description: 'Host running Portainer, reachable over SSH'
+    required: true
+  ssh-user:
+    description: 'SSH user for the deploy tunnel'
+    required: true
+  ssh-port:
+    description: 'SSH port'
+    required: false
+    default: '22'
+  ssh-key:
+    description: 'Private SSH key for the tunnel-only deploy account'
+    required: true
+  ssh-known-hosts:
+    description: 'Pinned known_hosts line(s) for the SSH host'
+    required: true
+  local-port:
+    description: 'Local port on the runner to bind the tunnel to'
+    required: false
+    default: '9000'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Prepare stack file with version
+      id: prepare-stack
+      shell: bash
+      run: |
+        # Replace APP_VERSION placeholder with actual version
+        sed "s/\${APP_VERSION}/${{ inputs.version }}/g" ${{ inputs.stack-file }} > /tmp/stack.yaml
+        echo "Stack file prepared with version ${{ inputs.version }}"
+
+    - name: Open SSH tunnel to Portainer
+      shell: bash
+      env:
+        SSH_KEY: ${{ inputs.ssh-key }}
+        SSH_KNOWN_HOSTS: ${{ inputs.ssh-known-hosts }}
+        SSH_HOST: ${{ inputs.ssh-host }}
+        SSH_USER: ${{ inputs.ssh-user }}
+        SSH_PORT: ${{ inputs.ssh-port }}
+        LOCAL_PORT: ${{ inputs.local-port }}
+      run: |
+        set -euo pipefail
+        KEYFILE="$RUNNER_TEMP/portainer_deploy_key"
+        KNOWN_HOSTS="$RUNNER_TEMP/portainer_known_hosts"
+        printf '%s\n' "$SSH_KEY" > "$KEYFILE"
+        chmod 600 "$KEYFILE"
+        printf '%s\n' "$SSH_KNOWN_HOSTS" > "$KNOWN_HOSTS"
+
+        # Background tunnel: runner:LOCAL_PORT -> host:127.0.0.1:9000.
+        # ExitOnForwardFailure makes ssh fail fast if the forward is rejected.
+        ssh -f -N \
+          -o IdentitiesOnly=yes \
+          -o StrictHostKeyChecking=yes \
+          -o UserKnownHostsFile="$KNOWN_HOSTS" \
+          -o ConnectTimeout=15 \
+          -o ServerAliveInterval=15 \
+          -o ServerAliveCountMax=3 \
+          -o ExitOnForwardFailure=yes \
+          -i "$KEYFILE" \
+          -L "${LOCAL_PORT}:127.0.0.1:9000" \
+          -p "$SSH_PORT" \
+          "${SSH_USER}@${SSH_HOST}"
+
+        # Confirm Portainer answers through the tunnel before we proceed.
+        if curl -sf --max-time 15 -o /dev/null "http://localhost:${LOCAL_PORT}/api/system/status"; then
+          echo "✅ SSH tunnel to Portainer established (localhost:${LOCAL_PORT})"
+        else
+          echo "❌ Could not reach Portainer through the SSH tunnel"
+          exit 1
+        fi
+
+    - name: Fetch current stack from Portainer
+      id: fetch-stack
+      shell: bash
+      env:
+        PORTAINER_TOKEN: ${{ inputs.portainer-access-token }}
+        LOCAL_PORT: ${{ inputs.local-port }}
+      run: |
+        # GET /api/stacks/{id} to retrieve current stack definition
+        HTTP_STATUS=$(curl -s --connect-timeout 10 --max-time 30 \
+          -o /tmp/current_stack.json -w "%{http_code}" \
+          -X GET \
+          -H "X-API-Key: $PORTAINER_TOKEN" \
+          "http://localhost:${LOCAL_PORT}/api/stacks/${{ inputs.stack-id }}")
+
+        if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+          echo "✅ Successfully fetched current stack definition"
+          # Extract Env array and save to file (no logging of values)
+          jq '.Env // []' /tmp/current_stack.json > /tmp/current_env.json
+          echo "Found $(jq length /tmp/current_env.json) environment variables"
+        else
+          echo "❌ Failed to fetch current stack (HTTP $HTTP_STATUS)"
+          exit 1
+        fi
+
+    - name: Deploy stack to Portainer
+      shell: bash
+      env:
+        PORTAINER_TOKEN: ${{ inputs.portainer-access-token }}
+        LOCAL_PORT: ${{ inputs.local-port }}
+      run: |
+        STACK_CONTENT=$(cat /tmp/stack.yaml)
+
+        # Build the JSON payload with stackFileContent and preserved Env
+        jq -n \
+          --arg content "$STACK_CONTENT" \
+          --slurpfile env /tmp/current_env.json \
+          '{
+            "stackFileContent": $content,
+            "env": $env[0],
+            "prune": true,
+            "pullImage": true
+          }' > /tmp/update_payload.json
+
+        # Generous max-time: the PUT triggers a synchronous image pull on the host.
+        HTTP_STATUS=$(curl -s --connect-timeout 10 --max-time 600 \
+          -o /tmp/response.json -w "%{http_code}" \
+          -X PUT \
+          -H "X-API-Key: $PORTAINER_TOKEN" \
+          -H "Content-Type: application/json" \
+          "http://localhost:${LOCAL_PORT}/api/stacks/${{ inputs.stack-id }}?endpointId=${{ inputs.endpoint-id }}" \
+          -d @/tmp/update_payload.json)
+
+        echo "HTTP Status: $HTTP_STATUS"
+        # Only log non-sensitive response metadata
+        jq '{Id, Name, Status, CreationDate, UpdateDate}' /tmp/response.json 2>/dev/null || echo "Could not parse response"
+
+        if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+          echo "✅ Stack deployed successfully!"
+        else
+          echo "❌ Failed to deploy stack"
+          # Log error message only (Portainer error responses don't contain secrets)
+          jq '.message // .error // .' /tmp/response.json 2>/dev/null || cat /tmp/response.json
+          exit 1
+        fi
+
+    - name: Close SSH tunnel
+      if: always()
+      shell: bash
+      env:
+        LOCAL_PORT: ${{ inputs.local-port }}
+      run: |
+        # Tear down the background tunnel (runner is ephemeral, but keep it tidy).
+        pkill -f "${LOCAL_PORT}:127.0.0.1:9000" 2>/dev/null || true
+        echo "Tunnel closed"

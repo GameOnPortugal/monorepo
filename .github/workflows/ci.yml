@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Cancel superseded runs on the same ref (keeps the latest push authoritative).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      bot: ${{ steps.filter.outputs.bot }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            bot:
+              - 'discord-bot/**'
+              - '.github/workflows/ci.yml'
+
+  bot:
+    name: Bot — typecheck & test
+    needs: changes
+    if: ${{ needs.changes.outputs.bot == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.2"
+
+      # Prisma's preinstall hook requires Node >= 18.18.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        working-directory: discord-bot
+        run: bun install --frozen-lockfile
+
+      # MUST come before typecheck: without a generated client, tsc reports ~30
+      # phantom "implicitly has an 'any' type" errors from the missing types.
+      - name: Generate Prisma client
+        working-directory: discord-bot
+        run: bunx prisma generate
+
+      - name: Type-check
+        working-directory: discord-bot
+        run: bunx tsc --noEmit
+
+      # Integration tests need MariaDB. Run them inside the CI compose network so
+      # the DB is reachable at `mariadb:3306` — no host port-mapping assumptions.
+      - name: Test
+        working-directory: discord-bot
+        run: |
+          cp .env.test .env
+          docker compose -f docker-compose.ci.yml up -d
+          # Wait for the app container to be ready, then set up the test DB.
+          timeout 300 bash -c 'until docker compose -f docker-compose.ci.yml exec -T discord-bot true 2>/dev/null; do sleep 3; done'
+          docker compose -f docker-compose.ci.yml exec -T discord-bot bun run test:setup
+          docker compose -f docker-compose.ci.yml exec -T discord-bot bun test
+
+      - name: Show app logs on failure
+        if: failure()
+        working-directory: discord-bot
+        run: docker compose -f docker-compose.ci.yml logs
+
+      - name: Tear down test stack
+        if: always()
+        working-directory: discord-bot
+        run: docker compose -f docker-compose.ci.yml down -v
+
+  # Single required status check — green when every triggered job is.
+  ci:
+    name: CI
+    needs: [bot]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify no job failed
+        run: |
+          if [ "${{ contains(needs.*.result, 'failure') }}" = "true" ] || \
+             [ "${{ contains(needs.*.result, 'cancelled') }}" = "true" ]; then
+            echo "A required job failed or was cancelled."
+            exit 1
+          fi
+          echo "All triggered jobs passed."

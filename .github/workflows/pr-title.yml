@@ -1,0 +1,49 @@
+name: PR Title
+
+# Enforce Conventional Commits on the PR title. PRs are squash-merged, so the
+# title becomes the commit message on main — which is what release-please reads
+# to decide versions. The repo's history is full of `chore: another attempt`,
+# which is exactly why no release was ever cut.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  lint:
+    name: Lint PR title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            chore
+            docs
+            refactor
+            test
+            ci
+            build
+            perf
+            revert
+          scopes: |
+            bot
+            marketplace
+            screenshots
+            trophies
+            scheduler
+            portal
+            portal-api
+            portal-web
+            db
+            ci
+            docker
+            infra
+            deps
+            deps-dev
+          requireScope: false

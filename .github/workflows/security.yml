@@ -1,0 +1,92 @@
+name: Security
+
+# Security scanning:
+#  - CodeQL  : static application security testing (SAST) for JS/TS
+#  - Trivy   : dependency (lockfile) CVE scan + IaC/misconfig scan
+#  - Gitleaks: secret scanning across the repo and history
+#
+# This repo is public, so GitHub Advanced Security features (code scanning,
+# SARIF upload) are available at no cost — unlike the private ez-web repos this
+# pattern came from, results are uploaded rather than discarded.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, so newly-disclosed CVEs in pinned deps surface even without a push.
+    - cron: '27 4 * * 1'
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  codeql:
+    name: CodeQL (SAST)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: security-and-quality
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:javascript-typescript'
+
+  trivy:
+    name: Trivy (deps & misconfig)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scanners: vuln,secret,misconfig
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-results.sarif
+          # old-discord-bot/ is retired reference code (Node 15, never built or
+          # deployed) — scanning it would drown the report in unfixable CVEs.
+          skip-dirs: old-discord-bot,webpage
+
+      - name: Upload Trivy results to code scanning
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy
+
+  gitleaks:
+    name: Gitleaks (secret scan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Gitleaks
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz \
+            | tar -xz -C "$RUNNER_TEMP" gitleaks
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Run Gitleaks
+        run: gitleaks detect --source . -v --no-banner --exit-code 1

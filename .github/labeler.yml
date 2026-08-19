@@ -1,0 +1,33 @@
+# Path-based PR labels. Applied by .github/workflows/labeler.yml.
+
+Bot:
+  - changed-files:
+      - any-glob-to-any-file: 'discord-bot/**'
+
+Portal:
+  - changed-files:
+      - any-glob-to-any-file: 'portal/**'
+
+Infrastructure:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'infrastructure/**'
+          - '.github/workflows/**'
+          - '.github/actions/**'
+
+Database:
+  - changed-files:
+      - any-glob-to-any-file: 'discord-bot/prisma/**'
+
+Documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'docs/**'
+          - '**/*.md'
+
+Legacy:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'old-discord-bot/**'
+          - 'webpage/**'
+          - 'scheduler/**'
