@@ -83,7 +83,7 @@ migrations. Either extract `prisma/` into a shared workspace package or have the
 API import the bot's generated client — decide early, and write it down.
 
 **Do not fork the data.** One database, one source of truth. A read replica is
-premature at this size (70 ads, 624 screenshots, 4,477 trophies).
+premature at this size (70 ads, 624 screenshots, 4,971 trophies).
 
 ### Hosting — decided: HTZ1
 

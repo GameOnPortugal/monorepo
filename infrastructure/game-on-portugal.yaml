@@ -9,8 +9,8 @@
 #   https://game-on-portugal.pt        → gop-portal-web:80   (added by plan 03)
 #   https://media.game-on-portugal.pt  → gop-minio:9000      (public-read bucket)
 #
-# Migration status: see docs/plans/04-infrastructure-migration.md. Until cutover
-# the live bot still runs on TedRelayer under ~/game-on-portugal/.
+# This is the live production stack (id 46, endpoint 3) since the 2026-08-19
+# cutover — see docs/plans/04-infrastructure-migration.md and docs/operations.md.
 
 services:
   # --- Discord bot ---------------------------------------------------------

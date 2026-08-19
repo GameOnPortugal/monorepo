@@ -112,7 +112,7 @@ only the schema file disagreed. `prisma migrate diff` now reports an empty
 migration, and `prisma db push` (tests) and `prisma migrate deploy` (production)
 finally produce the same shape.
 
-### 2. CI deploys to a machine that no longer exists — ✅ addressed in-repo
+### 2. CI deploys to a machine that no longer exists — ✅ FIXED
 
 Both `bot.yaml` and `scheduler.yaml` deployed via `caprover/deploy-from-github`
 to the CapRover host *Superman*, whose Hetzner contract was cancelled on
@@ -120,16 +120,17 @@ to the CapRover host *Superman*, whose Hetzner contract was cancelled on
 (`~/game-on-portugal/`, docker-compose) and the repo was never updated, so
 merging to `main` built an image and then failed to deploy it.
 
-**Status**: the nine CapRover-era workflows have been replaced with the house
-pipeline (Portainer over an SSH tunnel to HTZ1) — see
+**Fixed** 2026-08-19: the nine CapRover-era workflows were replaced with the
+house pipeline (Portainer over an SSH tunnel to HTZ1) — see
 [`plans/04-infrastructure-migration.md`](plans/04-infrastructure-migration.md)
-and `infrastructure/SETUP.md`. The repo side is done and lint-clean; the
-credentials, Portainer stack and DNS cutover are still outstanding, so
-**production is still hand-deployed on TedRelayer until then**.
-
-The `CAPROVER_*` secrets and `MY_RELEASE_PLEASE_TOKEN` should be deleted. The
-remaining secrets (`DOCKER_*`, `TELEGRAM_*`) are 14 months old and should be
-assumed expired until proven otherwise.
+and `infrastructure/SETUP.md`. Phases 0–3 of that plan have now executed:
+credentials created, the Portainer stack built (id 46) and restored, and
+production cut over from TedRelayer to HTZ1 with ~2 minutes of downtime.
+`deploy.yml`'s `push` trigger is enabled — **merging to `main` deploys for
+real**. The old `CAPROVER_*` secrets were deleted; `MY_RELEASE_PLEASE_TOKEN`
+was left in place even though nothing reads it (see issue #6). Remaining gap:
+`RELEASE_PLEASE_TOKEN` was not created (see #6), and the Telegram notification
+secrets are still unset, so `deploy.yml` runs without a Telegram ping today.
 
 ### 3. The scheduler has never run a single job
 
@@ -191,7 +192,7 @@ no configured linter enforces. Style is visibly inconsistent — 4-space and
 2-space indentation, semicolons and no semicolons, sometimes within one
 directory.
 
-### 6. release-please has never produced a release — ✅ addressed in-repo
+### 6. release-please has never produced a release — 🔸 repo side fixed, PAT still outstanding
 
 Configured since April 2025, running on every `main` push. Result: **zero tags,
 zero GitHub releases**, both manifest entries still `0.0.0`. Two candidate
@@ -205,9 +206,18 @@ even if the rest worked.
 that actually exists (`discord-bot`), `version` added to its `package.json` (the
 `node` release-type requires one), and `pr-title.yml` now enforces Conventional
 Commits on the PR title — which is the actual root cause, since PRs are
-squash-merged and `chore:` never triggers a release. Needs a
-`RELEASE_PLEASE_TOKEN` PAT: PRs opened with the default `GITHUB_TOKEN` do not
-trigger CI or the downstream deploy.
+squash-merged and `chore:` never triggers a release. That part is fixed.
+
+**Still open**: the `RELEASE_PLEASE_TOKEN` PAT was **not created** during the
+2026-08-19 infrastructure migration — it cannot be minted non-interactively.
+`release-please.yml` falls back to `secrets.GITHUB_TOKEN`, which lets it open
+and update release PRs, but PRs opened with the default token do not trigger
+downstream workflows (CI, and therefore the deploy that would run on merging
+the release PR). `MY_RELEASE_PLEASE_TOKEN` still exists as a secret but is not
+read by the current workflow — safe to delete once `RELEASE_PLEASE_TOKEN` is
+minted. Until then, expect a release PR to open on the next `feat:`/`fix:`
+merge, but treat its own merge as needing a manual deploy trigger
+(`workflow_dispatch`) if CI did not visibly run on it.
 
 ### 7. Dependencies are ~14 months stale
 
@@ -251,7 +261,7 @@ nothing executes.
 `/trophy check` and `/trophy rank` work, but nothing has written to the
 `trophies` table since **2024-12-02** — the psnprofiles.com scraper that feeds
 it lives only in `old-discord-bot/scripts/parse-psn-profile.js` and was never
-ported. Production holds 4,477 trophies across 118 profiles, all frozen. Users
+ported. Production holds 4,971 trophies across 118 profiles, all frozen. Users
 are being shown a leaderboard that has not moved in twenty months, with no
 indication that it is stale.
 
@@ -398,6 +408,31 @@ The old bot spoke Portuguese throughout ("Qual o nome do artigo?", "VENDO",
 English, in a community whose members post in Portuguese. This is a UX regression
 that arrived with the rewrite and has never been raised.
 
+## Third batch — found during the HTZ1 infrastructure migration (2026-08-19)
+
+### 25. 🔴 The nightly database backup had been silently failing to upload for seven weeks — ✅ FIXED
+
+Found while re-verifying the `databack/mysql-backup` sidecar on TedRelayer as
+phase 0, step 3 of [`plans/04-infrastructure-migration.md`](plans/04-infrastructure-migration.md)
+("nobody has ever checked"). The last file actually present on the NAS was
+dated **2026-06-30** — the day of the Superman→TedRelayer migration — even
+though the container had been reporting `Up` for seven weeks since.
+
+The dump itself succeeded every night; it was the SMB **upload** that failed,
+with `protocol negotiation failed: NT_STATUS_CONNECTION_DISCONNECTED`. Root
+cause: `DB_DUMP_TARGET` addressed the NAS over the internet via the DDNS name
+`joshlopes.synology.me`, when TedRelayer and the NAS are in fact on the same
+LAN. Fixed by repointing it at the LAN address `192.168.0.178` and recreating
+the container; a backup was produced immediately and verified present on the
+NAS.
+
+**The general lesson, worth not relearning**: the backup had never once been
+checked end-to-end, and "the container is `Up`" was never evidence that it was
+actually producing restorable, delivered backups — only that the process
+hadn't crashed. The same applies to `gop-db-backup` on the new HTZ1 stack: its
+existence in `docker ps` is not verification either. Spot-check it periodically
+rather than assuming.
+
 ## Verified *not* broken
 
 Worth recording, so nobody re-investigates:
@@ -415,10 +450,11 @@ Worth recording, so nobody re-investigates:
 - **The bot itself** — live on TedRelayer, up 6 weeks, `Ready! Logged in as
   GameOnPortugalBot#9387`, 4 slash commands registered, migrations applied
   cleanly at boot.
-- **Production data** — intact: 4,477 trophies, 624 screenshots, 118 trophy
-  profiles, 70 ads, with a nightly `databack/mysql-backup` job writing to the
-  NAS. `/marketplace` is still being used (newest ad 2026-08-06) and
-  `/screenshot` too (newest 2026-06-01).
+- **Production data** — intact: 4,971 trophies, 624 screenshots, 118 trophy
+  profiles, 70 ads, with a nightly `databack/mysql-backup` job that *appeared*
+  to be writing to the NAS — turned out not to be (see issue #25, found and
+  fixed later the same day). `/marketplace` is still being used (newest ad
+  2026-08-06) and `/screenshot` too (newest 2026-06-01).
 - **LFG data** — the LFG tables are **empty**, not lost-and-recoverable. Do not
   plan a migration for them; there is nothing to migrate.
 
