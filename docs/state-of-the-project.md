@@ -15,6 +15,7 @@ against the repo, GitHub, Docker Hub or DNS on that date rather than inferred.
 | 2025-06-30 08:36 UTC   | Last push of `joshlopes/game-on-portugal-bot:latest` to Docker Hub          |
 | **2026-06-29/30**      | **Superman (the CapRover host) decommissioned.** Stack hand-migrated to TedRelayer as docker-compose; database moved and verified by row count |
 | 2026-08-19             | This exploration. Repo ~14 months dormant — but the bot is still running.   |
+| **2026-08-19**         | **Infrastructure migration executed.** Production cut over from TedRelayer to HTZ1 (Portainer stack `game-on-portugal`, id 46), CI wired to deploy on merge. See [`plans/04-infrastructure-migration.md`](plans/04-infrastructure-migration.md). TedRelayer kept stopped-but-intact as rollback until 2026-09-02 |
 
 The commit log tells its own story: 30+ consecutive `chore:` commits
 (`chore: fff`, `chore: whatever`, `chore: another attempt`) from someone fighting
@@ -37,42 +38,48 @@ branch `main`. The org also holds:
 an org one: `joshlopes/game-on-portugal-bot` (tags `latest`, `pr-<n>`,
 `pr-<sha>`) and `joshlopes/game-on-portugal-scheduler`.
 
-**Runtime** — **TedRelayer**, the home media server (`ssh -p 2224
-tedcrypto@192.168.0.184`), as a plain docker-compose stack in
-`~/game-on-portugal/`. Five containers, all up for 6–7 weeks:
+**Runtime** — **HTZ1** (`ssh -p 2224 ezweb@195.201.192.35`), Portainer stack
+`game-on-portugal` (stack id `46`, endpoint `3`), since the **2026-08-19**
+cutover. Five containers:
 
-| Container                     | Image                                          |
-| ----------------------------- | ---------------------------------------------- |
-| `game-on-portugal-app`        | `joshlopes/game-on-portugal-bot:latest`        |
-| `game-on-portugal-scheduler`  | `joshlopes/game-on-portugal-scheduler:latest`  |
-| `game-on-portugal-db`         | `mariadb:11.5.2` (healthy)                     |
-| `game-on-portugal-redis`      | `redis:7.0.4`                                  |
-| `game-on-portugal-db-backup`  | `databack/mysql-backup:v0.12.0` → NAS          |
+| Container           | Image                                           |
+| -------------------- | ------------------------------------------------ |
+| `gop-bot`            | `joshlopes/game-on-portugal-bot:${APP_VERSION}`   |
+| `gop-db`             | `mariadb:11.7.2` (healthy)                        |
+| `gop-minio`          | `minio/minio` — public `gop-media` bucket         |
+| `gop-createbuckets`  | `minio/mc` — one-shot bucket setup                |
+| `gop-db-backup`      | `databack/mysql-backup:v0.12.0`                   |
 
 The bot is genuinely live: its log shows `Ready! Logged in as
 GameOnPortugalBot#9387` and `Successfully reloaded 4 application (/) commands`.
+There is no `redis` container in the new stack at all — the rewritten bot
+never reads `REDIS_DSN`; only `old-discord-bot` used Redis.
 
-Two things about this arrangement matter:
-
-- It was **not** the repo that put it there. Until 2026-06-30 the runtime was a
-  CapRover host called *Superman* (Hetzner FSN1-DC5), which was decommissioned
-  and its contract cancelled. Someone moved the stack by hand and never updated
-  the repo, so **the entire CI/CD deploy path now points at a machine that does
-  not exist** and merging to `main` has no effect on production.
-- The Redis container is inherited cruft. The rewritten bot never reads
-  `REDIS_DSN`; only `old-discord-bot` used Redis. The compose file also passes
-  `SENTRY_DSN`, `TROPHY_WEBHOOK` and `TELEGRAM_ACCESS_TOKEN`, none of which the
-  current code reads — it was clearly written from the stale `.env.example`.
+Until this cutover, runtime was **TedRelayer**, the home media server, as a
+plain docker-compose stack in `~/game-on-portugal/` — itself a hand-migration
+off *Superman* (a decommissioned CapRover host) that the repo's CI never found
+out about, so merging to `main` had no effect on production for over a year.
+That TedRelayer stack is kept **stopped-but-intact** as the rollback path
+until **2026-09-02** — `game-on-portugal-app` and `-scheduler` are stopped,
+`-db`/`-redis`/`-db-backup` still run. See [`operations.md`](operations.md)'s
+"Rollback path" section. `deploy.yml`'s `push` trigger is now enabled, so
+merging to `main` **does** deploy, to HTZ1, for real.
 
 **Production data** (as of 2026-08-19) — intact and still growing:
 
 | Table            | Rows  | Newest row              |
 | ---------------- | ----- | ----------------------- |
-| `trophies`       | 4,477 | 2024-12-02              |
+| `trophies`       | 4,971 | 2024-12-02              |
 | `screenshots`    | 624   | 2026-06-01              |
 | `trophyprofiles` | 118   | 2026-06-16              |
 | `ads`            | 70    | 2026-08-06              |
 | all LFG tables   | **0** | —                       |
+
+The trophies count was corrected from an earlier estimate of 4,477 during the
+2026-08-19 migration's phase-0 dump-and-restore: 4,477 came from
+`information_schema.tables.table_rows`, an *estimate* for InnoDB, not an exact
+count; `SELECT COUNT(*)` gives 4,971. The other three figures were exact
+either way.
 
 Two readings worth noting. Ads are still being posted 13 days ago, so the
 community actively uses the bot. Trophies stopped in **December 2024** — because
@@ -154,6 +161,12 @@ Four further jobs are commented out in both versions — `parse-psn-profiles`,
 invoking `node scripts/…` scripts that exist only in `old-discord-bot/`. They
 are dead until those features are ported.
 
+**As of the 2026-08-19 HTZ1 migration, the scheduler is retired rather than
+carried over** — `infrastructure/game-on-portugal.yaml` has no scheduler
+service at all, so there is now no cron trigger for `week-screenshot-winner`
+anywhere, not even a broken one. [`plans/02-scheduler-and-lifecycle.md`](plans/02-scheduler-and-lifecycle.md)
+replaces it with in-process cron inside the bot; that work has not started.
+
 ### `old-discord-bot/` — the retired predecessor
 
 Node 15 + discord.js v12 + Sequelize + MySQL 5.6, with Redis, Sentry, Telegram
@@ -191,37 +204,36 @@ config and the labeler, built and deployed by nothing.
 
 ## CI/CD as it stands
 
-Nine workflows under `.github/workflows/`. Per-project `bot.yaml` and
-`scheduler.yaml` orchestrate reusable `shared.*` workflows for tests, image
-build and CapRover deploy; `global.release-please.yaml` handles versioning;
-`shared.labeler.yaml` auto-labels PRs; two workflows send Telegram messages.
+Eight workflows under `.github/workflows/`: `ci.yml` (typecheck + tests),
+`docker-build.yml` (PR image build, no push), `deploy.yml` (build, push, roll
+the Portainer stack), `release-please.yml`, `pr-title.yml`, `labeler.yml`,
+`security.yml` and `workflow-failed.yml`. The original nine CapRover-era
+workflows (`bot.yaml`, `scheduler.yaml`, their `shared.*` dependencies) were
+deleted when this pipeline replaced them — they deployed via
+`caprover/deploy-from-github` to *Superman*, decommissioned 2026-06-30.
 
-Observed facts:
+Observed facts, as of the 2026-08-19 cutover:
 
-- **The deploy jobs target a decommissioned machine.** Both `bot.yaml` and
-  `scheduler.yaml` deploy via `caprover/deploy-from-github` to the CapRover host
-  *Superman*, whose Hetzner contract was cancelled on 2026-06-30. The pipeline
-  would build and push images fine, then fail (or worse, succeed against
-  nothing) at the deploy step. Production is now updated by hand on TedRelayer.
-- Actions are **enabled**, all nine workflows **active**.
-- `gh run list` returns **zero runs** — nothing has run since at least the
-  retention horizon, consistent with 14 months of dormancy.
-- **Zero git tags and zero GitHub releases exist**, despite release-please having
-  been configured and running on every `main` push since April 2025. Both
-  manifest entries are still `0.0.0`. Either `MY_RELEASE_PLEASE_TOKEN` was never
-  valid, or every commit since has been `chore:`-typed and thus release-less
-  (which the commit log makes entirely plausible).
-- `webpage/` has no workflow at all, and `scheduler` is in
-  `release-please-config.json` but **missing from `.release-please-manifest.json`**.
-- The static-analysis job in `bot.yaml` is commented out, pointing at
-  `TedcryptoOrg/github-actions` — a third-party org's shared workflows, i.e. a
-  cross-project dependency inherited from the author's other work.
+- **The deploy pipeline works end to end.** `deploy.yml`'s `push` trigger is
+  enabled; merging to `main` builds `joshlopes/game-on-portugal-bot`, pushes
+  it, and rolls Portainer stack `game-on-portugal` (id 46) on HTZ1 over an SSH
+  tunnel. Verified by the cutover itself: the real deploy path put the current
+  build on HTZ1 with ~2 minutes of downtime.
+- Actions are **enabled**, all eight workflows **active**.
+- Release-please is wired (config + manifest under `.github/`, `pr-title.yml`
+  enforcing Conventional Commits, `discord-bot`'s `package.json` given a
+  `version`), but **no release has actually been cut yet** — that needs a
+  `feat:`/`fix:`-titled PR to merge first, and `RELEASE_PLEASE_TOKEN` was not
+  created during the migration (falls back to `GITHUB_TOKEN`, which works but
+  means the release PR itself gets no CI run). See known-issues.md #6.
+- `webpage/` still has no workflow at all, and is still slated for deletion
+  along with the rest of the orphaned static site.
 
 ## Overall read
 
 A small, competently structured project that stopped being *maintained* without
 ever stopping *running*. The bones are good: clean layering, real integration
-tests, a reproducible Docker build, a sensible CI skeleton, and 4,477 trophies'
+tests, a reproducible Docker build, a sensible CI skeleton, and 4,971 trophies'
 worth of community history still in the database.
 
 What the fourteen months actually cost is subtler than "it broke". The code kept
@@ -230,10 +242,13 @@ serving, so nobody noticed that:
 - `/marketplace sell` has been half-failing on **every single use** since the
   rewrite went live;
 - the scheduler has never executed a job, because an image was never rebuilt
-  after a one-line config change;
+  after a one-line config change, and it has since been retired outright
+  without a replacement cron trigger yet built (plan 02);
 - `/trophy rank` has been ranking data frozen in December 2024;
 - and the deploy pipeline quietly detached from reality when the host it
-  targets was decommissioned.
+  targeted was decommissioned — fixed 2026-08-19 by the HTZ1 migration, which
+  also caught a second, unrelated instance of the same failure mode: the
+  nightly database backup had been silently failing to upload for seven weeks.
 
 Each of these is individually small and individually invisible. That is the real
 finding: the project's problem is not fragility, it is the **absence of any

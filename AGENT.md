@@ -23,19 +23,22 @@ Details and the reasoning behind "alive?" are in
 
 - **Repo**: `github.com/GameOnPortugal/monorepo` (public), default branch `main`.
 - **Images**: Docker Hub `joshlopes/game-on-portugal-bot`, `joshlopes/game-on-portugal-scheduler`.
-- **Runtime**: **TedRelayer**, the home media server —
-  `ssh -p 2224 tedcrypto@192.168.0.184`, docker-compose stack at
-  `~/game-on-portugal/`. The bot is **live** (`GameOnPortugalBot#9387`).
+- **Runtime**: **HTZ1** — `ssh -p 2224 ezweb@195.201.192.35`, Portainer stack
+  `game-on-portugal` (id `46`, endpoint `3`). The bot is **live**
+  (`GameOnPortugalBot#9387`). Moved off TedRelayer, the home media server, on
+  **2026-08-19**; TedRelayer stays stopped-but-intact as the rollback path
+  until **2026-09-02**.
 - **Website**: `game-on-portugal.pt` → GitHub Pages of the *separate*
   `GameOnPortugal/gameonportugal.github.io` repo, **not** `webpage/` here.
 
-> ⚠️ **Deployment is in transition.** The CapRover workflows (targeting
-> *Superman*, decommissioned 2026-06-30) have been replaced with the house
-> pipeline: Portainer on **HTZ1** over an SSH tunnel, release-please cutting
-> versions on merge. But the credentials, Portainer stack and DNS cutover are
-> **not done**, so production is still hand-deployed on TedRelayer and merging to
-> `main` will not update it. See [`infrastructure/SETUP.md`](infrastructure/SETUP.md)
-> and [`docs/plans/04-infrastructure-migration.md`](docs/plans/04-infrastructure-migration.md).
+> ✅ **Deployment migration done (2026-08-19).** The CapRover workflows
+> (targeting *Superman*, decommissioned 2026-06-30) have been replaced with the
+> house pipeline: Portainer on **HTZ1** over an SSH tunnel, release-please
+> cutting versions on merge. Production now runs there and **merging to `main`
+> deploys it**. What is still outstanding — `RELEASE_PLEASE_TOKEN`, Telegram
+> secrets, the public apex DNS cutover, the TedRelayer decommission — is
+> tracked in [`docs/plans/04-infrastructure-migration.md`](docs/plans/04-infrastructure-migration.md)
+> and [`infrastructure/SETUP.md`](infrastructure/SETUP.md).
 
 ## Working on `discord-bot/`
 
@@ -126,7 +129,7 @@ or your change will never be released.
 ## Current state & priorities
 
 The repo has been dormant since **2025-06-30**, but the bot is **still serving
-the community** and its data is intact (4,477 trophies, 624 screenshots, 70 ads).
+the community** and its data is intact (4,971 trophies, 624 screenshots, 70 ads).
 Three things are actually broken in production right now:
 
 1. **`/marketplace sell` half-fails on every use** — the ad saves, but the
@@ -138,7 +141,7 @@ Three things are actually broken in production right now:
    and production have different shapes.
 
 Plus the accumulated rot: 6 type errors, no linter, no release ever cut. See
-[`docs/known-issues.md`](docs/known-issues.md) for the itemised list (24 items)
+[`docs/known-issues.md`](docs/known-issues.md) for the itemised list (25 items)
 and [`docs/revival-plan.md`](docs/revival-plan.md) for the order to attack it in.
 
 **If you are an agent picking up work**, start at

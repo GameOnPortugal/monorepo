@@ -3,57 +3,90 @@
 How the code gets from a commit to the Discord server, and what to check when it
 does not.
 
-## ⚠️ Read this first: CI does not deploy *yet*
+## Production is HTZ1
 
-The old workflows deployed to CapRover on **Superman**, a Hetzner box
-decommissioned on **2026-06-30**. The stack was hand-migrated to **TedRelayer**
-and never re-wired.
+Since the **2026-08-19** cutover ([`plans/04-infrastructure-migration.md`](plans/04-infrastructure-migration.md),
+phases 0–3), the bot runs as Portainer stack `game-on-portugal` (stack id
+`46`, endpoint `3`) on **HTZ1** (`195.201.192.35`), and **merging to `main`
+deploys it** — `deploy.yml`'s `push` trigger is enabled. `joshlopes/game-on-portugal-bot:latest`
+on Docker Hub is what HTZ1 pulls; the scheduler is retired (plan 02) and does
+not run anywhere anymore — see below.
 
-Those workflows have now been **replaced** with the house pipeline — Portainer
-over an SSH tunnel to HTZ1, with release-please cutting versions on merge (see
-`infrastructure/SETUP.md`). But the credentials, the Portainer stack and the DNS
-cutover are still outstanding, so until
-[`plans/04-infrastructure-migration.md`](plans/04-infrastructure-migration.md)
-is executed:
+TedRelayer (the old home-server deployment) is **not production anymore**. It
+is kept stopped-but-intact as the rollback path until **2026-09-02** — see
+[Rollback path](#rollback-path-until-2026-09-02) below.
 
-- **Production is still updated manually** on TedRelayer (see
-  [Deploying today](#deploying-today)).
-- `joshlopes/game-on-portugal-bot:latest` on Docker Hub is from 2025-06-30 and
-  *is* what production runs. The scheduler image is from 2025-04-19 and is
-  **one commit stale in a way that disables its only job**.
+## Accessing HTZ1
 
-## Where production actually is
+HTZ1 is a shared Hetzner host; Portainer's API (`:9000`) is firewalled to
+localhost, reachable only over an SSH tunnel — the same pattern used by
+`invoice-bot`, `smart-table`, `brawl-teams` and the other projects on that box.
 
 ```bash
-ssh -p 2224 tedcrypto@192.168.0.184        # TedRelayer, the home media server
-cd ~/game-on-portugal                       # docker-compose.yml + .env
-docker compose ps
+ssh -p 2224 ezweb@195.201.192.35 "docker ps --filter name=gop- --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'"
+ssh -p 2224 ezweb@195.201.192.35 "docker logs --tail 50 gop-bot"
 ```
 
-Five containers: `game-on-portugal-{app,scheduler,db,redis,db-backup}`. The
-database is MariaDB 11.5.2, schema `discord-bot`, backed up to the NAS by
-`databack/mysql-backup`. The `redis` container is inherited cruft — the current
-bot never connects to it.
+CI's deploy key on `ezweb` is **forced-command, tunnel-only**
+(`permitopen=127.0.0.1:9000`, `restrict`, no shell) — one such key per HTZ1
+project, appended to `~ezweb/.ssh/authorized_keys`. `deploy.yml` reaches
+Portainer through it via `.github/actions/portainer-deploy`, using the
+`DEPLOY_SSH_KEY` / `DEPLOY_SSH_KNOWN_HOSTS` secrets and the `DEPLOY_SSH_HOST` /
+`DEPLOY_SSH_USER` / `DEPLOY_SSH_PORT` / `PORTAINER_ENDPOINT_ID` /
+`PORTAINER_STACK_ID` variables. A human's own key on the same account normally
+has an ordinary shell, which is what the `docker ps` / `docker logs` commands
+above assume. To open the Portainer UI itself from a laptop, tunnel `:9000`
+the same way and browse `https://localhost:9000`.
 
-Credentials live only in `~/game-on-portugal/.env` on that host (mode `0600`).
-There is no copy in the repo or in 1Password; **that file is the single point of
-failure for the whole deployment** and should be backed up somewhere durable.
+Containers: `gop-bot`, `gop-db` (MariaDB 11.7.2), `gop-minio`,
+`gop-createbuckets`, `gop-db-backup`. There is no `redis` container — the
+current bot never reads `REDIS_DSN`.
 
-### Deploying today
+### Deploying
+
+Normal path: merge a PR to `main`. `deploy.yml` builds and pushes
+`joshlopes/game-on-portugal-bot:{latest,<sha>}`, then rolls the Portainer stack
+over the SSH tunnel and posts to Telegram (if the optional Telegram secrets are
+set — see `infrastructure/SETUP.md`).
+
+Manual path: run `deploy.yml` via `workflow_dispatch` from the Actions tab —
+useful for redeploying without a new commit (e.g. after changing a stack
+environment variable in Portainer directly).
+
+There is still no health gate beyond Docker's own restart policy — a redeploy
+that boots but fails to log in to Discord will not fail the workflow. Verify
+manually (below) after anything that touches auth or the database.
+
+### Verifying a deploy
 
 ```bash
-ssh -p 2224 tedcrypto@192.168.0.184
-cd ~/game-on-portugal
-docker compose pull game-on-portugal-app
-docker compose up -d game-on-portugal-app
-docker compose logs -f --tail 50 game-on-portugal-app
+ssh -p 2224 ezweb@195.201.192.35 "docker logs --tail 30 gop-bot"
 ```
 
-This pulls whatever CI last pushed to `:latest`. There is no rollback beyond
-re-pulling an older tag by digest, and no health gate — the container restarts
-`unless-stopped` regardless of whether the bot actually logged in.
+A healthy boot: `MariaDB is ready!` → `No pending migrations to apply.` →
+`Successfully reloaded N application (/) commands.` → `⚡️ Discord Bot app is
+running!` → `Ready! Logged in as GameOnPortugalBot#9387`.
 
-## Pipeline (as configured — not yet wired to a host)
+> The bot's first log line still prints the database root password in
+> plaintext (known issue #11 / work item M0.7, unchanged by this migration).
+> Treat `gop-bot` logs as secret-bearing, and fix this before enabling
+> `LOKI_HOST` or the password ships to Grafana.
+
+### Rolling back
+
+```bash
+ssh -p 2224 ezweb@195.201.192.35 "docker stop gop-bot"
+ssh -p 2224 tedcrypto@192.168.0.184 \
+  "cd ~/game-on-portugal && docker compose start game-on-portugal-app"
+```
+
+Only valid until TedRelayer is decommissioned (2026-09-02, plan 04 phase 5).
+Data written to HTZ1 after the cutover would be lost on rollback — take a
+delta dump in the other direction first if the window since cutover has been
+long. After 2026-09-02 this section and the one below should be deleted; there
+will be nothing to roll back to.
+
+## Pipeline
 
 ```
 pull request
@@ -66,16 +99,57 @@ pull request
 merge to main
       ├─ ci.yml + security.yml
       ├─ release-please.yml  release PR / tag / CHANGELOG per component
+      │                      (falls back to GITHUB_TOKEN — RELEASE_PLEASE_TOKEN
+      │                       not yet created, so the release PR itself gets no CI)
       └─ deploy.yml          build + push joshlopes/game-on-portugal-bot:{latest,<sha>}
-                             → Portainer stack `game-on-portugal` on HTZ1
-                                (SSH tunnel → PUT /api/stacks/{id})
-                             → Telegram notification
+                             → Portainer stack `game-on-portugal` (id 46) on HTZ1
+                                (SSH tunnel → PUT /api/stacks/46)
+                             → Telegram notification (optional secrets, currently unset)
 
 any failure → workflow-failed.yml → Telegram
 ```
 
 Full wiring reference — secrets, variables, Portainer stack, DNS, Caddy — is in
 [`../infrastructure/SETUP.md`](../infrastructure/SETUP.md).
+
+## Rollback path (until 2026-09-02)
+
+This section documents the **old** TedRelayer deployment, kept running
+stopped-but-intact as the fallback for the two weeks after cutover
+(2026-08-19 → 2026-09-02, plan 04 phase 5). It is not production; do not deploy
+here for anything except an actual rollback.
+
+```bash
+ssh -p 2224 tedcrypto@192.168.0.184        # TedRelayer, the home media server
+cd ~/game-on-portugal                       # docker-compose.yml + .env
+docker compose ps
+```
+
+Five containers exist here, three still running: `game-on-portugal-db`,
+`game-on-portugal-redis`, `game-on-portugal-db-backup`. `game-on-portugal-app`
+and `game-on-portugal-scheduler` were **stopped** at cutover and must stay that
+way while `gop-bot` is live on HTZ1 — two bots on one Discord token both
+receive interactions and double-reply.
+
+The database is MariaDB 11.5.2, schema `discord-bot`, backed up nightly to the
+NAS by `databack/mysql-backup`. That backup **was silently broken for seven
+weeks** (see known issue #25) — fixed 2026-08-19, but worth a spot-check before
+relying on it for anything.
+
+Credentials live only in `~/game-on-portugal/.env` on that host (mode `0600`).
+There is **still no copy in 1Password** — copying it over remains an
+outstanding task from the migration (see `infrastructure/SETUP.md`).
+
+To bring the old bot back up:
+
+```bash
+ssh -p 2224 tedcrypto@192.168.0.184
+cd ~/game-on-portugal
+docker compose start game-on-portugal-app
+docker compose logs -f --tail 50 game-on-portugal-app
+```
+
+Do this **after** stopping `gop-bot` on HTZ1, not before.
 
 ## Runtime environment (bot)
 
@@ -161,51 +235,53 @@ non-dry path posts publicly to the screenshots channel and grants 1000 XP.
 
 ```bash
 # logs
-ssh -p 2224 tedcrypto@192.168.0.184 "docker logs --tail 50 game-on-portugal-app"
+ssh -p 2224 ezweb@195.201.192.35 "docker logs --tail 50 gop-bot"
 
-# database (reads .env on the host so no password is typed or shell-logged)
-ssh -p 2224 tedcrypto@192.168.0.184 \
-  'set -a; . ~/game-on-portugal/.env; set +a;
-   docker exec game-on-portugal-db mariadb -uroot -p"$MYSQL_ROOT_PASSWORD" \
+# database
+ssh -p 2224 ezweb@195.201.192.35 \
+  'docker exec gop-db mariadb -uroot -p"$MYSQL_ROOT_PASSWORD" \
      discord-bot -e "SELECT COUNT(*) FROM ads;"'
 ```
+
+The second command needs `MYSQL_ROOT_PASSWORD` in the shell — it is a Portainer
+stack env var, not a host env var, so there is no `.env` on HTZ1 to source the
+way there was on TedRelayer. Pull it from Portainer (`Stacks → game-on-portugal
+→ Environment variables`) over the tunnel, or from 1Password.
 
 A healthy boot looks like: `MariaDB is ready!` → `No pending migrations to
 apply.` → `Successfully reloaded 4 application (/) commands.` → `⚡️ Discord Bot
 app is running!` → `Ready! Logged in as GameOnPortugalBot#9387`.
 
 Note the first log line **prints the database root password in plaintext**
-(`entrypoint.sh` echoes it in the connection-retry message). Treat container logs
-as secret-bearing, and be careful about pasting them — this also means enabling
-`LOKI_HOST` would ship the password to Grafana.
+(`entrypoint.sh` echoes it in the connection-retry message, known issue #11).
+Treat container logs as secret-bearing, and be careful about pasting them —
+this also means enabling `LOKI_HOST` would ship the password to Grafana.
 
 ## Debugging a dead bot
 
-1. `docker compose ps` on TedRelayer — is `game-on-portugal-app` up?
-2. `DISCORD_TOKEN` present in `~/game-on-portugal/.env`? If not, `InMemoryClient`
-   is bound and the process looks perfectly healthy while doing nothing.
-3. Stuck on `Waiting for MariaDB...`? `DATABASE_URL` is wrong or the DB is down —
-   and the wait loop never times out, so it will sit there forever.
+1. `docker ps --filter name=gop-` on HTZ1 (over the tunnel) — is `gop-bot` up?
+2. `DISCORD_TOKEN` set in the Portainer stack env? The stack file uses
+   `${DISCORD_TOKEN:?…}`, so a missing value fails the deploy loudly rather
+   than booting a silent `InMemoryClient` — but a *wrong* token still boots
+   cleanly and does nothing.
+3. Stuck on `Waiting for MariaDB...`? `DATABASE_URL` is wrong or `gop-db` is
+   down — and the wait loop never times out, so it will sit there forever.
 4. Slash commands missing? Registration is global and cached by Discord for up
    to an hour; also check `DISCORD_CLIENT_ID` and that `registerSlashCommands`
    did not swallow an error — it only `console.error`s and continues.
 5. Logs: container stdout always; Loki only if `LOKI_HOST` is configured (it is
    not, in the current deployment).
 
-## Debugging a job that never runs
+## The weekly job still does not run anywhere
 
-The scheduler is the component most likely to be silently doing nothing. Check
-what the *container* believes, not what the repo says:
-
-```bash
-ssh -p 2224 tedcrypto@192.168.0.184 \
-  "docker exec game-on-portugal-scheduler cat /srv/config.ini | grep -A3 job-exec"
-```
-
-As of 2026-08-19 every job in there is commented out — the deployed image
-predates the commit that enabled the weekly winner. Chadburn logs a line per job
-execution; if `docker logs game-on-portugal-scheduler` shows only
-`update-container-id` supervisord chatter, nothing is scheduled at all.
+The old `scheduler/` container (Chadburn) never ran the weekly screenshot
+winner in production (its image predated the commit that enabled the job —
+known issue #3), and it was **retired, not migrated** — `infrastructure/game-on-portugal.yaml`
+has no scheduler service at all. So as of the HTZ1 cutover there is **no cron
+trigger for `week-screenshot-winner` anywhere**; it can only be run by hand
+(below) until [`plans/02-scheduler-and-lifecycle.md`](plans/02-scheduler-and-lifecycle.md)'s
+in-process-cron replacement is built. Do not assume the job runs just because
+the migration happened — it is an independent, still-open piece of work.
 
 ## Verified 2026-08-19
 

@@ -113,8 +113,10 @@ signatures Discord did not then issue) and 10 are `ephemeral-attachments/…`.
 
 They are **recoverable** — see plan 02.
 
-**`trophies`** — 4,477 rows, frozen since 2024-12-02 (the scraper was never
-ported). `trophyprofiles` — 118 rows.
+**`trophies`** — 4,971 rows (corrected from an earlier estimate of 4,477 during
+the 2026-08-19 HTZ1 migration's `SELECT COUNT(*)` verification — the 4,477
+figure came from an InnoDB row-count estimate, not an exact count), frozen
+since 2024-12-02 (the scraper was never ported). `trophyprofiles` — 118 rows.
 
 **LFG tables** — all empty. No migration concern, no continuity either.
 

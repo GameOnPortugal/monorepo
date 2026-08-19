@@ -5,30 +5,17 @@ name: Deploy
 # The deploy reaches the firewalled Portainer API through an SSH tunnel
 # (see .github/actions/portainer-deploy).
 #
-# NOTE: until the migration in docs/plans/04-infrastructure-migration.md is done,
-# production still runs by hand on TedRelayer and this workflow deploys nothing
-# real. Do not enable the required secrets/variables until cutover.
+# NOTE: production cut over to HTZ1 on 2026-08-19 (plan 04, phases 0-3). This
+# now deploys for real on every merge to main — see docs/operations.md.
 
 on:
-  # DISABLED until the migration cutover (plan 04, phase 3 step 19).
-  #
-  # Two reasons this must not auto-run yet:
-  #  1. DOCKER_USERNAME/DOCKER_PASSWORD are still live from 2025, so this WOULD
-  #     succeed in pushing `joshlopes/game-on-portugal-bot:latest` — overwriting
-  #     the exact image production pulls on TedRelayer, i.e. the rollback
-  #     artifact, before there is anywhere new to deploy to.
-  #  2. The Portainer step has no secrets yet and would fail on every merge,
-  #     training everyone to ignore a red pipeline.
-  #
-  # Re-enable by uncommenting this block once phase 3 is done.
-  #
-  # push:
-  #   branches: [main]
-  #   paths:
-  #     - 'discord-bot/**'
-  #     - 'infrastructure/**'
-  #     - '.github/workflows/deploy.yml'
-  #     - '.github/actions/portainer-deploy/**'
+  push:
+    branches: [main]
+    paths:
+      - 'discord-bot/**'
+      - 'infrastructure/**'
+      - '.github/workflows/deploy.yml'
+      - '.github/actions/portainer-deploy/**'
   workflow_dispatch: ~
 
 permissions:
