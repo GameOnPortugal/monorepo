@@ -5,6 +5,7 @@ import type Logger from '../../../Application/Logger/Logger.ts';
 import type { Bot } from '../../../Domain/Bot/Bot.ts';
 import { BotExecutor } from '../BotExecutor.ts';
 import type { SlashCommandContext } from '../../../Domain/Bot/SlashCommandContext.ts';
+import { safeReply } from '../../../Domain/Bot/safeReply.ts';
 
 @injectable()
 export class DiscordBot implements Bot {
@@ -16,7 +17,17 @@ export class DiscordBot implements Bot {
         @inject(TYPES.Logger) private readonly logger: Logger,
         @inject(BotExecutor) private readonly botExecutor: BotExecutor,
     ) {
-        this.client = new Client({ intents: [GatewayIntentBits.Guilds] });
+        // `allowedMentions: { parse: [] }` is set once here, on the Client
+        // itself, so every message sent through this client — regardless of
+        // which handler built it — has all mention parsing disabled by
+        // default. This is what stops a member from pinging @everyone by
+        // naming a marketplace item or screenshot "@everyone" (M0.2 / A1):
+        // without it, discord.js parses mentions out of raw message content
+        // even when nobody intended to @-mention anyone.
+        this.client = new Client({
+            intents: [GatewayIntentBits.Guilds],
+            allowedMentions: { parse: [] },
+        });
     }
 
     async start(): Promise<void> {
@@ -41,17 +52,10 @@ export class DiscordBot implements Bot {
                 await this.botExecutor.execute(slashCommandContext);
             } catch (error: any) {
                 this.logger.error('error happened', { error });
-                if (interaction.replied || interaction.deferred) {
-                    await interaction.followUp({
-                        content: 'There was an error while executing this command!',
-                        flags: MessageFlags.Ephemeral,
-                    });
-                } else {
-                    await interaction.reply({
-                        content: 'There was an error while executing this command!',
-                        flags: MessageFlags.Ephemeral,
-                    });
-                }
+                await safeReply(interaction, {
+                    content: 'There was an error while executing this command!',
+                    flags: MessageFlags.Ephemeral,
+                });
             }
         });
 

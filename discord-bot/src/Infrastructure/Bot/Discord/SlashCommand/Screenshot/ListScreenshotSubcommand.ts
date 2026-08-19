@@ -4,6 +4,7 @@ import type Logger from '../../../../../Application/Logger/Logger.ts';
 import { TYPES } from '../../../../DependencyInjection/types.ts';
 import { GetScreenshots } from '../../../../../Application/Query/Screenshot/GetScreenshots/GetScreenshots.ts';
 import { EmbedBuilder, MessageFlags } from 'discord.js';
+import { safeReply } from '../../../../../Domain/Bot/safeReply.ts';
 
 @injectable()
 export class ListScreenshotSubcommand {
@@ -87,7 +88,7 @@ export class ListScreenshotSubcommand {
                 error: error,
             });
 
-            await interaction.reply({
+            await safeReply(interaction, {
                 content: 'There was an error retrieving the screenshots. Please try again later.',
                 flags: MessageFlags.Ephemeral,
             });

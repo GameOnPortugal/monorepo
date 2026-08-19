@@ -7,6 +7,7 @@ import type Logger from '../../../../../Application/Logger/Logger';
 import { CreateTrophyProfileSubcommand } from './CreateTrophyProfileSubcommand';
 import { CheckTrophyProfileSubcommand } from './CheckTrophyProfileSubcommand';
 import { RankSubcommand } from './RankSubcommand.ts';
+import { safeReply } from '../../../../../Domain/Bot/safeReply.ts';
 
 @injectable()
 export class TrophySlashCommand implements SlashCommandHandler {
@@ -150,7 +151,10 @@ export class TrophySlashCommand implements SlashCommandHandler {
                 subcommand,
             });
 
-            await context.interaction.reply({
+            // The subcommand handler may already have replied (or deferred)
+            // before throwing; safeReply avoids InteractionAlreadyReplied
+            // masking the real error above.
+            await safeReply(context.interaction, {
                 content: 'An error occurred while processing your command.',
                 flags: MessageFlags.Ephemeral,
             });
