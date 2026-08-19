@@ -27,11 +27,12 @@ the Caddy vhosts. What remains there is a credentials-and-DNS runbook.
 - Read [`../../AGENT.md`](../../AGENT.md) first, then
   [`../architecture.md`](../architecture.md). The DI container is the composition
   root: **nothing is reachable until it is bound in `inversify.config.ts`**.
-- Production is **live** on TedRelayer (`ssh -p 2224 tedcrypto@192.168.0.184`,
-  stack at `~/game-on-portugal/`). Real users, real data. See
-  [`../operations.md`](../operations.md).
-- **CI does not deploy** (it targets a decommissioned host). Shipping means
-  building an image and running `docker compose pull && up -d` by hand.
+- Production is **live** on HTZ1 (Portainer stack `game-on-portugal` id 46,
+  since 2026-08-19). Real users, real data. See
+  [`../operations.md`](../operations.md). TedRelayer is kept as a rollback path
+  until 2026-09-02.
+- **CI deploys on merge** to `main` (fixed 2026-08-19). Shipping means merging a
+  PR; workflows build and push to HTZ1 via SSH tunnel.
 - Before claiming done: `bun run typecheck && bun test` (the script runs
   `prisma generate` for you). Both are **clean as of 2026-08-19** and `ci.yml`
   enforces the type check, so a PR that does not compile cannot merge.
