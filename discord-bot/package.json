@@ -12,14 +12,15 @@
         "dev:setup": "bun run dev:db:drop && bun run dev:db:push",
         "test:local": "env-cmd -f .env.local bun test",
         "test:db:drop": "env-cmd -f .env.test bunx prisma migrate reset --force --skip-generate",
-        "test:db:push": "env-cmd -f .env.test bunx prisma db push --skip-generate",
-        "test:setup": "bun run test:db:drop && bun run test:db:push",
+        "test:db:migrate": "env-cmd -f .env.test bunx prisma migrate deploy",
+        "test:setup": "bun run test:db:drop && bun run test:db:migrate",
         "run:command": "bun bin/console.ts",
         "typecheck": "bunx prisma generate && bunx tsc --noEmit",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
         "format": "prettier --write .",
-        "format:check": "prettier --check ."
+        "format:check": "prettier --check .",
+        "db:drift": "prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url \"$SHADOW_DATABASE_URL\" --exit-code"
     },
     "dependencies": {
         "@prisma/client": "^6.6.0",
