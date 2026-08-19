@@ -1,10 +1,10 @@
-import type LogProviderInterface from "../../src/Application/Logger/LogProviderInterface";
+import type LogProviderInterface from '../../src/Application/Logger/LogProviderInterface';
 
 export default class InMemoryLogger implements LogProviderInterface {
     logs: Record<string, any>[] = [];
 
     hasLog(level: string, message: string) {
-        return this.logs.some(log => log.level === level && log.message === message);
+        return this.logs.some((log) => log.level === level && log.message === message);
     }
 
     info(message: string, context?: Record<string, any>) {

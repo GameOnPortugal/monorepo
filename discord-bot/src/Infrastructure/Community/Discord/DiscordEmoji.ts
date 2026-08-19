@@ -1,4 +1,4 @@
-import {CustomEmoji} from "../../../Domain/Community/CustomEmoji.ts";
+import { CustomEmoji } from '../../../Domain/Community/CustomEmoji.ts';
 
 export enum DiscordEmoji {
     TROPHY_PLAT = '820982755927392297',
@@ -18,4 +18,4 @@ export const convertEmoji = (emoji: CustomEmoji): DiscordEmoji => {
         case CustomEmoji.TROPHY_BRONZE:
             return DiscordEmoji.TROPHY_BRONZE;
     }
-}
+};

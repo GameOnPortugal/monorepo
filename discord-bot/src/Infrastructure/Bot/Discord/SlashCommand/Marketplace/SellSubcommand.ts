@@ -1,38 +1,51 @@
-import { inject, injectable } from "inversify";
-import type { SlashCommandContext } from "../../../../../Domain/Bot/SlashCommandContext";
-import { MessageFlags } from "discord.js";
-import { TYPES } from "../../../../DependencyInjection/types";
-import type Logger from "../../../../../Application/Logger/Logger";
-import CommandHandlerManager from "../../../../CommandHandler/CommandHandlerManager";
-import { CreateAd } from "../../../../../Application/Write/Marketplace/CreateAd/CreateAd";
-import { AdId } from "../../../../../Domain/Marketplace/AdId";
+import { inject, injectable } from 'inversify';
+import type { SlashCommandContext } from '../../../../../Domain/Bot/SlashCommandContext';
+import { MessageFlags } from 'discord.js';
+import { TYPES } from '../../../../DependencyInjection/types';
+import type Logger from '../../../../../Application/Logger/Logger';
+import CommandHandlerManager from '../../../../CommandHandler/CommandHandlerManager';
+import { CreateAd } from '../../../../../Application/Write/Marketplace/CreateAd/CreateAd';
+import { AdId } from '../../../../../Domain/Marketplace/AdId';
 
 @injectable()
 export class SellSubcommand {
     constructor(
         @inject(TYPES.Logger) private readonly logger: Logger,
-        @inject(CommandHandlerManager) private readonly commandHandlerManager: CommandHandlerManager
+        @inject(CommandHandlerManager)
+        private readonly commandHandlerManager: CommandHandlerManager,
     ) {}
 
     private getStateEmoji(state: string): string {
         switch (state) {
-            case 'new': return '🆕';
-            case 'like_new': return '✨';
-            case 'used_good': return '👍';
-            case 'used_marks': return '📝';
-            case 'broken': return '🔧';
-            default: return '❓';
+            case 'new':
+                return '🆕';
+            case 'like_new':
+                return '✨';
+            case 'used_good':
+                return '👍';
+            case 'used_marks':
+                return '📝';
+            case 'broken':
+                return '🔧';
+            default:
+                return '❓';
         }
     }
 
     private getStateDisplay(state: string): string {
         switch (state) {
-            case 'new': return 'New';
-            case 'like_new': return 'Like new';
-            case 'used_good': return 'Used - Good condition';
-            case 'used_marks': return 'Used - With marks';
-            case 'broken': return 'Broken';
-            default: return state;
+            case 'new':
+                return 'New';
+            case 'like_new':
+                return 'Like new';
+            case 'used_good':
+                return 'Used - Good condition';
+            case 'used_marks':
+                return 'Used - With marks';
+            case 'broken':
+                return 'Broken';
+            default:
+                return state;
         }
     }
 
@@ -58,7 +71,7 @@ export class SellSubcommand {
                 dispatch,
                 warranty,
                 description,
-                'sale'
+                'sale',
             );
 
             const ad = await this.commandHandlerManager.handle(command);
@@ -73,12 +86,14 @@ export class SellSubcommand {
                 warranty ? `⚡ Warranty: ${warranty}` : '',
                 description ? `📝 Description: ${description}` : '',
                 '',
-                `Listed by: <@${context.interaction.user.id}>`
-            ].filter(Boolean).join('\n');
+                `Listed by: <@${context.interaction.user.id}>`,
+            ]
+                .filter(Boolean)
+                .join('\n');
 
             const reply = await context.interaction.reply({
                 content: replyContent,
-                fetchReply: true
+                fetchReply: true,
             });
 
             // Update the ad with the message ID
@@ -94,16 +109,15 @@ export class SellSubcommand {
                 ad.dispatch,
                 ad.warranty,
                 ad.description,
-                ad.adType
+                ad.adType,
             );
 
             await this.commandHandlerManager.handle(updateCommand);
-
         } catch (error) {
             this.logger.error('Error creating sale listing', { error });
             await context.interaction.reply({
                 content: 'There was an error creating your sale listing. Please try again.',
-                flags: MessageFlags.Ephemeral
+                flags: MessageFlags.Ephemeral,
             });
         }
     }

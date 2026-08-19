@@ -1,7 +1,7 @@
-import {myContainer} from "./Infrastructure/DependencyInjection/inversify.config";
-import type {Bot} from "./Domain/Bot/Bot.ts";
-import type Logger from "./Application/Logger/Logger";
-import {TYPES} from "./Infrastructure/DependencyInjection/types.ts";
+import { myContainer } from './Infrastructure/DependencyInjection/inversify.config';
+import type { Bot } from './Domain/Bot/Bot.ts';
+import type Logger from './Application/Logger/Logger';
+import { TYPES } from './Infrastructure/DependencyInjection/types.ts';
 
 const logger = myContainer.get<Logger>(TYPES.Logger);
 const app = myContainer.get<Bot>(TYPES.Bot);
@@ -12,6 +12,6 @@ const app = myContainer.get<Bot>(TYPES.Bot);
         await app.start();
         logger.info('⚡️ Discord Bot app is running!');
     } catch (error) {
-        logger.error('Error starting app:', {error});
+        logger.error('Error starting app:', { error });
     }
 })();

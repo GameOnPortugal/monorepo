@@ -1,10 +1,10 @@
-import {inject, injectable} from "inversify";
-import {Client, Events, GatewayIntentBits, MessageFlags, REST, Routes} from "discord.js";
-import {TYPES} from "../../DependencyInjection/types.ts";
-import type Logger from "../../../Application/Logger/Logger.ts";
-import type { Bot } from "../../../Domain/Bot/Bot.ts";
-import {BotExecutor} from "../BotExecutor.ts";
-import type {SlashCommandContext} from "../../../Domain/Bot/SlashCommandContext.ts";
+import { inject, injectable } from 'inversify';
+import { Client, Events, GatewayIntentBits, MessageFlags, REST, Routes } from 'discord.js';
+import { TYPES } from '../../DependencyInjection/types.ts';
+import type Logger from '../../../Application/Logger/Logger.ts';
+import type { Bot } from '../../../Domain/Bot/Bot.ts';
+import { BotExecutor } from '../BotExecutor.ts';
+import type { SlashCommandContext } from '../../../Domain/Bot/SlashCommandContext.ts';
 
 @injectable()
 export class DiscordBot implements Bot {
@@ -19,11 +19,10 @@ export class DiscordBot implements Bot {
         this.client = new Client({ intents: [GatewayIntentBits.Guilds] });
     }
 
-    async start(): Promise<void>
-    {
+    async start(): Promise<void> {
         await this.registerSlashCommands();
 
-        this.client.once(Events.ClientReady, readyClient => {
+        this.client.once(Events.ClientReady, (readyClient) => {
             this.logger.info(`Ready! Logged in as ${readyClient.user.tag}`);
         });
 
@@ -39,13 +38,19 @@ export class DiscordBot implements Bot {
             };
 
             try {
-                await this.botExecutor.execute(slashCommandContext)
+                await this.botExecutor.execute(slashCommandContext);
             } catch (error: any) {
                 this.logger.error('error happened', { error });
                 if (interaction.replied || interaction.deferred) {
-                    await interaction.followUp({ content: 'There was an error while executing this command!', flags: MessageFlags.Ephemeral });
+                    await interaction.followUp({
+                        content: 'There was an error while executing this command!',
+                        flags: MessageFlags.Ephemeral,
+                    });
                 } else {
-                    await interaction.reply({ content: 'There was an error while executing this command!', flags: MessageFlags.Ephemeral });
+                    await interaction.reply({
+                        content: 'There was an error while executing this command!',
+                        flags: MessageFlags.Ephemeral,
+                    });
                 }
             }
         });
@@ -64,10 +69,9 @@ export class DiscordBot implements Bot {
             this.logger.log(`Started refreshing ${commands.length} application (/) commands.`);
 
             // The put method is used to fully refresh all commands in the guild with the current set
-            const data = await rest.put(
-                Routes.applicationCommands(this.clientId),
-                { body: commands },
-            ) as any;
+            const data = (await rest.put(Routes.applicationCommands(this.clientId), {
+                body: commands,
+            })) as any;
 
             this.logger.log(`Successfully reloaded ${data.length} application (/) commands.`);
         } catch (error) {

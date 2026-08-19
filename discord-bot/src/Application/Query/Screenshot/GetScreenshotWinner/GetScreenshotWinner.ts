@@ -1,5 +1,3 @@
 export class GetScreenshotWinner {
-  constructor(
-      public readonly week: Date
-  ) {}
+    constructor(public readonly week: Date) {}
 }

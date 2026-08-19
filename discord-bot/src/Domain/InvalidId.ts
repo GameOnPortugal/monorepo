@@ -1,6 +1,6 @@
 export class InvalidId extends Error {
-    constructor (message: string) {
-        super(message)
-        this.name = 'InvalidId'
+    constructor(message: string) {
+        super(message);
+        this.name = 'InvalidId';
     }
 }

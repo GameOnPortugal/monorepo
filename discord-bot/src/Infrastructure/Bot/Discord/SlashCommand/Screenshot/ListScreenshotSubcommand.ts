@@ -1,17 +1,17 @@
-import {inject, injectable} from "inversify";
-import CommandHandlerManager from "../../../../CommandHandler/CommandHandlerManager.ts";
-import type Logger from "../../../../../Application/Logger/Logger.ts";
-import {TYPES} from "../../../../DependencyInjection/types.ts";
-import {GetScreenshots} from "../../../../../Application/Query/Screenshot/GetScreenshots/GetScreenshots.ts";
-import {EmbedBuilder, MessageFlags} from "discord.js";
+import { inject, injectable } from 'inversify';
+import CommandHandlerManager from '../../../../CommandHandler/CommandHandlerManager.ts';
+import type Logger from '../../../../../Application/Logger/Logger.ts';
+import { TYPES } from '../../../../DependencyInjection/types.ts';
+import { GetScreenshots } from '../../../../../Application/Query/Screenshot/GetScreenshots/GetScreenshots.ts';
+import { EmbedBuilder, MessageFlags } from 'discord.js';
 
 @injectable()
 export class ListScreenshotSubcommand {
     constructor(
-        @inject(CommandHandlerManager) private readonly commandHandlerManager: CommandHandlerManager,
-        @inject(TYPES.Logger) private readonly logger: Logger
-    ) {
-    }
+        @inject(CommandHandlerManager)
+        private readonly commandHandlerManager: CommandHandlerManager,
+        @inject(TYPES.Logger) private readonly logger: Logger,
+    ) {}
 
     public async handle(interaction: any): Promise<void> {
         try {
@@ -31,13 +31,15 @@ export class ListScreenshotSubcommand {
 
                 await interaction.reply({
                     content: message,
-                    flags: MessageFlags.Ephemeral
+                    flags: MessageFlags.Ephemeral,
                 });
                 return;
             }
 
             // Create an embed to display the screenshots
-            const title = isOwnScreenshots ? '🔍 Your Screenshots' : `🔍 ${targetUser.username}'s Screenshots`;
+            const title = isOwnScreenshots
+                ? '🔍 Your Screenshots'
+                : `🔍 ${targetUser.username}'s Screenshots`;
             const description = isOwnScreenshots
                 ? `You have submitted ${screenshots.length} screenshot(s).`
                 : `${targetUser.username} has submitted ${screenshots.length} screenshot(s).`;
@@ -52,40 +54,42 @@ export class ListScreenshotSubcommand {
             const displayLimit = Math.min(screenshots.length, 10);
             for (let i = 0; i < displayLimit; i++) {
                 const screenshot = screenshots[i];
-                const platform = screenshot.platform ?
-                    (screenshot.platform.charAt(0).toUpperCase() + screenshot.platform.slice(1)) :
-                    'Unknown';
+                const platform = screenshot.platform
+                    ? screenshot.platform.charAt(0).toUpperCase() + screenshot.platform.slice(1)
+                    : 'Unknown';
 
                 embed.addFields({
                     name: `#${i + 1} - ${screenshot.name || 'Unnamed'}`,
-                    value: `ID: ${screenshot.id.toString()}\nPlatform: ${platform}\nSubmitted: ${screenshot.createdAt.toLocaleDateString()}`
+                    value: `ID: ${screenshot.id.toString()}\nPlatform: ${platform}\nSubmitted: ${screenshot.createdAt.toLocaleDateString()}`,
                 });
             }
 
             // Add a note if there are more screenshots than shown
             if (screenshots.length > displayLimit) {
-                embed.setFooter({text: `Showing ${displayLimit} of ${screenshots.length} screenshots.`});
+                embed.setFooter({
+                    text: `Showing ${displayLimit} of ${screenshots.length} screenshots.`,
+                });
             }
 
             await interaction.reply({
                 embeds: [embed],
-                flags: MessageFlags.Ephemeral
+                flags: MessageFlags.Ephemeral,
             });
 
             this.logger.info('Screenshot list requested', {
                 userId: userId,
                 requestedBy: interaction.user.id,
-                count: screenshots.length
+                count: screenshots.length,
             });
         } catch (error) {
             this.logger.error('Error listing screenshots', {
                 userId: interaction.user.id,
-                error: error
+                error: error,
             });
 
             await interaction.reply({
                 content: 'There was an error retrieving the screenshots. Please try again later.',
-                flags: MessageFlags.Ephemeral
+                flags: MessageFlags.Ephemeral,
             });
         }
     }

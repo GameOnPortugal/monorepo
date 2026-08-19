@@ -4,9 +4,9 @@ import { ProfileNotFound } from '../../../../../../src/Application/Query/Trophy/
 import { TYPES } from '../../../../../../src/Infrastructure/DependencyInjection/types';
 import CommandHandlerManager from '../../../../../../src/Infrastructure/CommandHandler/CommandHandlerManager';
 import { PrismaClient } from '@prisma/client';
-import { myContainer } from "../../../../../../src/Infrastructure/DependencyInjection/inversify.config";
-import DatabaseUtil from "../../../../../Helper/DatabaseUtil";
-import { createTrophyProfile } from "../../../../../Helper/StaticFixtures";
+import { myContainer } from '../../../../../../src/Infrastructure/DependencyInjection/inversify.config';
+import DatabaseUtil from '../../../../../Helper/DatabaseUtil';
+import { createTrophyProfile } from '../../../../../Helper/StaticFixtures';
 
 describe('GetProfileHandler Integration Test', () => {
     let commandHandlerManager: CommandHandlerManager;
@@ -47,22 +47,17 @@ describe('GetProfileHandler Integration Test', () => {
         const command = new GetProfile(userId);
 
         // Act & Assert
-        await expect(commandHandlerManager.handle(command))
-            .rejects
-            .toThrow(ProfileNotFound);
+        await expect(commandHandlerManager.handle(command)).rejects.toThrow(ProfileNotFound);
     });
 
     test('should return correct profile when multiple profiles exist', async () => {
         // Arrange
         const userId1 = '123456789012345678';
         const userId2 = '987654321098765432';
-        
+
         // Create two profiles
         const profile1 = await createTrophyProfile();
-        await createTrophyProfile(
-            undefined,
-            userId2
-        );
+        await createTrophyProfile(undefined, userId2);
 
         const command = new GetProfile(userId1);
 

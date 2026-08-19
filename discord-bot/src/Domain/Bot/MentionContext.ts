@@ -6,8 +6,8 @@ export interface MentionContext {
         threadTs: string;
         userId?: string;
         teamId?: string;
-    },
-    client: any,
+    };
+    client: any;
 
     reply: (text: string) => Promise<void>;
 }
