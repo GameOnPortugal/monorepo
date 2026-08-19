@@ -1,5 +1,8 @@
 import { inject, injectable } from 'inversify';
 import type { SlashCommandContext } from '../../../../../Domain/Bot/SlashCommandContext';
+import { randomUUID } from 'crypto';
+import { TYPES } from '../../../../DependencyInjection/types';
+import type Logger from '../../../../../Application/Logger/Logger';
 import CommandHandlerManager from '../../../../CommandHandler/CommandHandlerManager';
 import { DeleteAd } from '../../../../../Application/Write/Marketplace/DeleteAd/DeleteAd';
 import { ListUserAds } from '../../../../../Application/Query/Marketplace/ListUserAds/ListUserAds';
@@ -12,6 +15,7 @@ import type { Ad } from '../../../../../Domain/Marketplace/Ad';
 @injectable()
 export class DeleteAdSubcommand {
     constructor(
+        @inject(TYPES.Logger) private readonly logger: Logger,
         @inject(CommandHandlerManager)
         private readonly commandHandlerManager: CommandHandlerManager,
     ) {}
@@ -60,9 +64,15 @@ export class DeleteAdSubcommand {
                     ephemeral: true,
                 });
             } else {
-                const message = error instanceof Error ? error.message : String(error);
+                const correlationId = randomUUID();
+                this.logger.error('Error deleting ad', {
+                    error,
+                    correlationId,
+                    adId: adId.toString(),
+                    userId,
+                });
                 await interaction.reply({
-                    content: `Error deleting ad: ${message}`,
+                    content: `There was an error deleting your ad. Please try again. (ref: ${correlationId})`,
                     ephemeral: true,
                 });
             }

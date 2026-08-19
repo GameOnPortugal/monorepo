@@ -1,6 +1,7 @@
 import { inject, injectable } from 'inversify';
 import type { SlashCommandContext } from '../../../../../Domain/Bot/SlashCommandContext';
 import { MessageFlags } from 'discord.js';
+import { randomUUID } from 'crypto';
 import { TYPES } from '../../../../DependencyInjection/types';
 import type Logger from '../../../../../Application/Logger/Logger';
 import CommandHandlerManager from '../../../../CommandHandler/CommandHandlerManager';
@@ -50,21 +51,62 @@ export class SellSubcommand {
     }
 
     public async handle(context: SlashCommandContext): Promise<void> {
-        const name = context.interaction.options.getString('name', true);
-        const price = context.interaction.options.getString('price', true);
-        const state = context.interaction.options.getString('state', true);
-        const zone = context.interaction.options.getString('zone', true);
-        const dispatch = context.interaction.options.getString('dispatch', true);
-        const warranty = context.interaction.options.getString('warranty') ?? '';
-        const description = context.interaction.options.getString('description') ?? '';
+        const interaction = context.interaction;
+        const name = interaction.options.getString('name', true);
+        const price = interaction.options.getString('price', true);
+        const state = interaction.options.getString('state', true);
+        const zone = interaction.options.getString('zone', true);
+        const dispatch = interaction.options.getString('dispatch', true);
+        const warranty = interaction.options.getString('warranty') ?? '';
+        const description = interaction.options.getString('description') ?? '';
+
+        const replyContent = [
+            '🏷️ New Sale Listing',
+            `**${name}**`,
+            `${this.getStateEmoji(state)} Condition: ${this.getStateDisplay(state)}`,
+            `💰 Price: ${price}`,
+            `📍 Location: ${zone}`,
+            `🚚 Dispatch: ${dispatch}`,
+            warranty ? `⚡ Warranty: ${warranty}` : '',
+            description ? `📝 Description: ${description}` : '',
+            '',
+            `Listed by: <@${interaction.user.id}>`,
+        ]
+            .filter(Boolean)
+            .join('\n');
+
+        // Post-then-persist: acknowledge, post the listing, and only then write
+        // the ad — with the real message ID already known. There is exactly one
+        // database write. `editReply()` always resolves with the Message that was
+        // actually sent, unlike the deprecated `reply({ fetchReply: true })` and
+        // unlike `withResponse: true` (which resolves an
+        // InteractionCallbackResponse, not a Message — its `.id` is the
+        // interaction callback's id, not the posted message's).
+        await interaction.deferReply();
+
+        let message;
+        try {
+            message = await interaction.editReply({ content: replyContent });
+        } catch (error) {
+            const correlationId = randomUUID();
+            this.logger.error('Failed to post sale listing message', {
+                error,
+                correlationId,
+                authorId: interaction.user.id,
+            });
+            await interaction.editReply({
+                content: `There was an error creating your sale listing. Please try again. (ref: ${correlationId})`,
+            });
+            return;
+        }
 
         try {
             const command = new CreateAd(
                 AdId.generate(),
                 name,
-                context.interaction.user.id,
-                context.interaction.channelId,
-                '', // message_id will be set after the reply
+                interaction.user.id,
+                interaction.channelId,
+                message.id,
                 state,
                 price,
                 zone,
@@ -74,49 +116,17 @@ export class SellSubcommand {
                 'sale',
             );
 
-            const ad = await this.commandHandlerManager.handle(command);
-
-            const replyContent = [
-                '🏷️ New Sale Listing',
-                `**${name}**`,
-                `${this.getStateEmoji(state)} Condition: ${this.getStateDisplay(state)}`,
-                `💰 Price: ${price}`,
-                `📍 Location: ${zone}`,
-                `🚚 Dispatch: ${dispatch}`,
-                warranty ? `⚡ Warranty: ${warranty}` : '',
-                description ? `📝 Description: ${description}` : '',
-                '',
-                `Listed by: <@${context.interaction.user.id}>`,
-            ]
-                .filter(Boolean)
-                .join('\n');
-
-            const reply = await context.interaction.reply({
-                content: replyContent,
-                fetchReply: true,
-            });
-
-            // Update the ad with the message ID
-            const updateCommand = new CreateAd(
-                ad.id,
-                ad.name,
-                ad.authorId,
-                ad.channelId,
-                reply.id,
-                ad.state,
-                ad.price,
-                ad.zone,
-                ad.dispatch,
-                ad.warranty,
-                ad.description,
-                ad.adType,
-            );
-
-            await this.commandHandlerManager.handle(updateCommand);
+            await this.commandHandlerManager.handle(command);
         } catch (error) {
-            this.logger.error('Error creating sale listing', { error });
-            await context.interaction.reply({
-                content: 'There was an error creating your sale listing. Please try again.',
+            const correlationId = randomUUID();
+            this.logger.error('Failed to persist sale listing after posting', {
+                error,
+                correlationId,
+                messageId: message.id,
+                authorId: interaction.user.id,
+            });
+            await interaction.followUp({
+                content: `Your listing was posted, but something went wrong saving it — it may not show up in /marketplace list or be deletable. Please contact a moderator. (ref: ${correlationId})`,
                 flags: MessageFlags.Ephemeral,
             });
         }
