@@ -144,18 +144,18 @@ jobs:
         run: bun run format:check
 
       # Supply-chain gate: reports high/critical advisories in the resolved
-      # dependency tree on every run. Deliberately non-blocking
-      # (continue-on-error) today: there are 26 known pre-existing advisories
-      # (2 critical, 24 high) in axios, protobufjs (via winston-loki), lodash
-      # and ws/undici (both via discord.js). Clearing them is M3.2-M3.5 —
-      # undici is pinned exactly by discord.js/@discordjs/rest, so that
-      # advisory can't be patched with an override; bumping discord.js
-      # (M3.2) is the only supported remedy. The PR that clears the last of
-      # these MUST flip continue-on-error back off, or this gate is theatre.
+      # dependency tree on every run. Blocking as of M3 (dependency
+      # currency): axios was dropped for native fetch, discord.js was bumped
+      # to 14.27.0 (undici/ws no longer exact-pinned, so both float to
+      # patched versions), winston-loki was replaced with a small direct
+      # HTTP transport (dropping protobufjs/snappy), and the transitive
+      # lodash pulled in by discord.js was overridden off the vulnerable
+      # range. `bun audit` is clean — keep continue-on-error off. If a
+      # future advisory can't be cleared immediately, prefer fixing it over
+      # silencing this gate again.
       - name: Audit dependencies
         working-directory: discord-bot
         run: bun run audit
-        continue-on-error: true
 
   # Single required status check — green when every triggered job is.
   ci:
