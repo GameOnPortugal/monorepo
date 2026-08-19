@@ -67,6 +67,8 @@ Recommended sequencing: **Phase 0 (bugs+security, ship fast) → Phase 1 (API mo
 
 **A8 — Container runs as root**, ships `mariadb-client` in the runtime layer, and dev compose bind-mounts the whole repo `rw`. Dockerfile also has a `COPY ../ .` that only works by accident of build context.
 
+**A9 — Disabled TLS certificate validation (CodeQL `js/disabling-certificate-validation`, HIGH).** `AxiosHttpClient.ts` built its `https.Agent` with `rejectUnauthorized: false` and `checkServerIdentity: () => undefined`, accepting any certificate for any host on every HTTPS request it makes. Latent, not live: `TYPES.HttpClient` resolves to `RetryAxiosHttpClient` (which does not disable validation and just wraps `AxiosHttpClient`), and `AxiosHttpClient` itself was bound `.toSelf()` with nothing injecting it directly — so nothing exercised the hole yet. It mattered because M7.1's PSNProfiles crawler is exactly the code that will reach for an `HttpClient` next, and would have silently inherited a client that trusts any certificate. Fixed in the M1.8 dead-ends PR (`fix/tls-validation-and-dead-ends`).
+
 ### B. Correctness bugs found while reading
 
 **B1 — Rankings are wrong (HIGH).** `OrmTrophyRepository.ts:104,137,170` apply `take: limit` in the Prisma query *before* points are computed and sorted in JS. "Top 10" is therefore *an arbitrary 10 profiles, sorted among themselves* — not the top 10. Affects all three `/trophy rank` modes and `findUserPosition` (which requests 1000 then index-searches).

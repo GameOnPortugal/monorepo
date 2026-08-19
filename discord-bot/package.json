@@ -10,7 +10,6 @@
         "dev:db:drop": "bunx prisma migrate reset --force",
         "dev:db:push": "bunx prisma db push",
         "dev:setup": "bun run dev:db:drop && bun run dev:db:push",
-        "test:local": "env-cmd -f .env.local bun test",
         "test:db:drop": "env-cmd -f .env.test bunx prisma migrate reset --force --skip-generate",
         "test:db:migrate": "env-cmd -f .env.test bunx prisma migrate deploy",
         "test:setup": "bun run test:db:drop && bun run test:db:migrate",
