@@ -1,7 +1,11 @@
 import { inject, injectable } from 'inversify';
 import type { SlashCommandHandler } from '../../../../../Domain/Bot/SlashCommandHandler';
 import type { SlashCommandContext } from '../../../../../Domain/Bot/SlashCommandContext';
-import { MessageFlags, SlashCommandBuilder } from 'discord.js';
+import {
+    MessageFlags,
+    SlashCommandBuilder,
+    type SlashCommandSubcommandsOnlyBuilder,
+} from 'discord.js';
 import { TYPES } from '../../../../DependencyInjection/types';
 import type Logger from '../../../../../Application/Logger/Logger';
 import { CreateTrophyProfileSubcommand } from './CreateTrophyProfileSubcommand';
@@ -24,7 +28,7 @@ export class TrophySlashCommand implements SlashCommandHandler {
         return 'trophy';
     }
 
-    public builder(): any {
+    public builder(): SlashCommandSubcommandsOnlyBuilder {
         const currentYear = new Date().getFullYear();
         const yearChoices = Array.from({ length: 5 }, (_, i) => ({
             name: `${currentYear - i}`,

@@ -27,10 +27,11 @@ describe('SellSubcommand Integration Test', () => {
 
     function buildContext(interaction: FakeInteraction): SlashCommandContext {
         return {
+            kind: 'chat-input',
             channel_id: interaction.channelId,
             command: 'marketplace',
             text: '',
-            interaction,
+            interaction: interaction.asChatInputCommandInteraction(),
         };
     }
 

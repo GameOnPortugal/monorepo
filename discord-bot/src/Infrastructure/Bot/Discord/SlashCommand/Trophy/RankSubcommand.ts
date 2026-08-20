@@ -154,6 +154,10 @@ export class RankSubcommand {
     }
 
     public async handle(context: SlashCommandContext): Promise<void> {
+        // Deferred first: this can load up to 1000 profiles (GetRank), which
+        // can take longer than the 3s interaction-ack window.
+        await context.interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
         try {
             const type = context.interaction.options.getString('type', true) as RankType;
             const limit = context.interaction.options.getInteger('limit') ?? 10;
@@ -179,9 +183,8 @@ export class RankSubcommand {
                 ? await this.createRankingEmbed(result, type, type === 'monthly' ? date : undefined)
                 : this.createUserPositionEmbed(result, targetUser?.username ?? 'Unknown');
 
-            await context.interaction.reply({
+            await context.interaction.editReply({
                 embeds: [embed],
-                flags: MessageFlags.Ephemeral,
             });
         } catch (error) {
             this.logger.error('Error getting trophy ranks', {

@@ -19,6 +19,12 @@ export class CheckTrophyProfileSubcommand {
     public async handle(context: SlashCommandContext): Promise<void> {
         const targetUser = context.interaction.options.getUser('user') ?? context.interaction.user;
 
+        // The successful reply is public (no `flags`), so the defer is public
+        // too — ephemeral-ness is fixed at defer time. The "not found"/error
+        // paths below used to be ephemeral; they now post publicly, which is
+        // the trade-off for being able to defer at all (see PR description).
+        await context.interaction.deferReply();
+
         try {
             const command = new GetProfile(targetUser.id);
             const profile = await this.commandHandlerManager.handle(command);
@@ -49,7 +55,7 @@ export class CheckTrophyProfileSubcommand {
                 .setFooter({ text: 'PSN Profile Status' })
                 .setTimestamp();
 
-            await context.interaction.reply({
+            await context.interaction.editReply({
                 embeds: [embed],
             });
         } catch (error) {

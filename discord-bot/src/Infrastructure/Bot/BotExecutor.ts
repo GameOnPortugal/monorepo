@@ -62,6 +62,8 @@ export class BotExecutor {
     }
 }
 
-function isMentionContext(context: any): context is MentionContext {
+function isMentionContext(
+    context: MentionContext | SlashCommandContext,
+): context is MentionContext {
     return (context as MentionContext).event !== undefined;
 }
