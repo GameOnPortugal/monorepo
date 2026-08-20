@@ -1,0 +1,38 @@
+{
+    "_comment": [
+        "M9.1 (docs/plans/GLOBAL-PLAN.md) — Discord AutoMod rules for the Game On Portugal guild,",
+        "reconciled by `bun run:command automod:apply --apply` (Infrastructure/Community/Discord/DiscordAutoModClient.ts).",
+        "STARTER FILE — the one rule below is disabled and its keyword is a placeholder, not a real",
+        "blocklist. Nobody has been asked what this Portuguese community actually wants blocked, and",
+        "that call belongs to Luis, not to whoever wrote the mechanism. Before this is ever applied for",
+        "real: 1) decide the actual keyword/regex blocklist (pt-PT slurs/spam/scam patterns are the",
+        "obvious candidates, per the old bot's `regex` validator), 2) decide which role(s), if any, go",
+        "in exemptRoles so moderators are never blocked by their own rules, 3) decide which channels (if",
+        "any) belong in commandsOnlyChannels below — the old `specialchannels` table was empty in",
+        "production, so there is nothing to port forward, only a fresh decision to make, 4) flip",
+        "`enabled` to true on the rules you actually want live. Until then this file only documents the",
+        "mechanism; running `--apply` with it as-is creates one disabled, harmless placeholder rule and",
+        "touches no channel permissions at all."
+    ],
+    "rules": [
+        {
+            "key": "starter-keyword-blocklist",
+            "displayName": "Starter keyword blocklist (placeholder — do not enable)",
+            "enabled": false,
+            "eventType": "MESSAGE_SEND",
+            "triggerType": "KEYWORD",
+            "keywordFilter": ["examplebadword"],
+            "regexPatterns": [],
+            "allowList": [],
+            "exemptRoles": [],
+            "exemptChannels": [],
+            "actions": [
+                {
+                    "type": "BLOCK_MESSAGE",
+                    "customMessage": "Esta mensagem foi bloqueada pelas regras do servidor."
+                }
+            ]
+        }
+    ],
+    "commandsOnlyChannels": []
+}
