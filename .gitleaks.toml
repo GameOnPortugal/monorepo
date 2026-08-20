@@ -1,0 +1,27 @@
+# Gitleaks configuration for GameOnPortugal/monorepo.
+#
+# Extends the default rule set — this file only ever *narrows* false positives,
+# it never disables a rule wholesale. If you add an entry here, say why the
+# matched value is genuinely not a credential.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Discord channel and guild snowflakes are public identifiers, not credentials"
+
+# Gitleaks' built-in `discord-client-id` rule matches any 17-20 digit number.
+# Discord "snowflake" IDs for a guild or a channel are public: they appear in
+# every channel URL, in the client UI under Copy Link, and in any invite. They
+# identify a room; they do not authorise anything. Committing them is the entire
+# point of work item M1.7 — the alternative is hardcoding them in TypeScript,
+# which is the problem being fixed.
+#
+# Deliberately keyed on the variable name rather than on the file or on the
+# literal values, so that:
+#   - a real DISCORD_TOKEN or client *secret* still fails the scan, and
+#   - adding a new channel does not require editing this file again.
+regexTarget = "line"
+regexes = [
+  '''DISCORD_(GUILD_ID|CHANNEL_[A-Z0-9_]+)\s*=\s*[0-9]{17,20}''',
+]
