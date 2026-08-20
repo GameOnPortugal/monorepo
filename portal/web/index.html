@@ -2,7 +2,17 @@
 <html lang="pt-PT">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!--
+      Real brand assets (M8.1), derived from the guild's own icon — see
+      brand/README.md. PNG rather than SVG on purpose: the mark is detailed
+      line-art and no faithful vector trace exists yet, so a hand-authored SVG
+      would only resemble the logo. An honest raster beats an approximate
+      vector.
+    -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#060302" />
     <meta
@@ -10,6 +20,21 @@
       content="Game On Portugal — marketplace, screenshots e leaderboard de troféus da comunidade de jogadores portuguesa no Discord."
     />
     <title>Game On Portugal</title>
+
+    <!-- Open Graph / Twitter. Full SEO (sitemap, per-page cards) is M8.13. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Game On Portugal" />
+    <meta property="og:title" content="Game On Portugal" />
+    <meta
+      property="og:description"
+      content="Marketplace, screenshots e leaderboard de troféus da comunidade de jogadores portuguesa no Discord."
+    />
+    <meta property="og:image" content="https://game-on-portugal.pt/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:url" content="https://game-on-portugal.pt/" />
+    <meta property="og:locale" content="pt_PT" />
+    <meta name="twitter:card" content="summary_large_image" />
   </head>
   <body>
     <div id="root"></div>
