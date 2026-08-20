@@ -36,6 +36,16 @@ services:
       LOKI_AUTH: ${LOKI_AUTH:-}
       APP_VERSION: ${APP_VERSION:-latest}
     restart: unless-stopped
+    healthcheck:
+      # No HTTP endpoint exists yet (see discord-bot/docker/Dockerfile — EXPOSE
+      # 3000 is aspirational, nothing listens on it). This is a process check
+      # so Portainer/`docker ps` can at least tell the bot's main process is
+      # alive; a real /health endpoint (needs src/ changes) is the follow-up.
+      test: [ "CMD-SHELL", "pgrep -f 'bun run src/index.ts' > /dev/null || exit 1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     depends_on:
       db:
         condition: service_healthy

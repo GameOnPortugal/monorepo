@@ -8,13 +8,33 @@ services:
       target: runtime
     container_name: discord-bot-ts
     restart: unless-stopped
+    # entrypoint.sh runs as /bin/sh and does not source Bun's
+    # auto-loaded .env, so DATABASE_URL etc. must be handed to the
+    # container explicitly. One source of truth: the same .env the
+    # Makefile/CI already require (copied from .env.example, or from
+    # .env.test in CI) rather than duplicating the URL here.
+    # `.env` must exist before Compose parses this file (Compose resolves
+    # env_file for every service up front, not just the one being started),
+    # so ci.yml creates it (`cp .env.test .env`) in its own step before any
+    # docker compose command runs, and local dev/Makefile usage requires a
+    # real .env already (copied from .env.example) for the same reason.
+    # Deliberately required (not the optional env_file form): an absent
+    # .env should fail loudly here rather than silently boot with no
+    # DATABASE_URL, which is exactly the hang M0.7 exists to remove.
+    env_file: .env
     ports:
       - "${SERVER_PORT:-3000}:3000"
     environment:
       - NODE_ENV=development
       - PORT=3000
-    volumes:
-      - ./:/app:rw
+    healthcheck:
+      # No HTTP endpoint exists yet (see docker/Dockerfile / entrypoint.sh
+      # notes), so this is a process check: is the bot's main process alive.
+      test: [ "CMD-SHELL", "pgrep -f 'bun run src/index.ts' > /dev/null || exit 1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     depends_on:
       - mariadb
 
