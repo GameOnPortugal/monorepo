@@ -8,6 +8,11 @@ const TYPES = {
     // Bot
     MentionHandler: Symbol.for('MentionHandler'),
     SlashCommandHandler: Symbol.for('SlashCommandHandler'),
+    // M4.7/M4.8 — the two non-chat-input dispatch tables. Both are
+    // @optional() at the BotExecutor injection site, so a container with no
+    // bindings for them is valid.
+    ComponentHandler: Symbol.for('ComponentHandler'),
+    AutocompleteHandler: Symbol.for('AutocompleteHandler'),
 
     // Security
 

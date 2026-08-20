@@ -9,12 +9,23 @@ import {
     RESTEvents,
     Routes,
 } from 'discord.js';
-import type { InvalidRequestWarningData, RateLimitData } from 'discord.js';
+import type {
+    AnySelectMenuInteraction,
+    ButtonInteraction,
+    ChatInputCommandInteraction,
+    InvalidRequestWarningData,
+    ModalSubmitInteraction,
+    RateLimitData,
+} from 'discord.js';
 import { TYPES } from '../../DependencyInjection/types.ts';
 import type Logger from '../../../Application/Logger/Logger.ts';
 import type { Bot } from '../../../Domain/Bot/Bot.ts';
 import { BotExecutor } from '../BotExecutor.ts';
 import type { SlashCommandContext } from '../../../Domain/Bot/SlashCommandContext.ts';
+import type {
+    ComponentInteractionContext,
+    ModalInteractionContext,
+} from '../../../Domain/Bot/InteractionContext.ts';
 import { safeReply } from '../../../Domain/Bot/safeReply.ts';
 import {
     hashCommandSet,
@@ -121,30 +132,96 @@ export class DiscordBot implements Bot {
             this.logger.info(`Ready! Logged in as ${readyClient.user.tag}`);
         });
 
+        // M4.7 — one entry point, four interaction shapes. Each branch
+        // builds the matching member of the `InteractionContext` union
+        // (M4.1) and hands it to BotExecutor; the type guards are
+        // discord.js's own, so `interaction` is narrowed for free rather
+        // than cast.
         this.client.on(Events.InteractionCreate, async (interaction) => {
-            if (!interaction.isChatInputCommand()) return;
+            if (interaction.isChatInputCommand()) {
+                await this.dispatchChatInput(interaction);
+                return;
+            }
 
-            const slashCommandContext: SlashCommandContext = {
-                kind: 'chat-input',
-                channel_id: interaction.channelId,
-                command: interaction.commandName,
-                text: '',
-                client: this.client,
-                interaction: interaction,
-            };
-
-            try {
-                await this.botExecutor.execute(slashCommandContext);
-            } catch (error: any) {
-                this.logger.error('error happened', { error });
-                await safeReply(interaction, {
-                    content: 'There was an error while executing this command!',
-                    flags: MessageFlags.Ephemeral,
+            // M4.8 — autocomplete is handled before the component branch
+            // because it is the one interaction type that is neither
+            // repliable nor deferrable: it must be answered with
+            // `respond()`, and BotExecutor guarantees it always is.
+            if (interaction.isAutocomplete()) {
+                await this.botExecutor.executeAutocomplete({
+                    kind: 'autocomplete',
+                    client: this.client,
+                    interaction,
                 });
+                return;
+            }
+
+            if (
+                interaction.isButton() ||
+                interaction.isAnySelectMenu() ||
+                interaction.isModalSubmit()
+            ) {
+                await this.dispatchComponent(interaction);
+                return;
             }
         });
 
         await this.client.login(this.token);
+    }
+
+    private async dispatchChatInput(interaction: ChatInputCommandInteraction): Promise<void> {
+        const slashCommandContext: SlashCommandContext = {
+            kind: 'chat-input',
+            channel_id: interaction.channelId,
+            command: interaction.commandName,
+            text: '',
+            client: this.client,
+            interaction: interaction,
+        };
+
+        try {
+            await this.botExecutor.execute(slashCommandContext);
+        } catch (error: any) {
+            this.logger.error('error happened', { error });
+            await safeReply(interaction, {
+                content: 'There was an error while executing this command!',
+                flags: MessageFlags.Ephemeral,
+            });
+        }
+    }
+
+    private async dispatchComponent(
+        interaction: ButtonInteraction | AnySelectMenuInteraction | ModalSubmitInteraction,
+    ): Promise<void> {
+        const context: ComponentInteractionContext | ModalInteractionContext =
+            interaction.isModalSubmit()
+                ? { kind: 'modal', client: this.client, interaction }
+                : { kind: 'component', client: this.client, interaction };
+
+        try {
+            const handled = await this.botExecutor.executeComponent(context);
+            if (!handled) {
+                // Not an error — see BotExecutor.executeComponent. The
+                // member still clicked something, so they get an answer
+                // rather than a spinner that never resolves. Ephemeral: a
+                // stale button in a public channel should not produce a
+                // public error message for everyone reading it.
+                await safeReply(interaction, {
+                    content:
+                        'Este botão já não está disponível. Corre o comando outra vez para obter uma versão actualizada.',
+                    flags: MessageFlags.Ephemeral,
+                });
+            }
+        } catch (error: any) {
+            this.logger.error('error handling component interaction', {
+                error,
+                customId: interaction.customId,
+            });
+            await safeReply(interaction, {
+                content: 'Ocorreu um erro ao processar esta acção.',
+                flags: MessageFlags.Ephemeral,
+            });
+        }
     }
 
     /**

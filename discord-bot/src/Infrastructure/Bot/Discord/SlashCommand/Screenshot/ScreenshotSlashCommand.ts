@@ -96,7 +96,10 @@ export class ScreenshotSlashCommand implements SlashCommandHandler {
                             option
                                 .setName('id')
                                 .setDescription('ID of the screenshot to delete')
-                                .setRequired(true),
+                                .setRequired(true)
+                                // M4.8 — ScreenshotAutocompleteHandler fills
+                                // this in from the member's own screenshots.
+                                .setAutocomplete(true),
                         ),
                 )
         );
