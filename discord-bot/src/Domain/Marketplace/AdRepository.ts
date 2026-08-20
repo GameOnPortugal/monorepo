@@ -1,5 +1,12 @@
 import type { Ad } from './Ad';
 import type { AdId } from './AdId';
+import type { AdSearchCriteria } from './AdSearchCriteria';
+
+/** Pagination window for `findByUserId`/`search` — DB-level `LIMIT`/`OFFSET`, never a JS `.slice()` over an unbounded fetch. */
+export interface AdPageOptions {
+    limit: number;
+    offset: number;
+}
 
 export interface AdRepository {
     save(ad: Ad): Promise<void>;
@@ -11,7 +18,36 @@ export interface AdRepository {
 
     delete(id: AdId): Promise<void>;
 
-    findByUserId(userId: string): Promise<Ad[]>;
+    /**
+     * A user's own non-deleted ads, newest first. `options` is optional and
+     * additive (M5.8): omitting it keeps the pre-pagination behaviour (every
+     * row) that autocomplete and the lifecycle jobs still rely on: only
+     * `/marketplace list`'s presenter needs a bounded page.
+     */
+    findByUserId(userId: string, options?: AdPageOptions): Promise<Ad[]>;
+
+    /** Total non-deleted ads for a user — pairs with `findByUserId`'s `options` to compute `AdPage.totalPages` (M5.8). */
+    countByUserId(userId: string): Promise<number>;
+
+    /**
+     * How many of a user's ads are currently `active` — the 10-active-ads
+     * limit (M5.10) reads this rather than filtering `findByUserId`'s
+     * result in JS, so the check is one indexed COUNT query
+     * (`@@index([author_id, status])`), not "fetch everything, count in
+     * memory" that gets slower as a seller's history grows.
+     */
+    countActiveByUserId(userId: string): Promise<number>;
+
+    /**
+     * Active listings matching `criteria` (M5.9's `/marketplace search`),
+     * most-recently-bumped first, newest-created as the tiebreak. Filtering
+     * happens entirely in the database — see AdSearchCriteria.ts's doc
+     * comment for why that matters here.
+     */
+    search(criteria: AdSearchCriteria, options: AdPageOptions): Promise<Ad[]>;
+
+    /** Total active listings matching `criteria` — pairs with `search()` to compute `AdPage.totalPages`. */
+    countSearch(criteria: AdSearchCriteria): Promise<number>;
 
     /**
      * Active ads with no postable message (`message_id` empty or null) — the

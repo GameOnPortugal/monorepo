@@ -1,10 +1,11 @@
 import { inject, injectable } from 'inversify';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { TYPES } from '../DependencyInjection/types';
 import { Ad, serializeImages, type AdArray } from '../../Domain/Marketplace/Ad';
 import { AdId } from '../../Domain/Marketplace/AdId';
 import { AdStatus } from '../../Domain/Marketplace/AdStatus';
-import type { AdRepository } from '../../Domain/Marketplace/AdRepository';
+import type { AdPageOptions, AdRepository } from '../../Domain/Marketplace/AdRepository';
+import type { AdSearchCriteria } from '../../Domain/Marketplace/AdSearchCriteria';
 import RecordNotFound from '../../Domain/RecordNotFound';
 
 @injectable()
@@ -91,13 +92,82 @@ export class OrmAdRepository implements AdRepository {
         });
     }
 
-    async findByUserId(userId: string): Promise<Ad[]> {
+    async findByUserId(userId: string, options?: AdPageOptions): Promise<Ad[]> {
         const ads = await this.prismaClient.ad.findMany({
             where: { author_id: userId, deleted_at: null },
             orderBy: { createdAt: 'desc' },
+            ...(options ? { take: options.limit, skip: options.offset } : {}),
         });
 
         return ads.map((ad) => Ad.fromArray(ad as AdArray));
+    }
+
+    async countByUserId(userId: string): Promise<number> {
+        return this.prismaClient.ad.count({ where: { author_id: userId, deleted_at: null } });
+    }
+
+    async countActiveByUserId(userId: string): Promise<number> {
+        return this.prismaClient.ad.count({
+            where: {
+                author_id: userId,
+                deleted_at: null,
+                status: AdStatus.active().toString(),
+            },
+        });
+    }
+
+    /**
+     * Shared by `search()`/`countSearch()` so the two can never drift into
+     * matching different rows — a count for one query and a fetch for
+     * another would silently mis-render `AdPage.totalPages`.
+     */
+    private searchWhere(criteria: AdSearchCriteria): Prisma.AdWhereInput {
+        const where: Prisma.AdWhereInput = {
+            status: AdStatus.active().toString(),
+            deleted_at: null,
+        };
+
+        if (criteria.adType) {
+            where.adType = criteria.adType;
+        }
+        if (criteria.condition) {
+            where.state = criteria.condition;
+        }
+        if (criteria.zone) {
+            where.zone = { contains: criteria.zone };
+        }
+        if (criteria.maxPriceCents !== undefined) {
+            // Only ads with a parsed price can satisfy a max-price filter —
+            // NULL means "could not parse" (AdPrice.ts), never "free", so it
+            // is excluded rather than treated as matching everything.
+            where.price_cents = { lte: criteria.maxPriceCents };
+        }
+        if (criteria.keyword) {
+            where.OR = [
+                { name: { contains: criteria.keyword } },
+                { description: { contains: criteria.keyword } },
+            ];
+        }
+
+        return where;
+    }
+
+    async search(criteria: AdSearchCriteria, options: AdPageOptions): Promise<Ad[]> {
+        const ads = await this.prismaClient.ad.findMany({
+            where: this.searchWhere(criteria),
+            // Most-recently-bumped first (MySQL/MariaDB sort NULL as the
+            // smallest value, so never-bumped rows naturally fall after
+            // bumped ones in DESC order), newest-created as the tiebreak.
+            orderBy: [{ bumped_at: 'desc' }, { createdAt: 'desc' }],
+            take: options.limit,
+            skip: options.offset,
+        });
+
+        return ads.map((ad) => Ad.fromArray(ad as AdArray));
+    }
+
+    async countSearch(criteria: AdSearchCriteria): Promise<number> {
+        return this.prismaClient.ad.count({ where: this.searchWhere(criteria) });
     }
 
     async findOrphanedActive(limit: number): Promise<Ad[]> {

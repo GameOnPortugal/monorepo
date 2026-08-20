@@ -24,6 +24,8 @@ describe('MarketplaceSlashCommand builder()', () => {
             {} as any,
             {} as any,
             {} as any,
+            {} as any,
+            {} as any,
         );
 
         const json = command.builder().toJSON();

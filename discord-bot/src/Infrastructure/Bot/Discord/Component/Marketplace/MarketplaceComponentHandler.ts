@@ -22,8 +22,16 @@ import { GetAd } from '../../../../../Application/Query/Marketplace/GetAd/GetAd'
 import { MarkAdSold } from '../../../../../Application/Write/Marketplace/MarkAdSold/MarkAdSold';
 import { BumpAd } from '../../../../../Application/Write/Marketplace/BumpAd/BumpAd';
 import { EditAd } from '../../../../../Application/Write/Marketplace/EditAd/EditAd';
+import { ListUserAdsPage } from '../../../../../Application/Query/Marketplace/ListUserAdsPage/ListUserAdsPage';
+import { SearchAds } from '../../../../../Application/Query/Marketplace/SearchAds/SearchAds';
 import { DiscordChannels } from '../../../../Community/Discord/DiscordChannels';
 import { formatHoursRemaining } from '../../SlashCommand/Marketplace/formatHoursRemaining';
+import {
+    AdListPresenter,
+    LIST_PAGE_ACTION,
+    SEARCH_PAGE_ACTION,
+} from '../../SlashCommand/Marketplace/AdListPresenter';
+import { SearchCriteriaStore } from './SearchCriteriaStore';
 
 /**
  * The `mkt` namespace (M4.7's first real consumer): the three listing
@@ -50,6 +58,8 @@ export class MarketplaceComponentHandler implements ComponentHandler {
         @inject(TYPES.Logger) private readonly logger: Logger,
         @inject(CommandHandlerManager)
         private readonly commandHandlerManager: CommandHandlerManager,
+        @inject(AdListPresenter) private readonly presenter: AdListPresenter,
+        @inject(SearchCriteriaStore) private readonly searchCriteriaStore: SearchCriteriaStore,
     ) {}
 
     getNamespace(): string {
@@ -64,6 +74,24 @@ export class MarketplaceComponentHandler implements ComponentHandler {
         // defensive rather than assumed, since a handler must never crash on
         // untrusted client-supplied input (CustomId.ts).
         if (!parsed) {
+            return;
+        }
+
+        // M5.8/M5.9 — the two pagination actions carry a target user id / a
+        // SearchCriteriaStore token in args[0], never an AdId, so they are
+        // dispatched before the AdId parse every other action below needs.
+        if (parsed.action === LIST_PAGE_ACTION) {
+            await this.handleListPage(
+                interaction as ButtonInteraction | AnySelectMenuInteraction,
+                parsed.args,
+            );
+            return;
+        }
+        if (parsed.action === SEARCH_PAGE_ACTION) {
+            await this.handleSearchPage(
+                interaction as ButtonInteraction | AnySelectMenuInteraction,
+                parsed.args,
+            );
             return;
         }
 
@@ -109,6 +137,108 @@ export class MarketplaceComponentHandler implements ComponentHandler {
                     content: 'Esta ação já não está disponível.',
                     flags: MessageFlags.Ephemeral,
                 });
+        }
+    }
+
+    /**
+     * `mkt:list-page:<targetUserId>:<page>:<pageSize>` (M5.8). No ownership
+     * check needed: the message this button lives on is always `list`'s own
+     * ephemeral reply, which only the invoking member can see or click —
+     * same reasoning as `TrophyComponentHandler`'s pagination buttons.
+     * Numeric args fall back to page 1 / the default page size rather than
+     * propagating `NaN` if the custom ID is somehow malformed.
+     */
+    private async handleListPage(
+        interaction: ButtonInteraction | AnySelectMenuInteraction,
+        args: string[],
+    ): Promise<void> {
+        const [targetUserId, pageArg, pageSizeArg] = args;
+        if (!targetUserId) {
+            await safeReply(interaction, {
+                content:
+                    '⚠️ Este botão de paginação já não é válido. Corre `/marketplace list` outra vez.',
+                flags: MessageFlags.Ephemeral,
+            });
+            return;
+        }
+
+        const page = toPositiveInt(pageArg, 1);
+        const pageSize = toPositiveInt(pageSizeArg, 10);
+
+        try {
+            const adPage = await this.commandHandlerManager.handle(
+                new ListUserAdsPage(targetUserId, page, pageSize),
+            );
+            const embed = this.presenter.buildAdListEmbed({
+                title: `Anúncios de ${interaction.user.id === targetUserId ? interaction.user.username : targetUserId}`,
+                description: `${adPage.totalCount} anúncio${adPage.totalCount === 1 ? '' : 's'} encontrado${adPage.totalCount === 1 ? '' : 's'}`,
+                adPage,
+                guildId: interaction.guildId,
+            });
+            const row = this.presenter.buildListPaginationRow(targetUserId, adPage);
+
+            await (interaction as ButtonInteraction).update({ embeds: [embed], components: [row] });
+        } catch (error) {
+            this.logger.error('Error handling marketplace list pagination click', {
+                error,
+                customId: interaction.customId,
+                userId: interaction.user.id,
+            });
+            await safeReply(interaction, {
+                content: '⚠️ Ocorreu um erro ao mudar de página. Tenta novamente.',
+                flags: MessageFlags.Ephemeral,
+            });
+        }
+    }
+
+    /**
+     * `mkt:search-page:<token>:<page>` (M5.9). A missing/expired token
+     * (`SearchCriteriaStore`'s TTL, or a bot restart) fails closed with an
+     * ephemeral prompt to search again, rather than a stale or empty
+     * render — see that class's doc comment for why search pagination
+     * can't just carry its own criteria the way `list-page` does.
+     */
+    private async handleSearchPage(
+        interaction: ButtonInteraction | AnySelectMenuInteraction,
+        args: string[],
+    ): Promise<void> {
+        const [token, pageArg] = args;
+        const stored = token ? this.searchCriteriaStore.get(token) : null;
+
+        if (!stored) {
+            await safeReply(interaction, {
+                content: '⚠️ Esta pesquisa expirou. Corre `/marketplace search` outra vez.',
+                flags: MessageFlags.Ephemeral,
+            });
+            return;
+        }
+
+        const page = toPositiveInt(pageArg, 1);
+
+        try {
+            const adPage = await this.commandHandlerManager.handle(
+                new SearchAds(stored.criteria, page, stored.pageSize),
+            );
+            const embed = this.presenter.buildAdListEmbed({
+                title: '🔎 Resultados da pesquisa',
+                description: `${adPage.totalCount} anúncio${adPage.totalCount === 1 ? '' : 's'} activo${adPage.totalCount === 1 ? '' : 's'} encontrado${adPage.totalCount === 1 ? '' : 's'}`,
+                adPage,
+                guildId: interaction.guildId,
+                showOwner: true,
+            });
+            const row = this.presenter.buildSearchPaginationRow(token as string, adPage);
+
+            await (interaction as ButtonInteraction).update({ embeds: [embed], components: [row] });
+        } catch (error) {
+            this.logger.error('Error handling marketplace search pagination click', {
+                error,
+                customId: interaction.customId,
+                userId: interaction.user.id,
+            });
+            await safeReply(interaction, {
+                content: '⚠️ Ocorreu um erro ao mudar de página. Tenta novamente.',
+                flags: MessageFlags.Ephemeral,
+            });
         }
     }
 
@@ -262,4 +392,9 @@ export class MarketplaceComponentHandler implements ComponentHandler {
             });
         }
     }
+}
+
+function toPositiveInt(raw: string | undefined, fallback: number): number {
+    const parsed = Number.parseInt(raw ?? '', 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
