@@ -55,7 +55,7 @@ because the production entrypoint runs `prisma migrate deploy` on every boot.
 
 ## The situation in five lines
 
-The bot is **live** and serving a real community (4,477 trophies, 624
+The bot is **live** and serving a real community (4,971 trophies, 624
 screenshots, 70 ads) and has been since April 2025. In that time
 `/marketplace sell` has failed on **100%** of invocations, the scheduler has run
 **zero** jobs, every one of the 624 stored screenshot images has **404**'d,
@@ -167,7 +167,7 @@ serves a public object.
 
 | ID | Item | Evidence |
 | -- | ---- | -------- |
-| **M2.1** | **Phase 0 — safety net.** Dump production, restore it locally, confirm 4,477 / 624 / 118 / 70 row counts. Copy `~/game-on-portugal/.env` into 1Password (**it is the only copy of the bot token, on a home server**). Verify the nightly `databack/mysql-backup` output actually restores — nobody has ever checked. | [04 phase 0](04-infrastructure-migration.md) |
+| **M2.1** | ✅ **Done 2026-08-19.** Phase 0 — safety net. Dump production, restore it locally, confirm 4,971 / 624 / 118 / 70 row counts (the previously-quoted 4,477 was an InnoDB estimate). Copy `~/game-on-portugal/.env` into 1Password (**it is the only copy of the bot token, on a home server**). Verify the nightly `databack/mysql-backup` output actually restores — nobody has ever checked. | [04 phase 0](04-infrastructure-migration.md) |
 | **M2.2** | **Phase 1 — repo wiring.** Squash-only merges, branch protection requiring `CI`, create `RELEASE_PLEASE_TOKEN` / `DOCKER_*` / `PORTAINER_ACCESS_TOKEN` / `DEPLOY_SSH_*` / `TELEGRAM_*`, delete the obsolete `CAPROVER_*` and `MY_RELEASE_PLEASE_TOKEN`. | [04 phase 1](04-infrastructure-migration.md), [#2](../known-issues.md), [#6](../known-issues.md) |
 | **M2.3** | **Phase 2 — HTZ1 prep, no cutover.** Tunnel-only deploy key **appended** to `~ezweb/.ssh/authorized_keys`; create the Portainer stack with a **placeholder `DISCORD_TOKEN`** so it cannot fight the live bot; restore the dump; add only the `media.` DNS record and Caddy vhost. | [04 phase 2](04-infrastructure-migration.md) |
 | **M2.4** | **Phase 3 — cutover** (~15 min downtime). Stop the old bot **first** — two bots on one token both receive interactions. Delta dump, real token, verify `/ping`, then re-enable `deploy.yml`'s commented-out `push` trigger and prove the pipeline end to end. | [04 phase 3](04-infrastructure-migration.md) |
@@ -307,7 +307,7 @@ names a real winner; ads expire rather than pile up.
 **Goal**: `/trophy rank` reflects trophies people actually earned this month.
 
 This is the **highest-value gap in the port**, because the feature *appears* to
-work: 118 profiles and 4,477 trophies are presented as a live leaderboard that has
+work: 118 profiles and 4,971 trophies are presented as a live leaderboard that has
 not moved since **2024-12-02**. The read side was ported; the entire
 data-producing side was not.
 
@@ -431,17 +431,63 @@ Update this table as items land. `—` = not started.
 
 | Milestone | Items | Done | Status |
 | --------- | ----- | ---- | ------ |
-| M0 Stop the bleeding | 9 | 0 | — |
-| M1 Restore the signal | 10 | 0 | partial: `tsc --noEmit`, CodeQL/Trivy/Gitleaks and PR-title linting are already in CI |
+| M0 Stop the bleeding | 9 | 9 | **complete** — #11 #12 #13 #14 #15. All five live defects verified fixed *in production*, not just in CI |
+| M1 Restore the signal | 10 | 7 | #9 #12 #18 #21. Remaining: M1.2 (a dedicated harness — tests exist but grew ad hoc), M1.3 (env validation at boot), M1.4 (loud registration failure), M1.10 (permission model) |
 | M2 Infrastructure cutover | 6 | 5 | **cut over 2026-08-19** — production is HTZ1, Portainer stack 46. M2.5 (decommission TedRelayer) due 2026-09-02 |
-| M3 Dependencies & container | 8 | 0 | — |
-| M4 Discord API modernisation | 10 | 0 | — |
-| M5 Marketplace overhaul | 11 | 0 | — |
-| M6 Jobs, lifecycle & media | 8 | 0 | — |
-| M7 Trophies | 8 | 0 | — |
+| M3 Dependencies & container | 8 | 7 | #11 #20. `bun audit` **26 advisories → 0** and the gate is blocking again. Remaining: **M3.6 Prisma 6→7**, deliberately left alone as its own PR |
+| M4 Discord API modernisation | 10 | 0 | — (M3.2 cleared the deprecations that were blocking it) |
+| M5 Marketplace overhaul | 11 | 0 | M0.1 already did plan 01's task 1 |
+| M6 Jobs, lifecycle & media | 8 | 1 | M6.7 done (#19) — `scheduler/` deleted. **M6.1 is now the only route to any scheduled work running at all** |
+| M7 Trophies | 8 | 0 | M0.8 fixed the read side; the data-producing side is untouched |
 | M8 Community portal | 15 | 0 | — |
 | M9 Feature gap & dead weight | 7 | 3 | M9.2/M9.3/M9.4 **decided as dropped**; M9.1 redesigned onto AutoMod |
-| **Total** | **92** | **8** | |
+| **Total** | **92** | **39** | |
+
+### What landed on 2026-08-19/20
+
+Eighteen PRs, `v1.0.0` and `v1.1.0` — the repo's first releases ever, after a
+30-commit `chore:` streak that cut none.
+
+**The three live production failures are fixed and verified against production:**
+
+- `/marketplace sell` had failed **28 times out of 28** since 2025-05-11 — a 100%
+  failure rate, not the 28-of-33 this document previously claimed. `CreateAdHandler`
+  returns `void`, so `const ad = await handle(command)` was `undefined` and `ad.id`
+  threw *after* the reply had already been posted; the catch block then replied a
+  second time and buried the real error under `InteractionAlreadyReplied`.
+- `/trophy rank` returned an arbitrary ten profiles sorted among themselves. Of the
+  ten it displayed, **one** belonged in the real top ten; the true #1 (58,050 points
+  across 193 trophies) did not appear at all. Verified fixed by running the deployed
+  query against the production database.
+- The scheduler ran zero jobs — and was **doubly** dead: every job commented out,
+  *and* pointing at `node scripts/…` commands from the old bot that do not exist in
+  the rewrite. Deleted (M6.7).
+
+**Found while working, not in any plan when the session started:**
+
+- **The nightly backup had been silently failing for seven weeks.** The dump
+  succeeded every night; the SMB *upload* failed because `DB_DUMP_TARGET` addressed
+  the NAS over the internet by DDNS name. Nobody had ever checked the destination —
+  "the container is Up" is not evidence a backup works.
+- **The trophy count is 4,971, not 4,477.** The figure everywhere in these docs came
+  from `information_schema.table_rows`, an InnoDB *estimate*.
+- **CI depended on a hang.** Bounding the entrypoint's DB wait (M0.7) revealed that
+  `docker-compose.ci.yml` never passed `DATABASE_URL` to the container: Bun
+  auto-loads `.env` for the *app*, but `entrypoint.sh` is `/bin/sh` and never saw it.
+  The readiness loop had been spinning forever and CI relied on that to stay alive.
+- **TLS certificate validation was disabled on a live path** (`rejectUnauthorized:
+  false` *and* `checkServerIdentity: () => undefined`). Recorded as finding **A9**.
+  A grep for `rejectUnauthorized` under-reports it — the insecure client is reached
+  through `RetryAxiosHttpClient`, which configures no agent of its own.
+- **The secret scan judged every PR by every branch**, so one branch's false positive
+  reddened every other open PR (#21).
+- **Three ads were created in DMs**, confirming the `guildId === null` case is real
+  and not hypothetical: of 70 ads, 62 are in `📖anuncios`, 5 in `💬chat`, 3 in a DM.
+
+**Still needs Luis** (neither can be done non-interactively): minting
+`RELEASE_PLEASE_TOKEN`, and copying the credentials from the operator's
+`~/gop-backups/2026-08-19/` into 1Password — **the bot token still has no durable
+copy anywhere**.
 
 Already closed before this plan was written: [#1](../known-issues.md) (schema
 drift), [#4](../known-issues.md) (6 type errors), and the repo side of
