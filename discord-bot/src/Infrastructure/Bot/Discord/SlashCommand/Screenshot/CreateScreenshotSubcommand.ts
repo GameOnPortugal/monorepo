@@ -43,6 +43,12 @@ export class CreateScreenshotSubcommand {
         // Create a new screenshot
         const screenshotId = ScreenshotId.generate();
         try {
+            // Defer first: the reply is filled in via editReply() below, which
+            // (unlike the deprecated `fetchReply: true` option) returns a real
+            // Message directly, and lets CreateScreenshot's write path take
+            // longer than the 3s interaction-ack window without failing.
+            await interaction.deferReply();
+
             await this.commandHandlerManager.handle(
                 new CreateScreenshot(
                     screenshotId,
@@ -60,7 +66,7 @@ export class CreateScreenshotSubcommand {
             // escaped (markdown injection) and mentions are explicitly
             // disabled on this reply (mention injection, M0.2/A1) in
             // addition to the client-wide default set in DiscordBot.ts.
-            const message = await interaction.reply({
+            const message = await interaction.editReply({
                 content:
                     `📸 **Screenshot Submitted!**\n\n` +
                     `ID: #${screenshotId.toString()}\n` +
@@ -69,7 +75,6 @@ export class CreateScreenshotSubcommand {
                     `Platform: ${platform.charAt(0).toUpperCase() + platform.slice(1)}`,
                 files: [image.url],
                 allowedMentions: { parse: [] },
-                fetchReply: true, // This ensures we get the message object back
             });
 
             // Add the trophy reaction to the message
