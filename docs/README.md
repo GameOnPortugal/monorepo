@@ -39,29 +39,28 @@ Detailed, self-contained plans written to be handed to independent agents:
 
 ## The 60-second version
 
-Four subprojects, one of which really matters. `discord-bot/` is a Bun +
+Two live subprojects and two retired ones. `discord-bot/` is a Bun +
 TypeScript + discord.js v14 + Prisma/MySQL bot with a clean layered
 architecture, 32 passing integration tests, and a production Docker image that
-still builds today. `scheduler/` is a small Chadburn cron container meant to run
-one weekly job inside the bot container. `old-discord-bot/` is the retired Node
-15 predecessor, kept only so the un-ported features can be read. `webpage/` is a
-static site that is **not** what serves game-on-portugal.pt.
+still builds today. `old-discord-bot/` is the retired Node 15 predecessor, kept
+only so the un-ported features can be read. `webpage/` is a static site that is
+**not** what serves game-on-portugal.pt.
 
-**The bot is live** on TedRelayer (`~/game-on-portugal/`, docker-compose), with
-4,477 trophies and 70 ads of real community data, and members still using it.
-But it was hand-migrated off a decommissioned CapRover host in June 2026 and the
-repo never found out, so **CI deploys to a machine that no longer exists**.
+The `scheduler/` container (a Chadburn cron sidecar) **was deleted** because it
+never executed any jobs in production (see [known-issues.md](known-issues.md) #3).
+It was not migrated to HTZ1; the `week-screenshot-winner` job now has no automatic
+trigger until the in-process replacement (plan 02, M6.1) ships.
 
-Three things are broken in production right now and none of them ever surfaced:
+**The bot is live** on HTZ1 as a Portainer stack since **2026-08-19**, with
+~5,000 trophies and 70 ads of real community data, and members still using it.
+
+Two things are broken in production right now and neither ever surfaced:
 
 - `/marketplace sell` throws on **every** use — 28 of 33 post-rewrite ads are
   orphaned from their Discord message.
-- The scheduler has **never executed a job**; its image predates the commit that
-  enabled the weekly screenshot winner by seventeen hours.
 - `/trophy rank` presents a leaderboard frozen since **December 2024** as if it
   were live, because the scraper feeding it was never ported.
 
-Underneath sits the reason all three went unnoticed: no type gate, no linter, no
-release ever cut, no tests on the discord.js layer where all three live. Details
-in [known-issues.md](known-issues.md), sequencing in
-[revival-plan.md](revival-plan.md).
+Underneath sits the reason both went unnoticed: no type gate, no linter, no
+release ever cut, no tests on the discord.js layer where both live. Details
+in [known-issues.md](known-issues.md), sequencing in the global plan.

@@ -30,13 +30,14 @@ branch `main`. The org also holds:
 | --------------------------- | ---------- | ---------- | ----------------------------------------------------- |
 | `monorepo`                  | public     | 2025-06-30 | This repo                                             |
 | `discord-bot`               | public     | 2024-11-13 | **Archived.** Absorbed as `discord-bot/`              |
-| `scheduler`                 | private    | 2024-11-13 | Absorbed as `scheduler/`, original never archived     |
+| `scheduler`                 | private    | 2024-11-13 | Absorbed as `scheduler/`, original never archived; directory deleted 2026-08-19 |
 | `gameonportugal.github.io`  | public     | 2021-11-11 | **Serves the live website.** Not this repo's `webpage/` |
 | `screenshot-bot`            | private    | 2021-07-08 | Unrelated, long dead                                  |
 
 **Container images** — Docker Hub under the personal `joshlopes` namespace, not
 an org one: `joshlopes/game-on-portugal-bot` (tags `latest`, `pr-<n>`,
-`pr-<sha>`) and `joshlopes/game-on-portugal-scheduler`.
+`pr-<sha>`). The `joshlopes/game-on-portugal-scheduler` image is no longer built
+or deployed as of 2026-08-19.
 
 **Runtime** — **HTZ1** (`ssh -p 2224 ezweb@195.201.192.35`), Portainer stack
 `game-on-portugal` (stack id `46`, endpoint `3`), since the **2026-08-19**
@@ -61,7 +62,8 @@ off *Superman* (a decommissioned CapRover host) that the repo's CI never found
 out about, so merging to `main` had no effect on production for over a year.
 That TedRelayer stack is kept **stopped-but-intact** as the rollback path
 until **2026-09-02** — `game-on-portugal-app` and `-scheduler` are stopped,
-`-db`/`-redis`/`-db-backup` still run. See [`operations.md`](operations.md)'s
+`-db`/`-redis`/`-db-backup` still run (though `-scheduler` is also no longer
+maintained). See [`operations.md`](operations.md)'s
 "Rollback path" section. `deploy.yml`'s `push` trigger is now enabled, so
 merging to `main` **does** deploy, to HTZ1, for real.
 
@@ -124,16 +126,16 @@ Verified working on 2026-08-19: `bun install` (on Node 24), `prisma generate`,
 `docker build --target runtime` of the production image. Verified failing:
 `bunx tsc --noEmit` (6 errors).
 
-### `scheduler/` — the cron sidecar
+### `scheduler/` — the cron sidecar (deleted 2026-08-19)
 
-An Alpine image bundling [Chadburn](https://github.com/PremoWeb/chadburn) (a Go
+The `scheduler/` directory contained an Alpine image bundling [Chadburn](https://github.com/PremoWeb/chadburn) (a Go
 cron that drives Docker), supervisord, and a small Python script. On boot,
-`update_container.py` looks up the running bot container by name
-(`APP_CONTAINER_NAME`), rewrites `config.ini` to point at it, and restarts the
-cron job — this indirection exists because CapRover container names carry
+`update_container.py` would look up the running bot container by name
+(`APP_CONTAINER_NAME`), rewrite `config.ini` to point at it, and restart the
+cron job — this indirection existed because CapRover container names carry
 generated suffixes.
 
-`config.ini` **in the repo** has exactly one active job:
+The `config.ini` **in the repo** had exactly one active job:
 
 ```ini
 [job-exec "weekly-screenshot-winner"]
@@ -142,30 +144,30 @@ container = game-on-portugal-app-placeholder
 command = bun run:command week-screenshot-winner
 ```
 
-**The deployed container does not have this.** `docker exec
-game-on-portugal-scheduler cat /srv/config.ini` shows every job still commented
-out, including a `weekly-screenshot-winner` that still reads
+**The deployed container did not have this.** `docker exec
+game-on-portugal-scheduler cat /srv/config.ini` showed every job still commented
+out, including a `weekly-screenshot-winner` that still read
 `command = node scripts/screenshot-winners.js` — the *old bot's* version. The
-reason is a one-day miss: `joshlopes/game-on-portugal-scheduler:latest` was last
+reason was a one-day miss: `joshlopes/game-on-portugal-scheduler:latest` was last
 pushed **2025-04-19 14:27 UTC**, and commit `c28a73f` ("feat: enable screenshot
 winner. run commands"), which activated the job, landed **2025-04-20 09:56** and
 was never built into an image.
 
-So the scheduler container has run **zero jobs since it was deployed**. Its logs
-contain nothing but the `update-container-id` supervisord loop firing every two
-minutes. The weekly screenshot winner — the only reason this component exists —
-has never run in production.
+So the scheduler container had run **zero jobs since it was deployed**. Its logs
+contained nothing but the `update-container-id` supervisord loop firing every two
+minutes. The weekly screenshot winner — the only reason this component existed —
+never ran in production.
 
-Four further jobs are commented out in both versions — `parse-psn-profiles`,
+Four further jobs were commented out in both versions — `parse-psn-profiles`,
 `update-lfg-points`, `has-been-sold`, and the old screenshot-winner — all
-invoking `node scripts/…` scripts that exist only in `old-discord-bot/`. They
-are dead until those features are ported.
+invoking `node scripts/…` scripts that existed only in `old-discord-bot/`. They
+were dead until those features were ported.
 
-**As of the 2026-08-19 HTZ1 migration, the scheduler is retired rather than
-carried over** — `infrastructure/game-on-portugal.yaml` has no scheduler
-service at all, so there is now no cron trigger for `week-screenshot-winner`
-anywhere, not even a broken one. [`plans/02-scheduler-and-lifecycle.md`](plans/02-scheduler-and-lifecycle.md)
-replaces it with in-process cron inside the bot; that work has not started.
+**The directory was deleted during work item M6.7 (2026-08-19).** It was never
+migrated to the HTZ1 stack — `infrastructure/game-on-portugal.yaml` has no scheduler
+service at all, so there is no cron trigger for `week-screenshot-winner`
+anywhere. [`plans/02-scheduler-and-lifecycle.md`](plans/02-scheduler-and-lifecycle.md)
+describes the in-process cron replacement (M6.1) that will restore this capability.
 
 ### `old-discord-bot/` — the retired predecessor
 

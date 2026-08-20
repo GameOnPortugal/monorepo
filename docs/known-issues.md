@@ -132,27 +132,30 @@ was left in place even though nothing reads it (see issue #6). Remaining gap:
 `RELEASE_PLEASE_TOKEN` was not created (see #6), and the Telegram notification
 secrets are still unset, so `deploy.yml` runs without a Telegram ping today.
 
-### 3. The scheduler has never run a single job
+### 3. The scheduler has never run a single job — ✅ DELETED
 
-`docker exec game-on-portugal-scheduler cat /srv/config.ini` shows **every job
-commented out**, including a `weekly-screenshot-winner` still pointing at the old
-bot's `node scripts/screenshot-winners.js`. The repo's `config.ini` has had the
-job enabled since commit `c28a73f` (2025-04-20 09:56) — but
-`joshlopes/game-on-portugal-scheduler:latest` was last pushed **2025-04-19
-14:27**, seventeen hours earlier. The image was never rebuilt.
+The `scheduler/` container directory was **deleted during work item M6.7**. It
+never ran any jobs in production; every job in the deployed image (`docker exec
+game-on-portugal-scheduler cat /srv/config.ini`) was commented out, including a
+`weekly-screenshot-winner` still pointing at the old bot's `node scripts/screenshot-winners.js`.
 
-The scheduler container's logs contain nothing but the `update-container-id`
+The repo's `config.ini` had the job enabled since commit `c28a73f` (2025-04-20
+09:56), but `joshlopes/game-on-portugal-scheduler:latest` was last pushed
+**2025-04-19 14:27**, seventeen hours earlier. The image was never rebuilt.
+
+The scheduler container's logs contained nothing but the `update-container-id`
 supervisord loop firing every two minutes. The weekly screenshot winner — the
-sole reason this component exists, and the feature commit `c28a73f` was written
-to ship — **has never executed in production**.
+sole reason this component existed — **never executed in production**.
 
-Worth checking *why* the rebuild never happened before trusting the pipeline
-again: `scheduler.yaml`'s `push` trigger mixes `paths`, `branches` and `tags`,
-and commit `c28a73f` did touch `scheduler/config.ini`, so it should have fired.
+Instead of fixing it, the entire `scheduler/` directory was removed:
+- It was not migrated to the HTZ1 Portainer stack (as of 2026-08-19).
+- The deployment liability remains (no health checks, root access to `docker.sock`,
+  three Trivy CVEs).
+- The Docker Hub image `joshlopes/game-on-portugal-scheduler` is no longer built.
 
-**Fix**: rebuild and redeploy the scheduler image. Then verify inside the
-container rather than in the repo — this failure mode is invisible from the
-source tree.
+The `week-screenshot-winner` command now has **no automated trigger**. See
+[`plans/02-scheduler-and-lifecycle.md`](plans/02-scheduler-and-lifecycle.md) (M6.1)
+for the planned in-process cron replacement.
 
 ## 🟠 Medium
 
