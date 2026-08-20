@@ -2,7 +2,9 @@ import { describe, test, expect } from 'bun:test';
 import {
     DISCORD_IDS_DEFAULTS,
     resolveDiscordIds,
+    convertChannel,
 } from '../../../../../src/Infrastructure/Community/Discord/DiscordChannels.ts';
+import { CommunityChannels } from '../../../../../src/Domain/Community/CommunityChannels.ts';
 
 /**
  * Regression coverage for M1.7 (#16): the Discord guild/channel IDs used to
@@ -22,6 +24,7 @@ describe('resolveDiscordIds', () => {
             GUILD_ID: '818108848492773377',
             SCREENSHOTS: '827646847483904040',
             MARKETPLACE: '818447274266591243',
+            ADMIN: '',
         });
     });
 
@@ -30,12 +33,14 @@ describe('resolveDiscordIds', () => {
             DISCORD_GUILD_ID: '111111111111111111',
             DISCORD_CHANNEL_SCREENSHOTS: '222222222222222222',
             DISCORD_CHANNEL_MARKETPLACE: '333333333333333333',
+            DISCORD_CHANNEL_ADMIN: '555555555555555555',
         });
 
         expect(result).toEqual({
             GUILD_ID: '111111111111111111',
             SCREENSHOTS: '222222222222222222',
             MARKETPLACE: '333333333333333333',
+            ADMIN: '555555555555555555',
         });
     });
 
@@ -46,6 +51,27 @@ describe('resolveDiscordIds', () => {
             GUILD_ID: DISCORD_IDS_DEFAULTS.GUILD_ID,
             SCREENSHOTS: DISCORD_IDS_DEFAULTS.SCREENSHOTS,
             MARKETPLACE: '444444444444444444',
+            ADMIN: DISCORD_IDS_DEFAULTS.ADMIN,
         });
+    });
+});
+
+/**
+ * M6.4: the ADMIN channel has no verified production ID (unlike
+ * GUILD_ID/SCREENSHOTS/MARKETPLACE), so resolving it when unset must fail
+ * loudly instead of silently returning an empty channel ID that a job could
+ * post into by accident.
+ */
+describe('convertChannel', () => {
+    test('still resolves SCREENSHOTS to its verified default', () => {
+        expect(convertChannel(CommunityChannels.SCREENSHOTS)).toBe(
+            DISCORD_IDS_DEFAULTS.SCREENSHOTS,
+        );
+    });
+
+    test('throws for ADMIN when DISCORD_CHANNEL_ADMIN is not configured', () => {
+        expect(() => convertChannel(CommunityChannels.ADMIN)).toThrow(
+            /DISCORD_CHANNEL_ADMIN is not configured/,
+        );
     });
 });
