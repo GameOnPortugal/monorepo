@@ -45,11 +45,33 @@ export interface TrophyRepository {
      */
     findMissingCompletionDate(limit: number): Promise<Trophy[]>;
 
-    getTopMonthlyHunters(limit: number, monthFilter: Date): Promise<TrophyRankData[]>;
+    /**
+     * `offset` defaults to 0 (appended, not inserted, so every pre-M7.6 call
+     * site with a positional `(limit, monthFilter)` call keeps compiling)
+     * (M7.6) — pagination support for `/trophy rank`'s buttons.
+     */
+    getTopMonthlyHunters(
+        limit: number,
+        monthFilter: Date,
+        offset?: number,
+    ): Promise<TrophyRankData[]>;
 
-    getTopSinceCreationHunters(limit: number): Promise<TrophyRankData[]>;
+    getTopSinceCreationHunters(limit: number, offset?: number): Promise<TrophyRankData[]>;
 
-    getTopLifetimeHunters(limit: number): Promise<TrophyRankData[]>;
+    getTopLifetimeHunters(limit: number, offset?: number): Promise<TrophyRankData[]>;
+
+    /**
+     * Total number of ranked (non-excluded, at-least-one-trophy) profiles
+     * for the same window `getTopMonthlyHunters` sums — the page-count half
+     * of pagination (M7.6). Kept as a separate query, not folded into the
+     * ranked-hunters query, so a page render never pays for a full-table
+     * scan it does not need when it is not the page building the buttons.
+     */
+    countMonthlyHunters(monthFilter: Date): Promise<number>;
+
+    countSinceCreationHunters(): Promise<number>;
+
+    countLifetimeHunters(): Promise<number>;
 
     findUserPosition(userId: string): Promise<UserPosition>;
 }
