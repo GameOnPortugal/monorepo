@@ -28,10 +28,18 @@ describe('ApplyAutoModConfig', () => {
         logger = new InMemoryLogger();
         command = new ApplyAutoModConfig(autoModClient, new Logger([logger]));
         dir = await mkdtemp(join(tmpdir(), 'automod-test-'));
+        // --apply refuses to run without bot credentials (see the
+        // 'refuses --apply' test below) — set them here so every other
+        // --apply test exercises the actual reconciliation logic, same as
+        // it would in production with a real DISCORD_TOKEN configured.
+        process.env.DISCORD_TOKEN = 'test-token';
+        process.env.DISCORD_CLIENT_ID = 'test-client-id';
     });
 
     afterEach(async () => {
         await rm(dir, { recursive: true, force: true });
+        delete process.env.DISCORD_TOKEN;
+        delete process.env.DISCORD_CLIENT_ID;
     });
 
     async function writeConfig(contents: unknown): Promise<string> {
@@ -94,6 +102,37 @@ describe('ApplyAutoModConfig', () => {
 
         expect(exitCode).toBe(0);
         expect(autoModClient.calls).toEqual([]);
+    });
+
+    test('--apply is refused when DISCORD_TOKEN/DISCORD_CLIENT_ID are not set, and makes zero API calls', async () => {
+        delete process.env.DISCORD_TOKEN;
+        delete process.env.DISCORD_CLIENT_ID;
+        const filePath = await writeConfig({ rules: [validRule()], commandsOnlyChannels: [] });
+
+        const exitCode = await command.run([`--file=${filePath}`, '--apply']);
+
+        expect(exitCode).toBe(1);
+        expect(autoModClient.calls).toEqual([]);
+        expect(logger.hasLog('error', 'automod:apply.missing-credentials')).toBe(true);
+    });
+
+    test('a failed create during a recreate rolls back to the rule that was just deleted', async () => {
+        const oldDefinition = validRule({ triggerType: 'KEYWORD', keywordFilter: ['old-word'] });
+        await autoModClient.createRule(oldDefinition as any);
+        autoModClient.calls.length = 0;
+        const newDefinition = validRule({ triggerType: 'KEYWORD_PRESET', presets: ['PROFANITY'] });
+        autoModClient.failNextCreate('starter-keyword-blocklist');
+        const filePath = await writeConfig({ rules: [newDefinition], commandsOnlyChannels: [] });
+
+        const exitCode = await command.run([`--file=${filePath}`, '--apply']);
+
+        expect(exitCode).toBe(1);
+        expect(logger.hasLog('error', 'automod:apply.rule-recreate-create-failed')).toBe(true);
+        expect(logger.hasLog('warn', 'automod:apply.rule-recreate-rolled-back')).toBe(true);
+        const rules = await autoModClient.listRules();
+        expect(rules).toHaveLength(1);
+        expect(rules[0]?.triggerType).toBe('KEYWORD');
+        expect(rules[0]?.keywordFilter).toEqual(['old-word']);
     });
 
     test('--apply on an empty guild creates the rules in the file', async () => {

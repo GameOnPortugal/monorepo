@@ -7,6 +7,15 @@ export interface RuleUpdateEntry {
     remoteId: string;
 }
 
+export interface RuleRecreateEntry extends RuleUpdateEntry {
+    /**
+     * The full remote rule being replaced, kept so the caller can roll back
+     * — recreate it verbatim — if the CREATE half of delete-then-create
+     * fails after the DELETE half already succeeded.
+     */
+    remote: RemoteAutoModRule;
+}
+
 export interface RulePlan {
     /** In the file, not on Discord (or on Discord but unmanaged) — create. */
     toCreate: AutoModRuleDefinition[];
@@ -17,7 +26,7 @@ export interface RulePlan {
      * endpoint cannot change a rule's trigger type at all, so this is a
      * DELETE of `remoteId` followed by a CREATE, never a PATCH.
      */
-    toRecreate: RuleUpdateEntry[];
+    toRecreate: RuleRecreateEntry[];
     /** Matches Discord exactly already — no call needed. */
     unchanged: AutoModRuleDefinition[];
     /**
@@ -73,6 +82,37 @@ export function ruleMatchesRemote(
 }
 
 /**
+ * Reconstructs the definition a managed remote rule was created from, so a
+ * failed recreate (see `RuleRecreateEntry`) can be rolled back to the exact
+ * rule that was just deleted. Returns `undefined` for a rule with no managed
+ * marker — callers only ever pass rules this repo created in the first
+ * place, so that should be unreachable in practice.
+ */
+export function remoteRuleToDefinition(
+    remote: RemoteAutoModRule,
+): AutoModRuleDefinition | undefined {
+    const parsed = parseManagedRuleName(remote.name);
+    if (!parsed) return undefined;
+
+    return {
+        key: parsed.key,
+        displayName: parsed.displayName,
+        enabled: remote.enabled,
+        eventType: remote.eventType,
+        triggerType: remote.triggerType,
+        keywordFilter: remote.keywordFilter,
+        regexPatterns: remote.regexPatterns,
+        allowList: remote.allowList,
+        presets: remote.presets,
+        mentionTotalLimit: remote.mentionTotalLimit,
+        mentionRaidProtectionEnabled: remote.mentionRaidProtectionEnabled,
+        exemptRoles: remote.exemptRoles,
+        exemptChannels: remote.exemptChannels,
+        actions: remote.actions,
+    };
+}
+
+/**
  * Diffs the desired config against every rule Discord currently reports for
  * the guild. Rules without the managed marker (see `ManagedName.ts`) —
  * anything clicked into existence by hand in the Discord UI — are filtered
@@ -111,7 +151,7 @@ export function buildRulePlan(
         }
 
         if (remote.triggerType !== definition.triggerType) {
-            plan.toRecreate.push({ definition, remoteId: remote.id });
+            plan.toRecreate.push({ definition, remoteId: remote.id, remote });
             continue;
         }
 

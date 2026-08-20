@@ -3,10 +3,11 @@ import { inject, injectable } from 'inversify';
 import type { ConsoleCommand } from '../../Domain/Console/ConsoleCommand.ts';
 import type { AutoModClient } from '../../Domain/Community/AutoModClient.ts';
 import { parseAutoModConfig } from '../../Domain/Moderation/AutoModConfigParser.ts';
-import { buildRulePlan } from '../../Domain/Moderation/AutoModPlan.ts';
+import { buildRulePlan, remoteRuleToDefinition } from '../../Domain/Moderation/AutoModPlan.ts';
 import { buildCommandsOnlyChannelPlan } from '../../Domain/Moderation/ChannelPermissionPlan.ts';
 import { TYPES } from '../../Infrastructure/DependencyInjection/types.ts';
 import type Logger from '../../Application/Logger/Logger.ts';
+import { validateBotEnv } from '../../Infrastructure/Config/env.ts';
 
 export const DEFAULT_AUTOMOD_CONFIG_PATH = 'config/automod-rules.json';
 
@@ -105,6 +106,24 @@ export default class ApplyAutoModConfig implements ConsoleCommand {
             return 0;
         }
 
+        // Without a real DISCORD_TOKEN/DISCORD_CLIENT_ID, the DI container
+        // binds InMemoryAutoModClient (see inversify.config.ts) — a no-op
+        // fake that would happily "reconcile" and report success while
+        // touching no guild at all. That is the right fallback for the test
+        // suite and every read-mostly console command, but --apply is a
+        // write path an operator relies on actually running: refuse rather
+        // than silently no-op.
+        const { config: botEnv, errors: botEnvErrors } = validateBotEnv();
+        if (!botEnv) {
+            this.logger.error('automod:apply.missing-credentials', {
+                errors: botEnvErrors,
+                note:
+                    'DISCORD_TOKEN/DISCORD_CLIENT_ID are not set. --apply would bind an in-memory ' +
+                    'client and report success without touching the guild, so it is refused instead.',
+            });
+            return 1;
+        }
+
         let failed = 0;
 
         const remoteRules = await this.autoModClient.listRules();
@@ -137,16 +156,55 @@ export default class ApplyAutoModConfig implements ConsoleCommand {
             }
         }
 
-        for (const { definition, remoteId } of rulePlan.toRecreate) {
+        for (const { definition, remoteId, remote } of rulePlan.toRecreate) {
             try {
                 // triggerType is immutable server-side — PATCH cannot change
                 // it, so this is delete-then-create rather than an update.
                 await this.autoModClient.deleteRule(remoteId);
-                await this.autoModClient.createRule(definition);
-                this.logger.info('automod:apply.rule-recreated', { key: definition.key, remoteId });
+                try {
+                    await this.autoModClient.createRule(definition);
+                    this.logger.info('automod:apply.rule-recreated', {
+                        key: definition.key,
+                        remoteId,
+                    });
+                } catch (createError) {
+                    // The old rule is already gone and its replacement
+                    // failed to create — the guild is unprotected for this
+                    // key until we act. Best-effort: recreate the exact
+                    // rule we just deleted rather than leaving nothing.
+                    failed++;
+                    this.logger.error('automod:apply.rule-recreate-create-failed', {
+                        key: definition.key,
+                        remoteId,
+                        error: (createError as Error).message,
+                    });
+                    const rollbackDefinition = remoteRuleToDefinition(remote);
+                    if (!rollbackDefinition) {
+                        this.logger.error('automod:apply.rule-recreate-rollback-skipped', {
+                            key: definition.key,
+                            remoteId,
+                            note: 'Could not reconstruct the deleted rule from its remote name. Guild has NO active rule for this key.',
+                        });
+                        continue;
+                    }
+                    try {
+                        await this.autoModClient.createRule(rollbackDefinition);
+                        this.logger.warn('automod:apply.rule-recreate-rolled-back', {
+                            key: definition.key,
+                            remoteId,
+                        });
+                    } catch (rollbackError) {
+                        this.logger.error('automod:apply.rule-recreate-rollback-failed', {
+                            key: definition.key,
+                            remoteId,
+                            error: (rollbackError as Error).message,
+                            note: 'Guild has NO active rule for this key until the next automod:apply run.',
+                        });
+                    }
+                }
             } catch (error) {
                 failed++;
-                this.logger.error('automod:apply.rule-recreate-failed', {
+                this.logger.error('automod:apply.rule-recreate-delete-failed', {
                     key: definition.key,
                     remoteId,
                     error: (error as Error).message,

@@ -26,6 +26,13 @@ export class InMemoryAutoModClient implements AutoModClient {
     /** Calls made, in order — lets a test assert "dry-run made zero calls" without touching this class at all. */
     public readonly calls: string[] = [];
 
+    /** Set by a test to make the next `createRule` call for this key throw, then clear itself — for exercising delete-then-create failure/rollback paths. */
+    private failNextCreateForKey: string | undefined;
+
+    failNextCreate(key: string): void {
+        this.failNextCreateForKey = key;
+    }
+
     /** Seeds a rule as if it already existed on the guild — e.g. a hand-made, unmanaged rule, or a pre-existing managed one. */
     seedRule(rule: RemoteAutoModRule): void {
         this.rules.set(rule.id, rule);
@@ -70,6 +77,12 @@ export class InMemoryAutoModClient implements AutoModClient {
 
     async createRule(definition: AutoModRuleDefinition): Promise<RemoteAutoModRule> {
         this.calls.push(`createRule:${definition.key}`);
+        if (this.failNextCreateForKey === definition.key) {
+            this.failNextCreateForKey = undefined;
+            throw new ClientError(
+                `InMemoryAutoModClient: forced createRule failure for ${definition.key}`,
+            );
+        }
         const id = `in-memory-rule-${this.nextRuleId++}`;
         const rule: RemoteAutoModRule = {
             id,

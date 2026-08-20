@@ -85,7 +85,7 @@ describe('buildRulePlan', () => {
 
         const plan = buildRulePlan([def], [remote]);
 
-        expect(plan.toRecreate).toEqual([{ definition: def, remoteId: 'remote-1' }]);
+        expect(plan.toRecreate).toEqual([{ definition: def, remoteId: 'remote-1', remote }]);
         expect(plan.toUpdate).toEqual([]);
     });
 
