@@ -174,28 +174,54 @@ const botEnv = validateBotEnv();
 // stand-in instead, which is what makes the M6.4 winner job's
 // tie / vanished-message / dry-run behaviour assertable without a mocking
 // library.
+// `toDynamicValue`, NOT `toConstantValue(new …(myContainer.get(…)))`.
+//
+// `toConstantValue` needs its argument *now*, so every `myContainer.get()`
+// inside one resolves while this module is still executing — against a
+// container that only holds the bindings declared above this line. That made
+// binding **order** load-bearing, silently, and in a way no test could see:
+// these two branches are the only ones a real `DISCORD_TOKEN` takes, so the
+// test suite and CI (which deliberately run without a token, binding
+// InMemoryGuildClient/InMemoryClient instead) never executed them at all.
+//
+// It cost a production outage. `myContainer.get(BotExecutor)` below pulls in
+// every SlashCommandHandler -> subcommand -> CommandHandlerManager -> every
+// `TYPES.CommandHandler`, and one of those (CreateScreenshotHandler) needs
+// `TYPES.MediaStorage` — which is bound ~40 lines *further down* this file.
+// The live bot crash-looped on `No bindings found for service:
+// "Symbol(MediaStorage)"` while CI stayed green.
+//
+// A dynamic value defers resolution to the first `container.get(TYPES.Bot)`,
+// by which point the whole file has run and every binding exists. Reordering
+// the lines would have fixed today's symptom and left the trap armed for the
+// next binding added in the wrong place.
 if (botEnv.config) {
+    const config = botEnv.config;
     myContainer
         .bind<GuildClient>(TYPES.GuildClient)
-        .toConstantValue(
-            new DiscordGuildClient(botEnv.config.DISCORD_TOKEN, myContainer.get(TYPES.Logger)),
-        );
+        .toDynamicValue(
+            () => new DiscordGuildClient(config.DISCORD_TOKEN, myContainer.get(TYPES.Logger)),
+        )
+        .inSingletonScope();
 } else {
     myContainer.bind<GuildClient>(TYPES.GuildClient).to(InMemoryGuildClient).inSingletonScope();
 }
 myContainer.bind(BotExecutor).toSelf();
 if (botEnv.config) {
+    const config = botEnv.config;
     myContainer
         .bind(TYPES.Bot)
-        .toConstantValue(
-            new DiscordBot(
-                botEnv.config.DISCORD_TOKEN,
-                botEnv.config.DISCORD_CLIENT_ID,
-                myContainer.get(TYPES.Logger),
-                myContainer.get(BotExecutor),
-                botEnv.config.DISCORD_DEV_GUILD_ID,
-            ),
-        );
+        .toDynamicValue(
+            () =>
+                new DiscordBot(
+                    config.DISCORD_TOKEN,
+                    config.DISCORD_CLIENT_ID,
+                    myContainer.get(TYPES.Logger),
+                    myContainer.get(BotExecutor),
+                    config.DISCORD_DEV_GUILD_ID,
+                ),
+        )
+        .inSingletonScope();
 } else {
     // Explicit and loud (M1.3), not a silent accident: InMemoryClient is a
     // deliberate no-op escape hatch for the test suite and bin/console.ts,
