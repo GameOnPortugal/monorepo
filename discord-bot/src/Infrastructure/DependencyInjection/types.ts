@@ -24,6 +24,7 @@ const TYPES = {
     TrophySource: Symbol.for('TrophySource'),
     OrmClient: Symbol.for('OrmClient'),
     GuildClient: Symbol.for('GuildClient'),
+    MediaStorage: Symbol.for('MediaStorage'),
 };
 
 export { TYPES };

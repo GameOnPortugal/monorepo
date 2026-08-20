@@ -49,6 +49,9 @@ import type { GuildClient } from '../../Domain/Community/GuildClient.ts';
 import { DiscordGuildClient } from '../Community/Discord/DiscordGuildClient.ts';
 import WeekScreenshotWinner from '../../Ui/Cli/WeekScreenshotWinner.ts';
 import { InMemoryClient } from '../Bot/InMemory/InMemoryClient.ts';
+import type { MediaStorage } from '../../Domain/Media/MediaStorage.ts';
+import { S3MediaStorage } from '../Media/S3MediaStorage.ts';
+import { InMemoryMediaStorage } from '../Media/InMemoryMediaStorage.ts';
 import { requireEnv, validateBaseEnv, validateBotEnv } from '../Config/env.ts';
 
 const myContainer = new Container();
@@ -167,6 +170,28 @@ if (botEnv.config) {
                 'independently at boot and should have already exited(1).',
         );
     myContainer.bind(TYPES.Bot).toConstantValue(new InMemoryClient());
+}
+
+// Media storage (M6.0) — falls back to an in-memory no-op when S3_* isn't
+// configured (local dev, tests), same shape as the Bot fallback above.
+if (
+    process.env.S3_ENDPOINT &&
+    process.env.S3_BUCKET &&
+    process.env.S3_ACCESS_KEY &&
+    process.env.S3_SECRET_KEY
+) {
+    myContainer.bind<MediaStorage>(TYPES.MediaStorage).toConstantValue(
+        new S3MediaStorage({
+            endpoint: process.env.S3_ENDPOINT,
+            publicUrl: process.env.S3_PUBLIC_URL ?? process.env.S3_ENDPOINT,
+            bucket: process.env.S3_BUCKET,
+            accessKeyId: process.env.S3_ACCESS_KEY,
+            secretAccessKey: process.env.S3_SECRET_KEY,
+            region: process.env.S3_REGION,
+        }),
+    );
+} else {
+    myContainer.bind<MediaStorage>(TYPES.MediaStorage).toConstantValue(new InMemoryMediaStorage());
 }
 
 // Console Command
