@@ -7,6 +7,9 @@ import type Logger from '../../../../../Application/Logger/Logger';
 import CommandHandlerManager from '../../../../CommandHandler/CommandHandlerManager';
 import { CreateAd } from '../../../../../Application/Write/Marketplace/CreateAd/CreateAd';
 import { AdId } from '../../../../../Domain/Marketplace/AdId';
+import type { GuildClient } from '../../../../../Domain/Community/GuildClient';
+import { CommunityChannels } from '../../../../../Domain/Community/CommunityChannels';
+import { DiscordChannels, DISCORD_GUILD_ID } from '../../../../Community/Discord/DiscordChannels';
 
 @injectable()
 export class SellSubcommand {
@@ -14,6 +17,7 @@ export class SellSubcommand {
         @inject(TYPES.Logger) private readonly logger: Logger,
         @inject(CommandHandlerManager)
         private readonly commandHandlerManager: CommandHandlerManager,
+        @inject(TYPES.GuildClient) private readonly guildClient: GuildClient,
     ) {}
 
     private getStateEmoji(state: string): string {
@@ -75,27 +79,29 @@ export class SellSubcommand {
             .filter(Boolean)
             .join('\n');
 
-        // Post-then-persist: acknowledge, post the listing, and only then write
-        // the ad — with the real message ID already known. There is exactly one
-        // database write. `editReply()` always resolves with the Message that was
-        // actually sent, unlike the deprecated `reply({ fetchReply: true })` and
-        // unlike `withResponse: true` (which resolves an
-        // InteractionCallbackResponse, not a Message — its `.id` is the
-        // interaction callback's id, not the posted message's).
-        await interaction.deferReply();
+        // Post-then-persist (M0.1), now routed through the GuildClient port to
+        // the marketplace channel (M5.1) instead of `interaction.reply()` —
+        // the command can be run from anywhere, but the listing itself always
+        // lands in #anuncios. The interaction reply becomes a private
+        // confirmation to the seller rather than the public listing itself,
+        // so it is ephemeral from the first ack.
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        let message;
+        let messageId: string;
         try {
-            message = await interaction.editReply({ content: replyContent });
+            messageId = await this.guildClient.sendMessage(
+                CommunityChannels.MARKETPLACE,
+                replyContent,
+            );
         } catch (error) {
             const correlationId = randomUUID();
-            this.logger.error('Failed to post sale listing message', {
+            this.logger.error('Failed to post sale listing to the marketplace channel', {
                 error,
                 correlationId,
                 authorId: interaction.user.id,
             });
             await interaction.editReply({
-                content: `There was an error creating your sale listing. Please try again. (ref: ${correlationId})`,
+                content: `Não foi possível publicar o teu anúncio. Tenta novamente. (ref: ${correlationId})`,
             });
             return;
         }
@@ -105,8 +111,8 @@ export class SellSubcommand {
                 AdId.generate(),
                 name,
                 interaction.user.id,
-                interaction.channelId,
-                message.id,
+                DiscordChannels.MARKETPLACE,
+                messageId,
                 state,
                 price,
                 zone,
@@ -122,13 +128,19 @@ export class SellSubcommand {
             this.logger.error('Failed to persist sale listing after posting', {
                 error,
                 correlationId,
-                messageId: message.id,
+                messageId,
                 authorId: interaction.user.id,
             });
             await interaction.followUp({
-                content: `Your listing was posted, but something went wrong saving it — it may not show up in /marketplace list or be deletable. Please contact a moderator. (ref: ${correlationId})`,
+                content: `O teu anúncio foi publicado, mas houve um erro ao guardá-lo — pode não aparecer em /marketplace list nem ser possível apagá-lo. Contacta um moderador. (ref: ${correlationId})`,
                 flags: MessageFlags.Ephemeral,
             });
+            return;
         }
+
+        const listingUrl = `https://discord.com/channels/${DISCORD_GUILD_ID}/${DiscordChannels.MARKETPLACE}/${messageId}`;
+        await interaction.editReply({
+            content: `✅ O teu anúncio foi publicado: ${listingUrl}`,
+        });
     }
 }

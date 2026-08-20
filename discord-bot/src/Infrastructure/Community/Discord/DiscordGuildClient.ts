@@ -1,7 +1,7 @@
 import type { GuildClient } from '../../../Domain/Community/GuildClient.ts';
 import { injectable } from 'inversify';
 import type { APIMessage, InvalidRequestWarningData, RateLimitData } from 'discord.js';
-import { REST, Routes, RESTEvents } from 'discord.js';
+import { REST, Routes, RESTEvents, DiscordAPIError, RESTJSONErrorCodes } from 'discord.js';
 import { CommunityChannels } from '../../../Domain/Community/CommunityChannels.ts';
 import { CustomEmoji } from '../../../Domain/Community/CustomEmoji.ts';
 import { convertChannel, DISCORD_GUILD_ID } from './DiscordChannels.ts';
@@ -105,6 +105,27 @@ export class DiscordGuildClient implements GuildClient {
             return created.id;
         } catch (error) {
             throw new ClientError(`Failed to send message: ${(error as Error).message}`);
+        }
+    }
+
+    async deleteMessage(channelId: string, messageId: string): Promise<void> {
+        this.requireToken();
+
+        try {
+            await this.rest.delete(Routes.channelMessage(channelId, messageId));
+        } catch (error) {
+            // Unknown Message (10008, HTTP 404): a moderator may already have
+            // removed it by hand, or M0.1's orphaned rows point at a message
+            // that never had a real id in the first place. Either way this is
+            // a successful outcome for the caller (M5.2), not a failure — the
+            // desired end state (no message) already holds.
+            if (
+                error instanceof DiscordAPIError &&
+                (error.code === RESTJSONErrorCodes.UnknownMessage || error.status === 404)
+            ) {
+                return;
+            }
+            throw new ClientError(`Failed to delete message: ${(error as Error).message}`);
         }
     }
 

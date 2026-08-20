@@ -12,18 +12,25 @@ import { CommunityChannels } from '../../../Domain/Community/CommunityChannels.t
  *   - GUILD_ID:    the Game On Portugal guild itself.
  *   - SCREENSHOTS: #screenshots — already wired, used by /screenshot and the
  *                  weekly winner job.
- *   - MARKETPLACE: #anuncios — the intended marketplace channel (62 of 70
- *                  production ads already live there). NOT yet wired to any
- *                  behaviour: today ads post to whichever channel the
- *                  command was invoked in (5 ended up in #chat, 3 in a DM).
- *                  Routing ads here is M5.1, a separate work item — this
- *                  only makes the ID available and configurable.
- *   - ADMIN:       an ops/mod-only channel for supervised dry runs (M6.4).
- *                  **Not verified** — unlike GUILD_ID/SCREENSHOTS/MARKETPLACE
- *                  there is no confirmed production ID, so it defaults to
- *                  empty and `convertChannel` throws rather than silently
- *                  resolving to nothing. Set `DISCORD_CHANNEL_ADMIN` before
- *                  running a job in dry-run mode.
+ *   - MARKETPLACE: #anuncios — the marketplace channel. `SellSubcommand` posts
+ *                  every listing here via `GuildClient` (M5.1), regardless of
+ *                  which channel the command was invoked from. Before M5.1,
+ *                  62 of 70 production ads had already ended up here by
+ *                  accident; the other 8 did not — 5 in #chat and 3 in a
+ *                  **DM channel** (verified 2026-08-20: channel
+ *                  1026852888636555366 is type 1). Those legacy rows keep
+ *                  their own `channel_id`, which is exactly why
+ *                  `GuildClient.deleteMessage` takes a raw channel id rather
+ *                  than a CommunityChannels member — a DM channel id can
+ *                  never be expressed as one, so routing deletes through
+ *                  MARKETPLACE would silently fail to clean those up.
+ *   - ADMIN:       #⚛server-log, in the 🏴Administration🏴 category. Used for
+ *                  supervised dry runs of jobs before they are allowed to
+ *                  post publicly (M6.4) and for per-run job summaries
+ *                  (M6.8). Verified against the live Discord API on
+ *                  2026-08-20, the same way the three above were — both
+ *                  work items landed with this unset because neither had a
+ *                  confirmed ID at the time.
  *
  * LFG channel IDs are deliberately not included here: LFG has been dropped
  * (see the decisions section of GLOBAL-PLAN.md), so configuring channels for
@@ -40,7 +47,7 @@ export const DISCORD_IDS_DEFAULTS: DiscordIdsConfig = {
     GUILD_ID: '818108848492773377',
     SCREENSHOTS: '827646847483904040',
     MARKETPLACE: '818447274266591243',
-    ADMIN: '',
+    ADMIN: '818108848492773380',
 };
 
 /**
@@ -73,11 +80,17 @@ export const convertChannel = (channel: CommunityChannels): string => {
         case CommunityChannels.SCREENSHOTS:
             return DiscordChannels.SCREENSHOTS;
         case CommunityChannels.ADMIN:
+            // Defensive: ADMIN now has a verified default, so this only
+            // fires if someone explicitly sets DISCORD_CHANNEL_ADMIN to an
+            // empty string. Better to fail loudly than to hand Discord an
+            // empty channel id.
             if (DiscordChannels.ADMIN === '') {
                 throw new Error(
-                    'DISCORD_CHANNEL_ADMIN is not configured — set it before running a job in dry-run mode.',
+                    'DISCORD_CHANNEL_ADMIN is set to an empty string — unset it to use the default, or give it a real channel id.',
                 );
             }
             return DiscordChannels.ADMIN;
+        case CommunityChannels.MARKETPLACE:
+            return DiscordChannels.MARKETPLACE;
     }
 };

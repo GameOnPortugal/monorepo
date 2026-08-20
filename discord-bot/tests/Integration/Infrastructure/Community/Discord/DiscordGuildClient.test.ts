@@ -47,6 +47,14 @@ describe('DiscordGuildClient — no token configured', () => {
         ).rejects.toThrow(ClientError);
     });
 
+    test('deleteMessage fails fast with a clear error, without making a request', async () => {
+        const client = new DiscordGuildClient(undefined);
+
+        await expect(
+            client.deleteMessage('818447274266591243', '123456789012345678'),
+        ).rejects.toThrow(ClientError);
+    });
+
     test('the same guard fires for an empty-string token, not just undefined', async () => {
         const client = new DiscordGuildClient('');
 

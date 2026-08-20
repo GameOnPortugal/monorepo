@@ -3,11 +3,16 @@ import { type ConsoleCommand } from '../src/Domain/Console/ConsoleCommand';
 import { TYPES } from '../src/Infrastructure/DependencyInjection/types';
 import type Logger from '../src/Application/Logger/Logger';
 import WeekScreenshotWinner from '../src/Ui/Cli/WeekScreenshotWinner.ts';
+import { RunJobConsoleCommand } from '../src/Infrastructure/Job/RunJobConsoleCommand.ts';
 
 const logger = myContainer.get<Logger>(TYPES.Logger);
 const consoleCommands: Record<string, ConsoleCommand> = {};
 consoleCommands[WeekScreenshotWinner.commandName.toString()] =
     myContainer.get<WeekScreenshotWinner>(WeekScreenshotWinner);
+// M6.1 — generic manual entry point for any job registered with the
+// JobRunner: `bun run:command jobs:run list` / `jobs:run <name> [--dry-run] [--limit=N]`.
+consoleCommands[RunJobConsoleCommand.commandName] =
+    myContainer.get<RunJobConsoleCommand>(RunJobConsoleCommand);
 
 async function run(): Promise<void> {
     const args = process.argv.slice(2);

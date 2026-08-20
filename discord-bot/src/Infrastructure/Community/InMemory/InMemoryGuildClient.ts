@@ -13,6 +13,11 @@ export interface SentMessage {
     message: string;
 }
 
+export interface DeletedMessage {
+    channelId: string;
+    messageId: string;
+}
+
 /**
  * Test/no-token stand-in for `DiscordGuildClient`, mirroring `InMemoryClient`
  * (the equivalent stand-in for `Bot`): bound automatically when
@@ -27,6 +32,10 @@ export class InMemoryGuildClient implements GuildClient {
     private readonly messages = new Map<string, InMemoryMessage>();
     private nextMessageId = 1;
     public readonly sentMessages: SentMessage[] = [];
+    public readonly deletedMessages: DeletedMessage[] = [];
+
+    /** When set, the next call to sendMessage() throws this instead of posting. */
+    public failNextSendWith: Error | undefined = undefined;
 
     /** Registers a message so it can be "found" by the methods below. */
     registerMessage(messageId: string, reactions: Partial<Record<CustomEmoji, number>> = {}): void {
@@ -41,7 +50,9 @@ export class InMemoryGuildClient implements GuildClient {
     reset(): void {
         this.messages.clear();
         this.sentMessages.length = 0;
+        this.deletedMessages.length = 0;
         this.nextMessageId = 1;
+        this.failNextSendWith = undefined;
     }
 
     async getTotalReactionsByEmoji(
@@ -67,10 +78,28 @@ export class InMemoryGuildClient implements GuildClient {
     }
 
     async sendMessage(channel: CommunityChannels, message: string): Promise<string> {
+        if (this.failNextSendWith) {
+            const error = this.failNextSendWith;
+            this.failNextSendWith = undefined;
+            throw error;
+        }
+
         const messageId = `in-memory-${this.nextMessageId++}`;
         this.sentMessages.push({ channel, message });
         this.messages.set(messageId, { reactions: {} });
 
         return messageId;
+    }
+
+    /**
+     * Mirrors `DiscordGuildClient.deleteMessage`'s idempotency (M5.2): a
+     * `messageId` this fake never registered (or already forgot) is treated
+     * the same way a real 404/Unknown Message is — a no-op, not a throw. Also
+     * mirrors the real client in taking a raw channel id rather than a
+     * `CommunityChannels` member — see the port's doc comment.
+     */
+    async deleteMessage(channelId: string, messageId: string): Promise<void> {
+        this.messages.delete(messageId);
+        this.deletedMessages.push({ channelId, messageId });
     }
 }
