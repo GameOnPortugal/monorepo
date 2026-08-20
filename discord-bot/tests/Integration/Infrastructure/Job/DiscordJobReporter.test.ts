@@ -1,6 +1,10 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { DiscordJobReporter } from '../../../../src/Infrastructure/Job/DiscordJobReporter.ts';
-import type { GuildClient } from '../../../../src/Domain/Community/GuildClient.ts';
+import type {
+    CommunityMessage,
+    GuildClient,
+    ListMessagesOptions,
+} from '../../../../src/Domain/Community/GuildClient.ts';
 import { CommunityChannels } from '../../../../src/Domain/Community/CommunityChannels.ts';
 import type { CustomEmoji } from '../../../../src/Domain/Community/CustomEmoji.ts';
 import type { JobReportOutcome } from '../../../../src/Domain/Job/JobReporter.ts';
@@ -45,6 +49,17 @@ class FakeGuildClient implements GuildClient {
         }
         this.sentMessages.push({ channel, message });
         return 'message-id';
+    }
+
+    async getMessage(_channel: CommunityChannels, _messageId: string): Promise<CommunityMessage> {
+        throw new Error('FakeGuildClient.getMessage is not used by DiscordJobReporter');
+    }
+
+    async listMessages(
+        _channel: CommunityChannels,
+        _options: ListMessagesOptions,
+    ): Promise<CommunityMessage[]> {
+        throw new Error('FakeGuildClient.listMessages is not used by DiscordJobReporter');
     }
 }
 

@@ -55,6 +55,22 @@ describe('DiscordGuildClient — no token configured', () => {
         ).rejects.toThrow(ClientError);
     });
 
+    test('getMessage fails fast with a clear error, without making a request', async () => {
+        const client = new DiscordGuildClient(undefined);
+
+        await expect(
+            client.getMessage(CommunityChannels.SCREENSHOTS, '123456789012345678'),
+        ).rejects.toThrow(ClientError);
+    });
+
+    test('listMessages fails fast with a clear error, without making a request', async () => {
+        const client = new DiscordGuildClient(undefined);
+
+        await expect(
+            client.listMessages(CommunityChannels.SCREENSHOTS, { limit: 100 }),
+        ).rejects.toThrow(ClientError);
+    });
+
     test('the same guard fires for an empty-string token, not just undefined', async () => {
         const client = new DiscordGuildClient('');
 

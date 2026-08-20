@@ -29,6 +29,7 @@ const TYPES = {
     // Jobs
     JobReporter: Symbol.for('JobReporter'),
     MediaStorage: Symbol.for('MediaStorage'),
+    SafeImageFetcher: Symbol.for('SafeImageFetcher'),
 };
 
 export { TYPES };

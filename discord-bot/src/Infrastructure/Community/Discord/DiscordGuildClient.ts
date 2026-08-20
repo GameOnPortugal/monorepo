@@ -1,4 +1,8 @@
-import type { GuildClient } from '../../../Domain/Community/GuildClient.ts';
+import type {
+    CommunityMessage,
+    GuildClient,
+    ListMessagesOptions,
+} from '../../../Domain/Community/GuildClient.ts';
 import { injectable } from 'inversify';
 import type { APIMessage, InvalidRequestWarningData, RateLimitData } from 'discord.js';
 import { REST, Routes, RESTEvents, DiscordAPIError, RESTJSONErrorCodes } from 'discord.js';
@@ -65,7 +69,7 @@ export class DiscordGuildClient implements GuildClient {
     ): Promise<number> {
         const discordEmojiId = convertEmoji(emoji);
 
-        const message = await this.getMessage(channel, messageId);
+        const message = await this.fetchRawMessage(channel, messageId);
         const reaction = (message.reactions ?? []).find(
             (candidate) => candidate.emoji.id === discordEmojiId,
         );
@@ -84,7 +88,7 @@ export class DiscordGuildClient implements GuildClient {
         // discord.js's `Message#url` produces — this is a single-guild bot,
         // so the guild ID is the configured one rather than something that
         // needs to be read off the message.
-        await this.getMessage(channel, messageId);
+        await this.fetchRawMessage(channel, messageId);
         return `https://discord.com/channels/${DISCORD_GUILD_ID}/${convertChannel(channel)}/${messageId}`;
     }
 
@@ -129,7 +133,50 @@ export class DiscordGuildClient implements GuildClient {
         }
     }
 
-    private async getMessage(channel: CommunityChannels, messageId: string): Promise<APIMessage> {
+    /**
+     * M6.3: the relink job re-fetches a screenshot message by its stored id
+     * (population A) to read the freshly-signed image URL Discord hands
+     * back off it — `getMessage` is the mapped, public-shaped read for that.
+     * `getMessageUrl`/`getTotalReactionsByEmoji` above keep using the raw
+     * `fetchRawMessage` since they only need `reactions`, not content or
+     * attachments.
+     */
+    async getMessage(channel: CommunityChannels, messageId: string): Promise<CommunityMessage> {
+        return toCommunityMessage(await this.fetchRawMessage(channel, messageId));
+    }
+
+    /**
+     * One page of `channel`'s history, newest-first — the primitive M6.3's
+     * relink job loops with `before` to scan backwards for population B's
+     * `ID: #<uuid>` messages. Discord silently caps `limit` at 100
+     * regardless of what is asked for, so this does not re-validate it.
+     */
+    async listMessages(
+        channel: CommunityChannels,
+        options: ListMessagesOptions,
+    ): Promise<CommunityMessage[]> {
+        this.requireToken();
+        const channelId = convertChannel(channel);
+
+        const query = new URLSearchParams({ limit: String(options.limit) });
+        if (options.before) {
+            query.set('before', options.before);
+        }
+
+        try {
+            const messages = (await this.rest.get(Routes.channelMessages(channelId), {
+                query,
+            })) as APIMessage[];
+            return messages.map(toCommunityMessage);
+        } catch (error) {
+            throw new ClientError(`Failed to list messages: ${(error as Error).message}`);
+        }
+    }
+
+    private async fetchRawMessage(
+        channel: CommunityChannels,
+        messageId: string,
+    ): Promise<APIMessage> {
         this.requireToken();
         const channelId = convertChannel(channel);
 
@@ -148,4 +195,19 @@ export class DiscordGuildClient implements GuildClient {
         }
         return this.token;
     }
+}
+
+function toCommunityMessage(message: APIMessage): CommunityMessage {
+    return {
+        id: message.id,
+        content: message.content,
+        // Discord snowflakes encode their creation time; `timestamp` is the
+        // same value pre-formatted as ISO-8601 by the API, cheaper to trust
+        // than decoding the snowflake ourselves.
+        createdAt: new Date(message.timestamp),
+        attachmentUrls: (message.attachments ?? []).map((attachment) => attachment.url),
+        embedImageUrls: (message.embeds ?? [])
+            .map((embed) => embed.image?.url)
+            .filter((url): url is string => url !== undefined),
+    };
 }
