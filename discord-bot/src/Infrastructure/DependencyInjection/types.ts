@@ -21,6 +21,7 @@ const TYPES = {
 
     // Clients
     HttpClient: Symbol.for('HttpClient'),
+    TrophySource: Symbol.for('TrophySource'),
     OrmClient: Symbol.for('OrmClient'),
     GuildClient: Symbol.for('GuildClient'),
 };
