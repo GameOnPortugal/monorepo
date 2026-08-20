@@ -31,6 +31,16 @@ import { CommunityChannels } from '../../../Domain/Community/CommunityChannels.t
  *                  2026-08-20, the same way the three above were — both
  *                  work items landed with this unset because neither had a
  *                  confirmed ID at the time.
+ *   - TROPHIES:    where `trophies:sync` announces newly-credited trophies
+ *                  (M7.8), replacing the old bot's `TROPHY_WEBHOOK`. **No
+ *                  verified default** — unlike the three above, nobody has
+ *                  confirmed a channel for this yet, so it defaults to the
+ *                  empty string ("unconfigured") rather than a guess.
+ *                  `convertChannel` throws a clear error for TROPHIES the
+ *                  same way it does for a blanked-out ADMIN, and
+ *                  `TrophiesSyncJob` catches that per-announcement (never
+ *                  fatal) — set `DISCORD_CHANNEL_TROPHIES` before turning on
+ *                  `TROPHIES_ANNOUNCE_ENABLED`.
  *
  * LFG channel IDs are deliberately not included here: LFG has been dropped
  * (see the decisions section of GLOBAL-PLAN.md), so configuring channels for
@@ -41,6 +51,7 @@ export interface DiscordIdsConfig {
     SCREENSHOTS: string;
     MARKETPLACE: string;
     ADMIN: string;
+    TROPHIES: string;
 }
 
 export const DISCORD_IDS_DEFAULTS: DiscordIdsConfig = {
@@ -48,6 +59,9 @@ export const DISCORD_IDS_DEFAULTS: DiscordIdsConfig = {
     SCREENSHOTS: '827646847483904040',
     MARKETPLACE: '818447274266591243',
     ADMIN: '818108848492773380',
+    // No verified channel — see this file's doc comment. Empty means
+    // "unconfigured", not "use some guessed default".
+    TROPHIES: '',
 };
 
 /**
@@ -62,6 +76,7 @@ export function resolveDiscordIds(env: typeof process.env = process.env): Discor
         SCREENSHOTS: env.DISCORD_CHANNEL_SCREENSHOTS ?? DISCORD_IDS_DEFAULTS.SCREENSHOTS,
         MARKETPLACE: env.DISCORD_CHANNEL_MARKETPLACE ?? DISCORD_IDS_DEFAULTS.MARKETPLACE,
         ADMIN: env.DISCORD_CHANNEL_ADMIN ?? DISCORD_IDS_DEFAULTS.ADMIN,
+        TROPHIES: env.DISCORD_CHANNEL_TROPHIES ?? DISCORD_IDS_DEFAULTS.TROPHIES,
     };
 }
 
@@ -71,6 +86,7 @@ export const DiscordChannels = {
     SCREENSHOTS: resolvedIds.SCREENSHOTS,
     MARKETPLACE: resolvedIds.MARKETPLACE,
     ADMIN: resolvedIds.ADMIN,
+    TROPHIES: resolvedIds.TROPHIES,
 } as const;
 
 export const DISCORD_GUILD_ID = resolvedIds.GUILD_ID;
@@ -92,5 +108,17 @@ export const convertChannel = (channel: CommunityChannels): string => {
             return DiscordChannels.ADMIN;
         case CommunityChannels.MARKETPLACE:
             return DiscordChannels.MARKETPLACE;
+        case CommunityChannels.TROPHIES:
+            // Unlike ADMIN, empty is the *expected* out-of-the-box state
+            // here — there is no verified default to fall back to. Still
+            // fails loudly rather than handing Discord an empty channel id;
+            // TrophiesSyncJob catches this per-announcement and logs it,
+            // same as any other failed post.
+            if (DiscordChannels.TROPHIES === '') {
+                throw new Error(
+                    'DISCORD_CHANNEL_TROPHIES is not configured — set it to the channel trophy announcements should post to before enabling TROPHIES_ANNOUNCE_ENABLED.',
+                );
+            }
+            return DiscordChannels.TROPHIES;
     }
 };

@@ -8,6 +8,7 @@ import { TrophyAlreadyClaimed } from '../../../Domain/Trophy/TrophyAlreadyClaime
 import { TrophyNotEarnedYet } from '../../../Domain/Trophy/TrophyNotEarnedYet.ts';
 import { calculateTrophyPoints } from '../../../Domain/Trophy/TrophyPoints.ts';
 import type { GuildClient } from '../../../Domain/Community/GuildClient.ts';
+import { CommunityChannels } from '../../../Domain/Community/CommunityChannels.ts';
 import { TYPES } from '../../DependencyInjection/types.ts';
 import type Logger from '../../../Application/Logger/Logger.ts';
 
@@ -55,6 +56,33 @@ interface ProfileOutcome {
  */
 const MODERATION_SAFETY_VALVE_THRESHOLD = 10;
 
+/**
+ * A single profile's newest-first walk that creates more new trophies than
+ * this in one run gets **one** summary announcement instead of one message
+ * per trophy — see "Announcements, and their flood guard" below. 3 is
+ * deliberately small: the steady-state case (a profile that already synced
+ * last run) earns 0 or 1 new platinum between 10-minute runs, so anything
+ * past a handful in a single run is itself a sign this is a backlog
+ * (first-ever sync, or a profile that reconnected after a long gap), not
+ * routine activity — exactly the case that must not become a wall of
+ * individual messages.
+ */
+const TROPHIES_ANNOUNCE_BATCH_THRESHOLD = 3;
+
+/**
+ * Hard ceiling on how many announcement messages (individual or summary)
+ * `trophies:sync` will post to the trophies channel in a single run,
+ * regardless of how many profiles changed. The per-profile batching above
+ * guards one profile's backlog; this guards the multi-profile case — e.g. an
+ * operator flipping `TROPHIES_ANNOUNCE_ENABLED` on for the first time after
+ * profiles have been quietly accumulating trophies while it was off. Once
+ * spent, further trophies still get created and counted in `changed` as
+ * normal — only the announcement is skipped, and it's skipped loudly
+ * (`trophies:sync.announce.suppressed`, folded into `JobResult.details`),
+ * never silently.
+ */
+const TROPHIES_ANNOUNCE_MAX_MESSAGES_PER_RUN = 10;
+
 /** Tracks how much "work" (network calls) this run has spent, across all profiles. */
 class Budget {
     used = 0;
@@ -68,6 +96,33 @@ class Budget {
     spend(): void {
         this.used++;
     }
+}
+
+/** Tracks how many announcement messages this run has sent, across all profiles. */
+class AnnouncementBudget {
+    used = 0;
+    suppressed = 0;
+
+    constructor(private readonly limit: number) {}
+
+    hasCapacity(): boolean {
+        return this.used < this.limit;
+    }
+
+    spend(): void {
+        this.used++;
+    }
+
+    suppress(): void {
+        this.suppressed++;
+    }
+}
+
+/** One newly-created trophy, queued up for an announcement once its profile's walk finishes. */
+interface NewTrophyAnnouncement {
+    userId: string;
+    url: string;
+    points: number;
 }
 
 /**
@@ -178,6 +233,50 @@ class Budget {
  * and resumable rather than an unbounded scrape — remaining profiles are
  * reported `skipped`, not silently dropped, and are picked up by the next
  * scheduled run.
+ *
+ * ## Announcements, and their flood guard (M7.8)
+ *
+ * Ported from the old bot's `TROPHY_WEBHOOK` announcement
+ * (`old-discord-bot/scripts/parse-psn-profile.js`) — "Parabéns <@user>!
+ * Acabaste de receber N TP…" — but posted by this bot itself through
+ * `GuildClient.sendMessage(CommunityChannels.TROPHIES, ...)` instead of an
+ * anonymous webhook (docs/plans/GLOBAL-PLAN.md M7.8, §7.7 of the feature-gap
+ * doc): one fewer secret, the bot's own identity, and a channel that can be
+ * reconfigured (`DISCORD_CHANNEL_TROPHIES`) without a redeploy.
+ *
+ * Three independent guards, because a naive port would flood the channel the
+ * moment it was turned on against 4,971 already-imported trophies plus
+ * whatever a fresh `trophies:sync` backlog finds:
+ *
+ *  1. **`TROPHIES_ANNOUNCE_ENABLED`** (env, default unset/off) — the master
+ *     switch, mirroring `TROPHIES_SYNC_ENABLED`. Announcements are inert
+ *     until an operator opts in, so the very first run — which can create a
+ *     large backlog of "new" trophies simply because nothing existed before
+ *     — never posts anything by default. This alone is enough to satisfy
+ *     "a first run against a fresh profile cannot flood the channel"; the
+ *     two guards below handle the case where an operator *has* opted in and
+ *     a genuinely large backlog shows up later (a profile reconnecting after
+ *     months away, or the flag being flipped on for the first time against
+ *     profiles that already have unannounced trophies).
+ *  2. **Per-profile batching** (`TROPHIES_ANNOUNCE_BATCH_THRESHOLD`, 3) — a
+ *     profile whose walk creates more than a handful of new trophies in one
+ *     run gets a single summary message ("Sincronizámos N troféus novos…")
+ *     instead of N individual ones.
+ *  3. **Per-run cap** (`TROPHIES_ANNOUNCE_MAX_MESSAGES_PER_RUN`, 10) — a hard
+ *     ceiling on announcement messages across the *whole* run, so many
+ *     profiles each producing a (batched or individual) message still can't
+ *     add up to a flood. Trophy creation itself is never affected by this —
+ *     only the announcement is skipped once the cap is spent, and it's
+ *     skipped loudly (`trophies:sync.announce.suppressed`, folded into
+ *     `JobResult.details.announcements`).
+ *
+ * A failed post (Discord down, channel misconfigured, rate limited) is
+ * caught and logged per-message — it must never fail the profile it belongs
+ * to, let alone the run. `--dry-run` never announces: `syncProfile` only
+ * queues an announcement inside the same `!context.dryRun` branch that
+ * actually calls `TrophyRepository.create`, so a dry run stays a pure
+ * preview, consistent with `DiscordJobReporter` and
+ * `WeekScreenshotWinner`'s own dry-run behaviour elsewhere in this codebase.
  */
 @injectable()
 export class TrophiesSyncJob implements Job {
@@ -201,6 +300,12 @@ export class TrophiesSyncJob implements Job {
     async run(context: JobContext, env: NodeJS.ProcessEnv = process.env): Promise<JobResult> {
         const forceAll = env.TROPHIES_SYNC_ALL === 'true';
         const forceProfile = env.TROPHIES_SYNC_PROFILE;
+        // Master switch for M7.8's announcements — see this class's doc
+        // comment ("Announcements, and their flood guard"). Off by default,
+        // same reasoning as TROPHIES_SYNC_ENABLED: a merge to main deploys,
+        // so a feature that posts to a public channel must be an opt-in an
+        // operator makes, not a side effect of landing this PR.
+        const announceEnabled = env.TROPHIES_ANNOUNCE_ENABLED === 'true';
 
         if (forceAll && !forceProfile) {
             const message = 'TROPHIES_SYNC_ALL=true requires TROPHIES_SYNC_PROFILE to also be set';
@@ -220,6 +325,7 @@ export class TrophiesSyncJob implements Job {
         }
 
         const budget = new Budget(context.workLimit);
+        const announcementBudget = new AnnouncementBudget(TROPHIES_ANNOUNCE_MAX_MESSAGES_PER_RUN);
         let considered = 0;
         let changed = 0;
         let skipped = 0;
@@ -248,6 +354,8 @@ export class TrophiesSyncJob implements Job {
                     isFullRescan,
                     budget,
                     pendingFlags,
+                    announceEnabled,
+                    announcementBudget,
                 );
                 changed += outcome.changed;
                 skipped += outcome.skipped;
@@ -276,6 +384,9 @@ export class TrophiesSyncJob implements Job {
             dryRun: context.dryRun,
             workLimitUsed: budget.used,
             workLimit: context.workLimit,
+            announceEnabled,
+            announcementsSent: announcementBudget.used,
+            announcementsSuppressed: announcementBudget.suppressed,
         });
 
         return {
@@ -297,6 +408,14 @@ export class TrophiesSyncJob implements Job {
                           moderationSuppressedProfiles: pendingFlags.map((p) => p.psnProfile),
                       }
                     : {}),
+                // M7.8: visible even when `enabled` is false, so a report
+                // makes it obvious *why* nothing was posted (the master
+                // switch, not a bug).
+                announcements: {
+                    enabled: announceEnabled,
+                    sent: announcementBudget.used,
+                    suppressed: announcementBudget.suppressed,
+                },
             },
         };
     }
@@ -308,6 +427,8 @@ export class TrophiesSyncJob implements Job {
         isFullRescan: boolean,
         budget: Budget,
         pendingFlags: PendingFlag[],
+        announceEnabled: boolean,
+        announcementBudget: AnnouncementBudget,
     ): Promise<ProfileOutcome> {
         const psnProfile = profile.psnProfile as string; // guarded by the caller
 
@@ -345,6 +466,9 @@ export class TrophiesSyncJob implements Job {
         let failed = 0;
         let page = 1;
         let stop = false;
+        // Queued up here, announced once as a batch after the walk finishes
+        // — see "Announcements, and their flood guard" on this class.
+        const newAnnouncements: NewTrophyAnnouncement[] = [];
 
         while (!stop && budget.has()) {
             budget.spend();
@@ -388,6 +512,13 @@ export class TrophiesSyncJob implements Job {
                             points,
                             data.completionDate,
                         );
+                        // Only queued for a real write, never under
+                        // --dry-run: a dry run is a preview and must not
+                        // post anything, same rule `DiscordJobReporter` and
+                        // `WeekScreenshotWinner` already follow.
+                        if (profile.userId) {
+                            newAnnouncements.push({ userId: profile.userId, url, points });
+                        }
                     }
                     changed++;
                 } catch (error) {
@@ -418,7 +549,89 @@ export class TrophiesSyncJob implements Job {
             page++;
         }
 
+        await this.announceNewTrophies(
+            profile,
+            newAnnouncements,
+            announceEnabled,
+            announcementBudget,
+        );
+
         return { changed, skipped, failed };
+    }
+
+    /**
+     * Turns this profile's newly-created trophies into announcement
+     * message(s) — one per trophy under `TROPHIES_ANNOUNCE_BATCH_THRESHOLD`,
+     * a single collapsed summary above it — and posts them through
+     * `GuildClient`, spending from the run-wide `announcementBudget` as it
+     * goes. See "Announcements, and their flood guard" on this class for the
+     * full reasoning. Never throws: every send is isolated in
+     * `postAnnouncement`.
+     */
+    private async announceNewTrophies(
+        profile: TrophyProfile,
+        announcements: NewTrophyAnnouncement[],
+        announceEnabled: boolean,
+        announcementBudget: AnnouncementBudget,
+    ): Promise<void> {
+        if (!announceEnabled || announcements.length === 0) {
+            return;
+        }
+
+        if (announcements.length > TROPHIES_ANNOUNCE_BATCH_THRESHOLD) {
+            // Every entry belongs to the same profile, so the same userId —
+            // guarded above by `announcements.length === 0` returning early.
+            const userId = announcements[0]!.userId;
+            const totalPoints = announcements.reduce((sum, a) => sum + a.points, 0);
+            await this.postAnnouncement(
+                announcementBudget,
+                profile.psnProfile,
+                `Parabéns <@${userId}>! Sincronizámos ${announcements.length} troféus novos, num total de ${totalPoints} TP (Trophy Points)! 🏆`,
+            );
+            return;
+        }
+
+        for (const announcement of announcements) {
+            await this.postAnnouncement(
+                announcementBudget,
+                profile.psnProfile,
+                `Parabéns <@${announcement.userId}>! Acabaste de receber ${announcement.points} TP (Trophy Points) pelo teu troféu: ${announcement.url}`,
+            );
+        }
+    }
+
+    /**
+     * The one place that actually spends the announcement budget and talks
+     * to `GuildClient`. Two failure modes, both non-fatal to the run:
+     *  - budget exhausted → logged and counted as suppressed, no send
+     *    attempted at all;
+     *  - the send itself throws (Discord down, channel misconfigured via
+     *    `DISCORD_CHANNEL_TROPHIES`, rate limited) → caught and logged, same
+     *    as `DiscordJobReporter`'s own reporting calls.
+     */
+    private async postAnnouncement(
+        announcementBudget: AnnouncementBudget,
+        psnProfile: string | null,
+        message: string,
+    ): Promise<void> {
+        if (!announcementBudget.hasCapacity()) {
+            announcementBudget.suppress();
+            this.logger.warn('trophies:sync.announce.suppressed', {
+                psnProfile,
+                reason: `per-run cap of ${TROPHIES_ANNOUNCE_MAX_MESSAGES_PER_RUN} announcement messages reached`,
+            });
+            return;
+        }
+
+        announcementBudget.spend();
+        try {
+            await this.guildClient.sendMessage(CommunityChannels.TROPHIES, message);
+        } catch (error) {
+            this.logger.error('trophies:sync.announce.failed', {
+                psnProfile,
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
     }
 
     /**
