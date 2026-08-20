@@ -1,12 +1,12 @@
 import { inject, injectable } from 'inversify';
 import type { SlashCommandContext } from '../../../../../Domain/Bot/SlashCommandContext';
-import { EmbedBuilder, MessageFlags } from 'discord.js';
+import { EmbedBuilder } from 'discord.js';
 import { TYPES } from '../../../../DependencyInjection/types';
 import type Logger from '../../../../../Application/Logger/Logger';
 import CommandHandlerManager from '../../../../CommandHandler/CommandHandlerManager';
 import { GetProfile } from '../../../../../Application/Query/Trophy/GetProfile/GetProfile';
 import { ProfileNotFound } from '../../../../../Application/Query/Trophy/GetProfile/ProfileNotFound';
-import { safeReply } from '../../../../../Domain/Bot/safeReply';
+import { replyPrivately } from '../../../../../Domain/Bot/safeReply';
 
 @injectable()
 export class CheckTrophyProfileSubcommand {
@@ -18,6 +18,14 @@ export class CheckTrophyProfileSubcommand {
 
     public async handle(context: SlashCommandContext): Promise<void> {
         const targetUser = context.interaction.options.getUser('user') ?? context.interaction.user;
+
+        // Public defer: a trophy profile check is worth showing off, so the
+        // success path stays public (no `flags`). The not-found/error paths
+        // below must NOT inherit that publicness -- they use replyPrivately()
+        // to delete the public "thinking..." placeholder and follow up
+        // ephemerally instead (M0.3: this is exactly the ephemeral-leak that
+        // was fixed in production once already).
+        await context.interaction.deferReply();
 
         try {
             const command = new GetProfile(targetUser.id);
@@ -49,17 +57,16 @@ export class CheckTrophyProfileSubcommand {
                 .setFooter({ text: 'PSN Profile Status' })
                 .setTimestamp();
 
-            await context.interaction.reply({
+            await context.interaction.editReply({
                 embeds: [embed],
             });
         } catch (error) {
             if (error instanceof ProfileNotFound) {
-                await safeReply(context.interaction, {
+                await replyPrivately(context.interaction, {
                     content:
                         targetUser.id === context.interaction.user.id
                             ? '❌ You have not registered your PSN profile yet. Use `/trophy create` to register.'
                             : '❌ This user has not registered their PSN profile.',
-                    flags: MessageFlags.Ephemeral,
                 });
                 return;
             }
@@ -69,9 +76,8 @@ export class CheckTrophyProfileSubcommand {
                 userId: targetUser.id,
             });
 
-            await safeReply(context.interaction, {
+            await replyPrivately(context.interaction, {
                 content: '⚠️ An error occurred while retrieving the PSN profile.',
-                flags: MessageFlags.Ephemeral,
             });
         }
     }

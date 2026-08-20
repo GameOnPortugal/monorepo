@@ -2,7 +2,7 @@ import { inject, injectable } from 'inversify';
 import CommandHandlerManager from '../../../../CommandHandler/CommandHandlerManager.ts';
 import type Logger from '../../../../../Application/Logger/Logger.ts';
 import { TYPES } from '../../../../DependencyInjection/types.ts';
-import { escapeMarkdown, MessageFlags } from 'discord.js';
+import { escapeMarkdown, MessageFlags, type ChatInputCommandInteraction } from 'discord.js';
 import { ScreenshotId } from '../../../../../Domain/Screenshot/ScreenshotId.ts';
 import { CreateScreenshot } from '../../../../../Application/Write/Screenshot/CreateScreenshot/CreateScreenshot.ts';
 import { ScreenshotAlreadyExist } from '../../../../../Application/Write/Screenshot/CreateScreenshot/ScreenshotAlreadyExist.ts';
@@ -17,7 +17,7 @@ export class CreateScreenshotSubcommand {
         @inject(TYPES.Logger) private readonly logger: Logger,
     ) {}
 
-    public async handle(interaction: any): Promise<void> {
+    public async handle(interaction: ChatInputCommandInteraction): Promise<void> {
         const image = interaction.options.getAttachment('image');
         const name = interaction.options.getString('name');
         const platform = interaction.options.getString('platform');

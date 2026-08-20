@@ -8,6 +8,7 @@ import { createAd } from '../../../../../../Helper/StaticFixtures';
 import { PrismaClient } from '@prisma/client';
 import type { AdRepository } from '../../../../../../../src/Domain/Marketplace/AdRepository';
 import type { SlashCommandContext } from '../../../../../../../src/Domain/Bot/SlashCommandContext';
+import { MessageFlags } from 'discord.js';
 
 describe('DeleteAdSubcommand Integration Test', () => {
     let deleteAdSubcommand: DeleteAdSubcommand;
@@ -28,22 +29,30 @@ describe('DeleteAdSubcommand Integration Test', () => {
 
     function buildContext(interaction: FakeInteraction): SlashCommandContext {
         return {
+            kind: 'chat-input',
             channel_id: interaction.channelId,
             command: 'marketplace',
             text: '',
-            interaction,
+            interaction: interaction.asChatInputCommandInteraction(),
         };
     }
 
-    it('deletes the ad and confirms when the owner deletes by id', async () => {
+    it('defers before doing any work, then edits the deferred reply', async () => {
         const userId = '123456789012345678';
         const ad = await createAd(undefined, 'Test Ad', userId);
         const interaction = new FakeInteraction({ id: ad.id.toString() }, userId);
 
         await deleteAdSubcommand.handle(buildContext(interaction));
 
-        expect(interaction.replyCalls.length).toBe(1);
-        expect(interaction.replyCalls[0].content).toBe('Ad deleted successfully');
+        // Deferred first (M4.2): the lookup for a numeric position requires a
+        // ListUserAds query before the delete itself, which can be slower
+        // than the 3s ack window. No bare `.reply()` should be used once the
+        // command has deferred.
+        expect(interaction.deferReplyCalls.length).toBe(1);
+        expect(interaction.deferReplyCalls[0]).toEqual({ flags: MessageFlags.Ephemeral });
+        expect(interaction.replyCalls.length).toBe(0);
+        expect(interaction.editReplyCalls.length).toBe(1);
+        expect(interaction.editReplyCalls[0].content).toBe('Ad deleted successfully');
         await expect(adRepository.get(ad.id)).rejects.toThrow();
     });
 
@@ -65,8 +74,8 @@ describe('DeleteAdSubcommand Integration Test', () => {
             const interaction = new FakeInteraction({ id: ad.id.toString() }, userId);
             await deleteAdSubcommand.handle(buildContext(interaction));
 
-            expect(interaction.replyCalls.length).toBe(1);
-            const reply = interaction.replyCalls[0];
+            expect(interaction.editReplyCalls.length).toBe(1);
+            const reply = interaction.editReplyCalls[0];
             expect(reply.content).not.toContain('ECONNRESET');
             expect(reply.content).not.toContain('secret internal connection string');
             expect(reply.content).toContain('ref:');
@@ -83,8 +92,10 @@ describe('DeleteAdSubcommand Integration Test', () => {
 
         await deleteAdSubcommand.handle(buildContext(interaction));
 
-        expect(interaction.replyCalls.length).toBe(1);
-        expect(interaction.replyCalls[0].content).toBe('You are not authorized to delete this ad');
+        expect(interaction.editReplyCalls.length).toBe(1);
+        expect(interaction.editReplyCalls[0].content).toBe(
+            'You are not authorized to delete this ad',
+        );
         // The ad still exists.
         await expect(adRepository.get(ad.id)).resolves.toBeDefined();
     });
@@ -98,7 +109,7 @@ describe('DeleteAdSubcommand Integration Test', () => {
 
         await deleteAdSubcommand.handle(buildContext(interaction));
 
-        expect(interaction.replyCalls.length).toBe(1);
-        expect(interaction.replyCalls[0].content).toBe('Ad not found');
+        expect(interaction.editReplyCalls.length).toBe(1);
+        expect(interaction.editReplyCalls[0].content).toBe('Ad not found');
     });
 });

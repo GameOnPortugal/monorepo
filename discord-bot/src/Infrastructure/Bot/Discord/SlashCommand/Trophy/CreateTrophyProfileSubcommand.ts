@@ -36,6 +36,11 @@ export class CreateTrophyProfileSubcommand {
             return;
         }
 
+        // Deferred only after the cheap synchronous URL validation above —
+        // everything past this point writes to the database, which can take
+        // longer than the 3s interaction-ack window.
+        await context.interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
         try {
             const command = new CreateProfile(
                 TrophyProfileId.generate(),
@@ -45,9 +50,8 @@ export class CreateTrophyProfileSubcommand {
 
             await this.commandHandlerManager.handle(command);
 
-            await context.interaction.reply({
+            await context.interaction.editReply({
                 content: `Successfully registered PSN profile: ${psnProfile}`,
-                flags: MessageFlags.Ephemeral,
             });
         } catch (error) {
             if (error instanceof ProfileAlreadyExists) {
