@@ -49,6 +49,7 @@ import type { GuildClient } from '../../Domain/Community/GuildClient.ts';
 import { DiscordGuildClient } from '../Community/Discord/DiscordGuildClient.ts';
 import WeekScreenshotWinner from '../../Ui/Cli/WeekScreenshotWinner.ts';
 import { InMemoryClient } from '../Bot/InMemory/InMemoryClient.ts';
+import { InMemoryGuildClient } from '../Community/InMemory/InMemoryGuildClient.ts';
 
 const myContainer = new Container();
 
@@ -122,9 +123,16 @@ myContainer.bind<HttpClient>(TYPES.HttpClient).to(RetryHttpClient);
 myContainer.bind<TrophySource>(TYPES.TrophySource).to(PsnProfilesTrophySource);
 
 // Bot
-myContainer
-    .bind<GuildClient>(TYPES.GuildClient)
-    .toConstantValue(new DiscordGuildClient(process.env.DISCORD_TOKEN ?? ''));
+// Mirrors the Bot binding below: without a real token there is nothing to
+// connect to, so tests and local runs get an in-memory stand-in instead of a
+// GuildClient that would otherwise hang or throw trying to log in to Discord.
+if (process.env.DISCORD_TOKEN) {
+    myContainer
+        .bind<GuildClient>(TYPES.GuildClient)
+        .toConstantValue(new DiscordGuildClient(process.env.DISCORD_TOKEN));
+} else {
+    myContainer.bind<GuildClient>(TYPES.GuildClient).to(InMemoryGuildClient).inSingletonScope();
+}
 myContainer.bind(BotExecutor).toSelf();
 if (process.env.DISCORD_TOKEN) {
     myContainer
