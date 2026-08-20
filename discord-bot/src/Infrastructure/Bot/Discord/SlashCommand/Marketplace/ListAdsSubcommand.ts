@@ -37,15 +37,15 @@ export class ListAdsSubcommand {
     private getStateDisplay(state: string): string {
         switch (state) {
             case 'new':
-                return 'New';
+                return 'Novo';
             case 'like_new':
-                return 'Like new';
+                return 'Como novo';
             case 'used_good':
-                return 'Used - Good condition';
+                return 'Usado - Bom estado';
             case 'used_marks':
-                return 'Used - With marks';
+                return 'Usado - Com marcas';
             case 'broken':
-                return 'Broken';
+                return 'Avariado';
             default:
                 return state;
         }
@@ -66,13 +66,16 @@ export class ListAdsSubcommand {
 
             if (ads.length === 0) {
                 await context.interaction.editReply({
-                    content: `${targetUser.id === context.interaction.user.id ? "You don't" : "This user doesn't"} have any active listings.`,
+                    content:
+                        targetUser.id === context.interaction.user.id
+                            ? 'Não tens nenhum anúncio activo.'
+                            : 'Este utilizador não tem nenhum anúncio activo.',
                 });
                 return;
             }
 
-            const title = `${targetUser.username}'s Marketplace Listings`;
-            const description = `Found ${ads.length} active listing${ads.length === 1 ? '' : 's'}`;
+            const title = `Anúncios de ${targetUser.username}`;
+            const description = `${ads.length} anúncio${ads.length === 1 ? '' : 's'} activo${ads.length === 1 ? '' : 's'} encontrado${ads.length === 1 ? '' : 's'}`;
 
             const embed = new EmbedBuilder()
                 .setColor('#0099ff')
@@ -86,13 +89,13 @@ export class ListAdsSubcommand {
                     name: `${index + 1}. ${ad.name}`,
                     value: [
                         `${this.getStateEmoji(ad.state)} ${this.getStateDisplay(ad.state)}`,
-                        `💰 Price: ${ad.price}`,
-                        `📍 Location: ${ad.zone}`,
-                        `🚚 Dispatch: ${ad.dispatch}`,
+                        `💰 Preço: ${ad.price}`,
+                        `📍 Zona: ${ad.zone}`,
+                        `🚚 Envio: ${ad.dispatch}`,
                         `🆔 ID: ${ad.id.toString()}`,
-                        ad.warranty ? `⚡ Warranty: ${ad.warranty}` : null,
+                        ad.warranty ? `⚡ Garantia: ${ad.warranty}` : null,
                         ad.description ? `📝 ${ad.description}` : null,
-                        `\n[View Listing](https://discord.com/channels/${context.interaction.guildId}/${ad.channelId}/${ad.messageId})`,
+                        `\n[Ver anúncio](https://discord.com/channels/${context.interaction.guildId}/${ad.channelId}/${ad.messageId})`,
                     ]
                         .filter(Boolean)
                         .join('\n'),
@@ -103,7 +106,7 @@ export class ListAdsSubcommand {
 
             if (omittedCount > 0) {
                 embed.setFooter({
-                    text: `Showing ${fields.length} of ${ads.length} listings — ${omittedCount} omitted. Narrow your search or ask an admin if you need to see the rest.`,
+                    text: `A mostrar ${fields.length} de ${ads.length} anúncios — ${omittedCount} omitidos. Restringe a pesquisa ou pede ajuda a um admin para ver os restantes.`,
                 });
             }
 
@@ -111,7 +114,7 @@ export class ListAdsSubcommand {
         } catch (error) {
             this.logger.error('Error listing ads', { error });
             await safeReply(context.interaction, {
-                content: 'There was an error fetching the listings. Please try again.',
+                content: 'Ocorreu um erro ao obter os anúncios. Tenta novamente.',
                 flags: MessageFlags.Ephemeral,
             });
         }

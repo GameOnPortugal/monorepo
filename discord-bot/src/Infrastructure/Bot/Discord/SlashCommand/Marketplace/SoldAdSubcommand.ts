@@ -5,14 +5,22 @@ import { MessageFlags } from 'discord.js';
 import { TYPES } from '../../../../DependencyInjection/types';
 import type Logger from '../../../../../Application/Logger/Logger';
 import CommandHandlerManager from '../../../../CommandHandler/CommandHandlerManager';
-import { DeleteAd } from '../../../../../Application/Write/Marketplace/DeleteAd/DeleteAd';
+import { MarkAdSold } from '../../../../../Application/Write/Marketplace/MarkAdSold/MarkAdSold';
 import { AdId } from '../../../../../Domain/Marketplace/AdId';
-import { UnauthorizedAdDeletion } from '../../../../../Domain/Marketplace/UnauthorizedAdDeletion';
+import { UnauthorizedAdAction } from '../../../../../Domain/Marketplace/UnauthorizedAdAction';
+import { AdNotActive } from '../../../../../Domain/Marketplace/AdNotActive';
 import RecordNotFound from '../../../../../Domain/RecordNotFound';
 import { InvalidId } from '../../../../../Domain/InvalidId';
+import { isGuildAdmin } from '../../../../../Domain/Bot/AdminCheck';
 
+/**
+ * `/marketplace sold` (M5.6) — the slash-command twin of the `✅ Marcar
+ * vendido` button. Both go through `MarkAdSoldHandler`; this file only
+ * builds the `MarkAdSold` command from a slash interaction instead of a
+ * button click.
+ */
 @injectable()
-export class DeleteAdSubcommand {
+export class SoldAdSubcommand {
     constructor(
         @inject(TYPES.Logger) private readonly logger: Logger,
         @inject(CommandHandlerManager)
@@ -23,24 +31,10 @@ export class DeleteAdSubcommand {
         const interaction = context.interaction;
         const identifier = interaction.options.getString('id', true);
         const userId = interaction.user.id;
+        const isAdmin = isGuildAdmin(interaction);
 
-        // Still deferred: the delete itself does a read, a Discord message
-        // delete and a write, which is not reliably inside the 3s
-        // interaction-ack window. Every reply below is ephemeral, so fixing
-        // that at defer time changes nothing about visibility.
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        // M4.8 — the option is autocompleted (MarketplaceAutocompleteHandler),
-        // so `identifier` is an ad id that Discord filled in from the member's
-        // own rows. The positional-index fallback that used to live here —
-        // "or type 2 for your second ad" — is gone: it resolved the position
-        // against a *fresh* ListUserAds query, so an ad created or expired
-        // between the member reading `/marketplace list` and typing the
-        // number shifted every position after it and deleted the wrong row.
-        //
-        // The option is still free text, though: a client can send whatever
-        // it likes without opening the suggestion list. So parse defensively
-        // here, and let DeleteAdHandler own the ownership check.
         let adId: AdId;
         try {
             adId = AdId.fromString(identifier.trim());
@@ -56,27 +50,27 @@ export class DeleteAdSubcommand {
         }
 
         try {
-            await this.commandHandlerManager.handle(new DeleteAd(adId, userId));
-            await interaction.editReply({ content: '🗑️ Anúncio apagado com sucesso.' });
+            await this.commandHandlerManager.handle(new MarkAdSold(adId, userId, isAdmin));
+            await interaction.editReply({ content: '✅ Anúncio marcado como vendido.' });
         } catch (error) {
-            if (error instanceof UnauthorizedAdDeletion) {
+            if (error instanceof UnauthorizedAdAction) {
                 await interaction.editReply({
-                    content: 'Não tens permissão para apagar este anúncio.',
+                    content: 'Não tens permissão para marcar este anúncio como vendido.',
                 });
+            } else if (error instanceof AdNotActive) {
+                await interaction.editReply({ content: 'Este anúncio já não está activo.' });
             } else if (error instanceof RecordNotFound) {
-                await interaction.editReply({
-                    content: 'Anúncio não encontrado.',
-                });
+                await interaction.editReply({ content: 'Anúncio não encontrado.' });
             } else {
                 const correlationId = randomUUID();
-                this.logger.error('Error deleting ad', {
+                this.logger.error('Error marking ad sold', {
                     error,
                     correlationId,
                     adId: adId.toString(),
                     userId,
                 });
                 await interaction.editReply({
-                    content: `Ocorreu um erro ao apagar o anúncio. Tenta novamente. (ref: ${correlationId})`,
+                    content: `Ocorreu um erro ao marcar o anúncio como vendido. Tenta novamente. (ref: ${correlationId})`,
                 });
             }
         }

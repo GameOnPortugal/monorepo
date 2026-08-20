@@ -7,6 +7,8 @@ import type Logger from '../../../../../Application/Logger/Logger';
 import CommandHandlerManager from '../../../../CommandHandler/CommandHandlerManager';
 import { CreateAd } from '../../../../../Application/Write/Marketplace/CreateAd/CreateAd';
 import { AdId } from '../../../../../Domain/Marketplace/AdId';
+import { Ad } from '../../../../../Domain/Marketplace/Ad';
+import { renderAdListing } from '../../../../../Domain/Marketplace/AdListingRenderer';
 import type { GuildClient } from '../../../../../Domain/Community/GuildClient';
 import { CommunityChannels } from '../../../../../Domain/Community/CommunityChannels';
 import { DiscordChannels, DISCORD_GUILD_ID } from '../../../../Community/Discord/DiscordChannels';
@@ -20,40 +22,6 @@ export class SellSubcommand {
         @inject(TYPES.GuildClient) private readonly guildClient: GuildClient,
     ) {}
 
-    private getStateEmoji(state: string): string {
-        switch (state) {
-            case 'new':
-                return '🆕';
-            case 'like_new':
-                return '✨';
-            case 'used_good':
-                return '👍';
-            case 'used_marks':
-                return '📝';
-            case 'broken':
-                return '🔧';
-            default:
-                return '❓';
-        }
-    }
-
-    private getStateDisplay(state: string): string {
-        switch (state) {
-            case 'new':
-                return 'New';
-            case 'like_new':
-                return 'Like new';
-            case 'used_good':
-                return 'Used - Good condition';
-            case 'used_marks':
-                return 'Used - With marks';
-            case 'broken':
-                return 'Broken';
-            default:
-                return state;
-        }
-    }
-
     public async handle(context: SlashCommandContext): Promise<void> {
         const interaction = context.interaction;
         const name = interaction.options.getString('name', true);
@@ -64,21 +32,6 @@ export class SellSubcommand {
         const warranty = interaction.options.getString('warranty') ?? '';
         const description = interaction.options.getString('description') ?? '';
 
-        const replyContent = [
-            '🏷️ New Sale Listing',
-            `**${name}**`,
-            `${this.getStateEmoji(state)} Condition: ${this.getStateDisplay(state)}`,
-            `💰 Price: ${price}`,
-            `📍 Location: ${zone}`,
-            `🚚 Dispatch: ${dispatch}`,
-            warranty ? `⚡ Warranty: ${warranty}` : '',
-            description ? `📝 Description: ${description}` : '',
-            '',
-            `Listed by: <@${interaction.user.id}>`,
-        ]
-            .filter(Boolean)
-            .join('\n');
-
         // Post-then-persist (M0.1), now routed through the GuildClient port to
         // the marketplace channel (M5.1) instead of `interaction.reply()` —
         // the command can be run from anywhere, but the listing itself always
@@ -87,11 +40,35 @@ export class SellSubcommand {
         // so it is ephemeral from the first ack.
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
+        // M5.5: the listing is now a rich embed + buttons
+        // (`renderAdListing`), not a plain string — built from a throwaway,
+        // not-yet-persisted `Ad` holding exactly what is about to be
+        // written, so `SellSubcommand` and the bump/edit paths (which render
+        // from a real, persisted `Ad`) can never drift from the same
+        // renderer.
+        const adId = AdId.generate();
+        const draft = new Ad(
+            adId,
+            name,
+            interaction.user.id,
+            DiscordChannels.MARKETPLACE,
+            '',
+            state,
+            price,
+            zone,
+            dispatch,
+            warranty,
+            description,
+            'sell',
+            new Date(),
+            new Date(),
+        );
+
         let messageId: string;
         try {
-            messageId = await this.guildClient.sendMessage(
+            messageId = await this.guildClient.sendRichMessage(
                 CommunityChannels.MARKETPLACE,
-                replyContent,
+                renderAdListing(draft, { authorDisplayName: interaction.user.username }),
             );
         } catch (error) {
             const correlationId = randomUUID();
@@ -108,7 +85,7 @@ export class SellSubcommand {
 
         try {
             const command = new CreateAd(
-                AdId.generate(),
+                adId,
                 name,
                 interaction.user.id,
                 DiscordChannels.MARKETPLACE,
@@ -119,7 +96,7 @@ export class SellSubcommand {
                 dispatch,
                 warranty,
                 description,
-                'sale',
+                'sell',
             );
 
             await this.commandHandlerManager.handle(command);
