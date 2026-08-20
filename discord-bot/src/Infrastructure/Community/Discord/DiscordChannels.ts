@@ -79,5 +79,7 @@ export const convertChannel = (channel: CommunityChannels): string => {
                 );
             }
             return DiscordChannels.ADMIN;
+        case CommunityChannels.MARKETPLACE:
+            return DiscordChannels.MARKETPLACE;
     }
 };

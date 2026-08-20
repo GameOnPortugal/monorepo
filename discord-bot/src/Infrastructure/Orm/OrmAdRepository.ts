@@ -61,8 +61,12 @@ export class OrmAdRepository implements AdRepository {
     }
 
     async get(id: AdId): Promise<Ad> {
-        const ad = await this.prismaClient.ad.findUnique({
-            where: { id: id.toString() },
+        // Excludes soft-deleted rows (cross-cutting rule 2 / M5.2): a
+        // deleted ad is not "found" for any caller of this read path —
+        // `DeleteAdHandler` re-fetching it (double delete) gets the same
+        // RecordNotFound it would have gotten from a hard delete.
+        const ad = await this.prismaClient.ad.findFirst({
+            where: { id: id.toString(), deleted_at: null },
         });
 
         if (ad === null) {
@@ -73,14 +77,22 @@ export class OrmAdRepository implements AdRepository {
     }
 
     async delete(id: AdId): Promise<void> {
-        await this.prismaClient.ad.delete({
+        // Soft-delete (cross-cutting rule 2 / M5.2): the old bot hard-deleted
+        // on expiry, which is why none of its data could ever be
+        // reconstructed. `deleted_at` was added by M5.3 precisely so this
+        // could stop doing that.
+        await this.prismaClient.ad.update({
             where: { id: id.toString() },
+            data: {
+                status: 'deleted',
+                deleted_at: new Date(),
+            },
         });
     }
 
     async findByUserId(userId: string): Promise<Ad[]> {
         const ads = await this.prismaClient.ad.findMany({
-            where: { author_id: userId },
+            where: { author_id: userId, deleted_at: null },
             orderBy: { createdAt: 'desc' },
         });
 
