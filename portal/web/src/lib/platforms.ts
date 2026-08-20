@@ -50,21 +50,10 @@ export const PLATFORMS: Record<Platform, PlatformMeta> = {
 export const PLATFORM_ORDER: Platform[] = ["playstation", "xbox", "nintendo", "pc"];
 
 /**
- * Best-effort mapping from one of the ~21 raw strings stored in the bot's
- * `ads.state`/`screenshots.plataform` columns to a canonical `Platform`.
- *
- * This is a small pragmatic subset for the scaffold's one representative
- * page, NOT the shared normalisation module — that is GLOBAL-PLAN M8.4,
- * which the bot and portal must both depend on so a listing renders
- * identically in Discord and on the web. Do not grow this function into
- * that module; replace it with an import from M8.4 when it lands.
+ * The `guessPlatform()` stand-in that used to live here (GLOBAL-PLAN M8.4's
+ * scaffold placeholder) has been replaced by the real shared normalisation
+ * module, `./normalize.ts`'s `normalizePlatform()` — it covers all the
+ * documented raw strings (not just a substring-match subset) and returns
+ * `"other"` for a recognised-but-uncategorisable value instead of silently
+ * dropping it. Import from there, not from here.
  */
-export function guessPlatform(raw: string | null | undefined): Platform | null {
-  if (!raw) return null;
-  const value = raw.toLowerCase();
-  if (value.includes("ps") || value.includes("playstation")) return "playstation";
-  if (value.includes("xbox") || value.includes("x box")) return "xbox";
-  if (value.includes("switch") || value.includes("nintendo")) return "nintendo";
-  if (value.includes("pc") || value.includes("steam")) return "pc";
-  return null;
-}

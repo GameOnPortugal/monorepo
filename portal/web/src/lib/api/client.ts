@@ -23,7 +23,12 @@ export interface Ad {
   price: string | null;
   price_cents: number | null;
   zone: string | null;
+  dispatch: string | null;
+  warranty: string | null;
+  description: string | null;
   images: string[];
+  bumped_at: string | null;
+  expires_at: string | null;
   createdAt: string;
 }
 
@@ -42,6 +47,13 @@ export interface LeaderboardEntry {
   trophyCount: number;
 }
 
+export interface PortalStats {
+  activeAds: number;
+  screenshots: number;
+  trophies: number;
+  hunters: number;
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${API_URL}${path}`);
   if (!res.ok) {
@@ -53,7 +65,9 @@ async function get<T>(path: string): Promise<T> {
 export const api = {
   health: () => get<{ status: string }>("/health"),
   listAds: (limit = 6) => get<{ ads: Ad[]; total: number }>(`/api/marketplace/ads?limit=${limit}`),
+  getAd: (id: string) => get<{ ad: Ad }>(`/api/marketplace/ads/${encodeURIComponent(id)}`),
   listScreenshots: (limit = 8) =>
     get<{ screenshots: Screenshot[]; total: number }>(`/api/screenshots?limit=${limit}`),
   leaderboard: (limit = 10) => get<{ leaderboard: LeaderboardEntry[] }>(`/api/trophies/leaderboard?limit=${limit}`),
+  stats: () => get<PortalStats>("/api/stats"),
 };
