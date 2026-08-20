@@ -37,6 +37,8 @@ import { GetProfileHandler } from '../../Application/Query/Trophy/GetProfile/Get
 import { CheckTrophyProfileSubcommand } from '../Bot/Discord/SlashCommand/Trophy/CheckTrophyProfileSubcommand.ts';
 import { GetRankHandler } from '../../Application/Query/Trophy/GetRank/GetRankHandler.ts';
 import { RankSubcommand } from '../Bot/Discord/SlashCommand/Trophy/RankSubcommand.ts';
+import { RankPresenter } from '../Bot/Discord/SlashCommand/Trophy/RankPresenter.ts';
+import { TrophyComponentHandler } from '../Bot/Discord/Component/TrophyComponentHandler.ts';
 import { OrmAdRepository } from '../Orm/OrmAdRepository.ts';
 import type { AdRepository } from '../../Domain/Marketplace/AdRepository.ts';
 import { CreateAdHandler } from '../../Application/Write/Marketplace/CreateAd/CreateAdHandler.ts';
@@ -137,9 +139,12 @@ myContainer.bind(ScreenshotAutocompleteHandler).toSelf();
 myContainer.bind(TYPES.AutocompleteHandler).toService(MarketplaceAutocompleteHandler);
 myContainer.bind(TYPES.AutocompleteHandler).toService(ScreenshotAutocompleteHandler);
 
-// Component handlers (M4.7) — matched by custom ID namespace. None yet;
-// M5.5/M5.6/M6.5/M7.6 are the first consumers. The multi-inject is
-// @optional() precisely so this list can legitimately be empty.
+// Component handlers (M4.7) — matched by custom ID namespace. M7.6 is the
+// first consumer: `trophies:page:...`, the `/trophy rank` pagination
+// buttons. The multi-inject is @optional() precisely so this list can
+// legitimately be empty when nothing else is bound.
+myContainer.bind(TrophyComponentHandler).toSelf();
+myContainer.bind(TYPES.ComponentHandler).toService(TrophyComponentHandler);
 
 // Subcommands
 myContainer.bind(CreateScreenshotSubcommand).toSelf();
@@ -147,6 +152,7 @@ myContainer.bind(ListScreenshotSubcommand).toSelf();
 myContainer.bind(DeleteScreenshotSubcommand).toSelf();
 myContainer.bind(CreateTrophyProfileSubcommand).toSelf();
 myContainer.bind(CheckTrophyProfileSubcommand).toSelf();
+myContainer.bind(RankPresenter).toSelf();
 myContainer.bind(RankSubcommand).toSelf();
 myContainer.bind(SellSubcommand).toSelf();
 myContainer.bind(ListAdsSubcommand).toSelf();

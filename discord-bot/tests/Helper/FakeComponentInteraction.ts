@@ -70,6 +70,17 @@ export default class FakeComponentInteraction {
         return { id: `fake-message-${++this.messageIdCounter}` };
     }
 
+    /**
+     * This fixture only ever stands in for a button interaction (see
+     * {@link asButtonInteraction}), so it always answers `true` — matching
+     * enough of discord.js's real type-guard behaviour for handlers that
+     * narrow on it (e.g. `TrophyComponentHandler`, M7.6) without having to
+     * fake the whole `Interaction` type hierarchy.
+     */
+    isButton(): boolean {
+        return true;
+    }
+
     asButtonInteraction(): ButtonInteraction {
         return this as unknown as ButtonInteraction;
     }
