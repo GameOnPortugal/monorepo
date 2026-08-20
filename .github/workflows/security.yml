@@ -88,5 +88,20 @@ jobs:
             | tar -xz -C "$RUNNER_TEMP" gitleaks
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
 
+      # On a pull request, scan only the commits the PR actually adds.
+      #
+      # `gitleaks detect` with a full clone scans every ref it can see, not just
+      # this branch's ancestry — so one contributor's branch reddens the secret
+      # scan on every *other* open PR, which is both confusing and trains people
+      # to ignore it. Scoping to `base..HEAD` makes a PR answerable for its own
+      # content. Pushes to main and the weekly schedule still scan all history,
+      # which is where a full sweep belongs.
       - name: Run Gitleaks
-        run: gitleaks detect --source . -v --no-banner --exit-code 1
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags origin "${{ github.base_ref }}"
+            gitleaks detect --source . -v --no-banner --exit-code 1 \
+              --log-opts="--no-merges origin/${{ github.base_ref }}..HEAD"
+          else
+            gitleaks detect --source . -v --no-banner --exit-code 1
+          fi
