@@ -181,4 +181,54 @@ describe('parseAutoModConfig — rejected wholesale, not half-applied', () => {
         expect(config).toBeUndefined();
         expect(errors.some((error) => error.includes('channelId'))).toBe(true);
     });
+
+    for (const mentionTotalLimit of [0, 51, 1.5]) {
+        test(`a mentionTotalLimit of ${mentionTotalLimit} outside Discord's 1-50 integer range is rejected`, () => {
+            const { config, errors } = parseAutoModConfig({
+                rules: [
+                    validRule({
+                        triggerType: 'MENTION_SPAM',
+                        keywordFilter: [],
+                        mentionTotalLimit,
+                    }),
+                ],
+            });
+
+            expect(config).toBeUndefined();
+            expect(errors.some((error) => error.includes('mentionTotalLimit'))).toBe(true);
+        });
+    }
+
+    test('a mentionTotalLimit within 1-50 is accepted', () => {
+        const { config, errors } = parseAutoModConfig({
+            rules: [
+                validRule({ triggerType: 'MENTION_SPAM', keywordFilter: [], mentionTotalLimit: 5 }),
+            ],
+        });
+
+        expect(errors).toEqual([]);
+        expect(config?.rules[0]?.mentionTotalLimit).toBe(5);
+    });
+
+    test('a MEMBER_PROFILE trigger with a MESSAGE_SEND event is rejected', () => {
+        const { config, errors } = parseAutoModConfig({
+            rules: [validRule({ triggerType: 'MEMBER_PROFILE', eventType: 'MESSAGE_SEND' })],
+        });
+
+        expect(config).toBeUndefined();
+        expect(errors.some((error) => error.includes('requires eventType "MEMBER_UPDATE"'))).toBe(
+            true,
+        );
+    });
+
+    test('a KEYWORD trigger with a MEMBER_UPDATE event is rejected', () => {
+        const { config, errors } = parseAutoModConfig({
+            rules: [validRule({ eventType: 'MEMBER_UPDATE' })],
+        });
+
+        expect(config).toBeUndefined();
+        expect(errors.some((error) => error.includes('requires eventType "MESSAGE_SEND"'))).toBe(
+            true,
+        );
+    });
 });

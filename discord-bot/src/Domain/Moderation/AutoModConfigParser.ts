@@ -42,6 +42,17 @@ const MAX_EXEMPT_ROLES = 20;
 const MAX_EXEMPT_CHANNELS = 50;
 const MAX_CUSTOM_MESSAGE_LENGTH = 150;
 const MAX_TIMEOUT_SECONDS = 2_419_200; // 4 weeks
+const MIN_MENTION_TOTAL_LIMIT = 1;
+const MAX_MENTION_TOTAL_LIMIT = 50;
+
+/** Discord only allows MEMBER_PROFILE on MEMBER_UPDATE, everything else on MESSAGE_SEND. */
+const VALID_EVENT_TYPES_BY_TRIGGER: Record<AutoModTriggerType, AutoModEventType> = {
+    KEYWORD: 'MESSAGE_SEND',
+    SPAM: 'MESSAGE_SEND',
+    KEYWORD_PRESET: 'MESSAGE_SEND',
+    MENTION_SPAM: 'MESSAGE_SEND',
+    MEMBER_PROFILE: 'MEMBER_UPDATE',
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -150,6 +161,14 @@ function parseRule(
         !AUTOMOD_TRIGGER_TYPES.includes(triggerType as AutoModTriggerType)
     ) {
         errors.push(`${path}.triggerType must be one of ${AUTOMOD_TRIGGER_TYPES.join(', ')}`);
+    } else if (
+        typeof eventType === 'string' &&
+        AUTOMOD_EVENT_TYPES.includes(eventType as AutoModEventType) &&
+        eventType !== VALID_EVENT_TYPES_BY_TRIGGER[triggerType as AutoModTriggerType]
+    ) {
+        errors.push(
+            `${path}: triggerType "${triggerType}" requires eventType "${VALID_EVENT_TYPES_BY_TRIGGER[triggerType as AutoModTriggerType]}", got "${eventType}"`,
+        );
     }
 
     const keywordFilter = raw.keywordFilter ?? [];
@@ -199,8 +218,16 @@ function parseRule(
         );
     }
 
-    if (raw.mentionTotalLimit !== undefined && typeof raw.mentionTotalLimit !== 'number') {
-        errors.push(`${path}.mentionTotalLimit must be a number`);
+    if (
+        raw.mentionTotalLimit !== undefined &&
+        (typeof raw.mentionTotalLimit !== 'number' ||
+            !Number.isInteger(raw.mentionTotalLimit) ||
+            raw.mentionTotalLimit < MIN_MENTION_TOTAL_LIMIT ||
+            raw.mentionTotalLimit > MAX_MENTION_TOTAL_LIMIT)
+    ) {
+        errors.push(
+            `${path}.mentionTotalLimit must be an integer between ${MIN_MENTION_TOTAL_LIMIT} and ${MAX_MENTION_TOTAL_LIMIT}`,
+        );
     }
 
     if (
