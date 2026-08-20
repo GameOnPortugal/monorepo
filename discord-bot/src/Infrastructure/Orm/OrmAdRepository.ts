@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { TYPES } from '../DependencyInjection/types';
 import { Ad, serializeImages, type AdArray } from '../../Domain/Marketplace/Ad';
 import { AdId } from '../../Domain/Marketplace/AdId';
+import { AdStatus } from '../../Domain/Marketplace/AdStatus';
 import type { AdRepository } from '../../Domain/Marketplace/AdRepository';
 import RecordNotFound from '../../Domain/RecordNotFound';
 
@@ -94,6 +95,68 @@ export class OrmAdRepository implements AdRepository {
         const ads = await this.prismaClient.ad.findMany({
             where: { author_id: userId, deleted_at: null },
             orderBy: { createdAt: 'desc' },
+        });
+
+        return ads.map((ad) => Ad.fromArray(ad as AdArray));
+    }
+
+    async findOrphanedActive(limit: number): Promise<Ad[]> {
+        const ads = await this.prismaClient.ad.findMany({
+            where: {
+                status: AdStatus.active().toString(),
+                deleted_at: null,
+                OR: [{ message_id: null }, { message_id: '' }],
+            },
+            orderBy: { createdAt: 'asc' },
+            take: limit,
+        });
+
+        return ads.map((ad) => Ad.fromArray(ad as AdArray));
+    }
+
+    async findIdleActive(idleBefore: Date, limit: number): Promise<Ad[]> {
+        const ads = await this.prismaClient.ad.findMany({
+            where: {
+                status: AdStatus.active().toString(),
+                deleted_at: null,
+                NOT: { OR: [{ message_id: null }, { message_id: '' }] },
+                // Idle since the last bump, or since creation if it has
+                // never been bumped — matches `AdRepository.findIdleActive`'s
+                // doc comment.
+                OR: [
+                    { bumped_at: null, createdAt: { lte: idleBefore } },
+                    { bumped_at: { lte: idleBefore } },
+                ],
+            },
+            orderBy: { createdAt: 'asc' },
+            take: limit,
+        });
+
+        return ads.map((ad) => Ad.fromArray(ad as AdArray));
+    }
+
+    async findAwaitingResponse(now: Date, limit: number): Promise<Ad[]> {
+        const ads = await this.prismaClient.ad.findMany({
+            where: {
+                status: AdStatus.pendingRenewal().toString(),
+                deleted_at: null,
+                expires_at: { lte: now },
+            },
+            orderBy: { expires_at: 'asc' },
+            take: limit,
+        });
+
+        return ads.map((ad) => Ad.fromArray(ad as AdArray));
+    }
+
+    async findAllActive(limit: number): Promise<Ad[]> {
+        const ads = await this.prismaClient.ad.findMany({
+            where: {
+                status: AdStatus.active().toString(),
+                deleted_at: null,
+            },
+            orderBy: { createdAt: 'asc' },
+            take: limit,
         });
 
         return ads.map((ad) => Ad.fromArray(ad as AdArray));

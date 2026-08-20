@@ -7,6 +7,7 @@ import type {
 import { CommunityChannels } from '../../../Domain/Community/CommunityChannels.ts';
 import { CustomEmoji } from '../../../Domain/Community/CustomEmoji.ts';
 import { ClientError } from '../../../Domain/Community/ClientError.ts';
+import type { DirectMessagePayload } from '../../../Domain/Community/DirectMessage.ts';
 
 interface InMemoryMessage {
     reactions: Partial<Record<CustomEmoji, number>>;
@@ -26,6 +27,11 @@ export interface DeletedMessage {
     messageId: string;
 }
 
+export interface SentDirectMessage {
+    userId: string;
+    message: DirectMessagePayload;
+}
+
 /**
  * Test/no-token stand-in for `DiscordGuildClient`, mirroring `InMemoryClient`
  * (the equivalent stand-in for `Bot`): bound automatically when
@@ -41,6 +47,8 @@ export class InMemoryGuildClient implements GuildClient {
     private nextMessageId = 1;
     public readonly sentMessages: SentMessage[] = [];
     public readonly deletedMessages: DeletedMessage[] = [];
+    public readonly sentDirectMessages: SentDirectMessage[] = [];
+    private readonly closedDmUsers = new Set<string>();
 
     /** When set, the next call to sendMessage() throws this instead of posting. */
     public failNextSendWith: Error | undefined = undefined;
@@ -80,6 +88,16 @@ export class InMemoryGuildClient implements GuildClient {
     }
 
     /**
+     * Simulates a user with DMs closed (privacy settings, or having blocked
+     * the bot) — `sendDirectMessage` returns `null` for them instead of
+     * recording anything, mirroring `DiscordGuildClient`'s 50007/10013
+     * handling.
+     */
+    closeDmFor(userId: string): void {
+        this.closedDmUsers.add(userId);
+    }
+
+    /**
      * Simulates a linked Discord account that has left the guild — the next
      * (and every subsequent) `isGuildMember(userId)` call returns `false`,
      * mirroring the real client's error-10007 case.
@@ -92,6 +110,8 @@ export class InMemoryGuildClient implements GuildClient {
         this.messages.clear();
         this.sentMessages.length = 0;
         this.deletedMessages.length = 0;
+        this.sentDirectMessages.length = 0;
+        this.closedDmUsers.clear();
         this.nextMessageId = 1;
         this.failNextSendWith = undefined;
         this.membersWhoLeft.clear();
@@ -149,6 +169,38 @@ export class InMemoryGuildClient implements GuildClient {
     async deleteMessage(channelId: string, messageId: string): Promise<void> {
         this.messages.delete(messageId);
         this.deletedMessages.push({ channelId, messageId });
+    }
+
+    async sendDirectMessage(userId: string, message: DirectMessagePayload): Promise<string | null> {
+        if (this.closedDmUsers.has(userId)) {
+            return null;
+        }
+
+        if (this.failNextSendWith) {
+            const error = this.failNextSendWith;
+            this.failNextSendWith = undefined;
+            throw error;
+        }
+
+        const messageId = `in-memory-dm-${this.nextMessageId++}`;
+        this.sentDirectMessages.push({ userId, message });
+        // Same shape sendMessage() records — main widened InMemoryMessage
+        // (content/createdAt/attachments/embeds) for M6.3's relink job while
+        // this DM path was being written, so a DM has to be a first-class
+        // message here too, not a reactions-only stub.
+        this.messages.set(messageId, {
+            reactions: {},
+            content: typeof message === 'string' ? message : (message.content ?? ''),
+            createdAt: new Date(),
+            attachmentUrls: [],
+            embedImageUrls: [],
+        });
+
+        return messageId;
+    }
+
+    async messageExists(_channelId: string, messageId: string): Promise<boolean> {
+        return this.messages.has(messageId);
     }
 
     async getMessage(_channel: CommunityChannels, messageId: string): Promise<CommunityMessage> {

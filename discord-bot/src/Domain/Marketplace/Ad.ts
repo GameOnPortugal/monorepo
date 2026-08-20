@@ -112,4 +112,51 @@ export class Ad {
             array.deleted_at,
         );
     }
+
+    /**
+     * Returns a new `Ad` with the given fields replaced — everything else,
+     * including `id`, is carried over unchanged. `Ad` is otherwise immutable
+     * (every field is `readonly`), so a lifecycle transition (M6.5's
+     * active → pending_renewal → expired/active) would otherwise mean
+     * re-listing all twenty-one constructor arguments at every call site,
+     * which is exactly the kind of copy-paste that silently drops a field.
+     * `updatedAt` defaults to "now" on every call, matching Prisma's
+     * `@updatedAt` semantics for the column it's mapped to.
+     */
+    public withChanges(
+        changes: Partial<{
+            channelId: string | null;
+            messageId: string | null;
+            status: AdStatus;
+            bumpedAt: Date | null;
+            expiresAt: Date | null;
+            soldAt: Date | null;
+            deletedAt: Date | null;
+            updatedAt: Date;
+        }>,
+    ): Ad {
+        return new Ad(
+            this.id,
+            this.name,
+            this.authorId,
+            'channelId' in changes ? (changes.channelId ?? null) : this.channelId,
+            'messageId' in changes ? (changes.messageId ?? null) : this.messageId,
+            this.state,
+            this.price,
+            this.zone,
+            this.dispatch,
+            this.warranty,
+            this.description,
+            this.adType,
+            this.createdAt,
+            changes.updatedAt ?? new Date(),
+            changes.status ?? this.status,
+            this.priceCents,
+            this.images,
+            'bumpedAt' in changes ? (changes.bumpedAt ?? null) : this.bumpedAt,
+            'expiresAt' in changes ? (changes.expiresAt ?? null) : this.expiresAt,
+            'soldAt' in changes ? (changes.soldAt ?? null) : this.soldAt,
+            'deletedAt' in changes ? (changes.deletedAt ?? null) : this.deletedAt,
+        );
+    }
 }
