@@ -120,7 +120,12 @@ export class MarketplaceSlashCommand implements SlashCommandHandler {
                             option
                                 .setName('id')
                                 .setDescription('ID of the item to delete')
-                                .setRequired(true),
+                                .setRequired(true)
+                                // M4.8 — MarketplaceAutocompleteHandler fills
+                                // this in from the member's own ads, which is
+                                // what retires the positional-index fallback
+                                // DeleteAdSubcommand used to carry.
+                                .setAutocomplete(true),
                         ),
                 )
         );

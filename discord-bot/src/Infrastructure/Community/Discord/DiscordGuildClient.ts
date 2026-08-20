@@ -4,14 +4,43 @@ import type {
     ListMessagesOptions,
 } from '../../../Domain/Community/GuildClient.ts';
 import { injectable } from 'inversify';
-import type { APIMessage, InvalidRequestWarningData, RateLimitData } from 'discord.js';
+import type { APIChannel, APIMessage, InvalidRequestWarningData, RateLimitData } from 'discord.js';
 import { REST, Routes, RESTEvents, DiscordAPIError, RESTJSONErrorCodes } from 'discord.js';
 import { CommunityChannels } from '../../../Domain/Community/CommunityChannels.ts';
 import { CustomEmoji } from '../../../Domain/Community/CustomEmoji.ts';
 import { convertChannel, DISCORD_GUILD_ID } from './DiscordChannels.ts';
 import { convertEmoji } from './DiscordEmoji.ts';
 import { ClientError } from '../../../Domain/Community/ClientError.ts';
+import type { DirectMessagePayload } from '../../../Domain/Community/DirectMessage.ts';
 import type Logger from '../../../Application/Logger/Logger.ts';
+
+/**
+ * Converts the port-level `DirectMessagePayload` into the REST request body
+ * Discord expects, chunking buttons into rows of up to 5 (Discord's own
+ * limit is 5 rows of 5 buttons — 25 total, far more than any ad-renewal DM
+ * needs, but chunked correctly regardless of how many are passed).
+ */
+function buildMessageBody(message: DirectMessagePayload): Record<string, unknown> {
+    const body: Record<string, unknown> = { content: message.content };
+
+    if (message.buttons && message.buttons.length > 0) {
+        const rows = [];
+        for (let i = 0; i < message.buttons.length; i += 5) {
+            rows.push({
+                type: 1, // ActionRow
+                components: message.buttons.slice(i, i + 5).map((button) => ({
+                    type: 2, // Button
+                    style: 1, // Primary
+                    label: button.label,
+                    custom_id: button.customId,
+                })),
+            });
+        }
+        body.components = rows;
+    }
+
+    return body;
+}
 
 // REST-only client (M4.5 / A5). The previous implementation lazily built and
 // `login()`-ed a *second whole gateway `Client`* on the same bot token and
@@ -130,6 +159,61 @@ export class DiscordGuildClient implements GuildClient {
                 return;
             }
             throw new ClientError(`Failed to delete message: ${(error as Error).message}`);
+        }
+    }
+
+    async sendDirectMessage(userId: string, message: DirectMessagePayload): Promise<string | null> {
+        this.requireToken();
+
+        try {
+            const dmChannel = (await this.rest.post(Routes.userChannels(), {
+                body: { recipient_id: userId },
+            })) as APIChannel;
+
+            const created = (await this.rest.post(Routes.channelMessages(dmChannel.id), {
+                body: buildMessageBody(message),
+            })) as APIMessage;
+
+            return created.id;
+        } catch (error) {
+            // Cannot Send Messages To This User (50007) covers both "this
+            // user has DMs from server members disabled" and "this user has
+            // blocked the bot" — Discord does not distinguish them in the
+            // error code, and M6.5 does not need to: either way, this is a
+            // closed DM, a routine and expected outcome, never grounds to
+            // expire anything early. Unknown User (10013) is the same
+            // outcome for a user who has since left/been deleted.
+            if (
+                error instanceof DiscordAPIError &&
+                (error.code === RESTJSONErrorCodes.CannotSendMessagesToThisUser ||
+                    error.code === RESTJSONErrorCodes.UnknownUser ||
+                    error.status === 403)
+            ) {
+                return null;
+            }
+            throw new ClientError(`Failed to send direct message: ${(error as Error).message}`);
+        }
+    }
+
+    async messageExists(channelId: string, messageId: string): Promise<boolean> {
+        this.requireToken();
+
+        try {
+            await this.rest.get(Routes.channelMessage(channelId, messageId));
+            return true;
+        } catch (error) {
+            // Unknown Message (10008) or Unknown Channel (10003, e.g. a
+            // closed/deleted DM channel) both mean "there is nothing left to
+            // point at" from a reconcile job's point of view.
+            if (
+                error instanceof DiscordAPIError &&
+                (error.code === RESTJSONErrorCodes.UnknownMessage ||
+                    error.code === RESTJSONErrorCodes.UnknownChannel ||
+                    error.status === 404)
+            ) {
+                return false;
+            }
+            throw new ClientError(`Failed to check message: ${(error as Error).message}`);
         }
     }
 

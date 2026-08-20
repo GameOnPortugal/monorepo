@@ -206,3 +206,20 @@ how the scheduler breakage went unnoticed for sixteen months.
 6. **Order matters**: the deployment migration (plan 04) should land before the
    `screenshots:relink` backfill, so the recovered images are written straight to
    the MinIO that will still exist afterwards, rather than to TedRelayer twice.
+7. **M6.5/M6.6, as built (2026-08-20): no new column.** The "prompted, waiting
+   on the owner" state described by decision 3 is `AdStatus.pendingRenewal()`
+   (a new `status` value, not a schema change) with `expires_at` repurposed
+   while in that status to hold the 72h response deadline, rather than an
+   earlier draft that added a `prompted_at DATETIME NULL` column — the two
+   existing columns already say everything a third one would have, and
+   `status` already exists to answer "what is this ad waiting on". `ads:reconcile`
+   only ever sees `status='active'` rows, so this never collides with its scan.
+8. **The first-run mass-DM problem, as built.** `AdsLifecycleJob` caps *distinct
+   newly-DM'd recipients* at 5 per run (`MAX_NEW_PROMPT_RECIPIENTS_PER_RUN`),
+   separate from and much tighter than the runner's own `workLimit` — the 70
+   production ads all reading as idle on day one (no `bumped_at`, `createdAt`
+   predating the 14-day window) means most authors would otherwise get DM'd in
+   one run. At one run/day this clears any realistic backlog over a handful of
+   days of small, unremarkable batches. Operators: run
+   `bun run:command jobs:run ads-lifecycle --dry-run` and read the counts before
+   ever enabling the schedule for real.
