@@ -1,6 +1,33 @@
 import type { CustomEmoji } from './CustomEmoji.ts';
 import type { CommunityChannels } from './CommunityChannels.ts';
 
+/**
+ * The subset of a Discord message the bot ever needs to read back — added
+ * for M6.3's screenshot relink job, which has to (a) re-fetch a message by
+ * its stored id and read the live, freshly-signed image URL Discord hands
+ * back off it (population A — see RelinkScreenshotsJob.ts), and (b) page
+ * through channel history looking for a message whose `content` embeds a
+ * screenshot's UUID (population B, whose stored message id is wrong and
+ * unusable). Deliberately just the fields those two things need, not a
+ * general-purpose message mirror.
+ */
+export interface CommunityMessage {
+    id: string;
+    content: string;
+    createdAt: Date;
+    /** Attachment URLs, in the order Discord returned them. */
+    attachmentUrls: string[];
+    /** `embed.image.url` for every embed that has one, in embed order — never thumbnails. */
+    embedImageUrls: string[];
+}
+
+export interface ListMessagesOptions {
+    /** Discord's own pagination cursor: only messages older than this id. Omit for the newest page. */
+    before?: string;
+    /** Capped at 100 by Discord's API regardless of what is asked for. */
+    limit: number;
+}
+
 export interface GuildClient {
     getTotalReactionsByEmoji(
         channel: CommunityChannels,
@@ -32,4 +59,20 @@ export interface GuildClient {
      * fail just because the Discord side of it was already gone.
      */
     deleteMessage(channelId: string, messageId: string): Promise<void>;
+
+    /**
+     * @throws ClientError if the message cannot be found or read.
+     */
+    getMessage(channel: CommunityChannels, messageId: string): Promise<CommunityMessage>;
+
+    /**
+     * One page of channel history, newest-first, exactly as Discord's own
+     * API paginates. The caller is responsible for looping with `before`
+     * and for deciding how far back is far enough — this method does not
+     * loop or bound anything on its own.
+     */
+    listMessages(
+        channel: CommunityChannels,
+        options: ListMessagesOptions,
+    ): Promise<CommunityMessage[]>;
 }

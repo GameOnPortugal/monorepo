@@ -3,6 +3,7 @@ import CommandHandlerManager from '../../../../CommandHandler/CommandHandlerMana
 import type Logger from '../../../../../Application/Logger/Logger.ts';
 import { TYPES } from '../../../../DependencyInjection/types.ts';
 import { escapeMarkdown, MessageFlags, type ChatInputCommandInteraction } from 'discord.js';
+import { randomUUID } from 'crypto';
 import { ScreenshotId } from '../../../../../Domain/Screenshot/ScreenshotId.ts';
 import { CreateScreenshot } from '../../../../../Application/Write/Screenshot/CreateScreenshot/CreateScreenshot.ts';
 import { ScreenshotAlreadyExist } from '../../../../../Application/Write/Screenshot/CreateScreenshot/ScreenshotAlreadyExist.ts';
@@ -42,31 +43,22 @@ export class CreateScreenshotSubcommand {
 
         // Create a new screenshot
         const screenshotId = ScreenshotId.generate();
+
+        // Defer first: the reply is filled in via editReply() below, which
+        // (unlike the deprecated `fetchReply: true` option) returns a real
+        // Message directly, and lets the write path take longer than the 3s
+        // interaction-ack window without failing.
+        await interaction.deferReply();
+
+        // Post-then-persist (M6.2, same fix as M0.1's marketplace listing):
+        // post first so the real, resolvable message id is known *before*
+        // it is written anywhere, instead of persisting `interaction.id` (a
+        // value that never resolves to a message — cross-cutting rule 4,
+        // and the root cause of every dead `message_id` in the screenshots
+        // table). One write, with the real id already in hand.
+        let message;
         try {
-            // Defer first: the reply is filled in via editReply() below, which
-            // (unlike the deprecated `fetchReply: true` option) returns a real
-            // Message directly, and lets CreateScreenshot's write path take
-            // longer than the 3s interaction-ack window without failing.
-            await interaction.deferReply();
-
-            await this.commandHandlerManager.handle(
-                new CreateScreenshot(
-                    screenshotId,
-                    name,
-                    interaction.user.id,
-                    interaction.channelId,
-                    interaction.id,
-                    platform,
-                    image.url,
-                ),
-            );
-
-            // Reply with the formatted message and the image. `name` is
-            // user-supplied and lands directly in message content, so it is
-            // escaped (markdown injection) and mentions are explicitly
-            // disabled on this reply (mention injection, M0.2/A1) in
-            // addition to the client-wide default set in DiscordBot.ts.
-            const message = await interaction.editReply({
+            message = await interaction.editReply({
                 content:
                     `📸 **Screenshot Submitted!**\n\n` +
                     `ID: #${screenshotId.toString()}\n` +
@@ -76,6 +68,37 @@ export class CreateScreenshotSubcommand {
                 files: [image.url],
                 allowedMentions: { parse: [] },
             });
+        } catch (error) {
+            const correlationId = randomUUID();
+            this.logger.error('Failed to post screenshot message', {
+                error,
+                correlationId,
+                userId: interaction.user.id,
+            });
+            await safeReply(interaction, {
+                content: `There was an error submitting your screenshot. Please try again. (ref: ${correlationId})`,
+                flags: MessageFlags.Ephemeral,
+            });
+            return;
+        }
+
+        try {
+            await this.commandHandlerManager.handle(
+                new CreateScreenshot(
+                    screenshotId,
+                    name,
+                    interaction.user.id,
+                    interaction.channelId,
+                    message.id,
+                    platform,
+                    image.url,
+                    // M4.9 added this field but no call site ever populated
+                    // it — wired now: Discord reports the attachment's real
+                    // byte size on the interaction, letting the handler
+                    // reject an oversized upload before any network call.
+                    image.size,
+                ),
+            );
 
             // Add the trophy reaction to the message
             try {
@@ -108,9 +131,19 @@ export class CreateScreenshotSubcommand {
                 return;
             }
 
-            // Generic error message for other errors
+            // The message is already posted publicly at this point (unlike
+            // the pre-M6.2 flow, which persisted before posting) — tell the
+            // author their listing may be broken rather than silently
+            // leaving an orphaned public message with no matching row.
+            const correlationId = randomUUID();
+            this.logger.error('Failed to persist screenshot after posting', {
+                error,
+                correlationId,
+                messageId: message.id,
+                userId: interaction.user.id,
+            });
             await safeReply(interaction, {
-                content: 'There was an error submitting your screenshot. Please try again later.',
+                content: `Your screenshot was posted, but something went wrong saving it — it may not count for the contest. Please contact a moderator. (ref: ${correlationId})`,
                 flags: MessageFlags.Ephemeral,
             });
         }

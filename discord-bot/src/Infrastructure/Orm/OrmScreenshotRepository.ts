@@ -58,6 +58,16 @@ export default class OrmScreenshotRepository implements ScreenshotRepository {
         return objects.map((object) => Screenshot.fromArray(object as ScreenshotArray));
     }
 
+    async findRequiringRelink(limit: number): Promise<Screenshot[]> {
+        const objects = await this.prismaClient.screenshot.findMany({
+            where: { image: { contains: 'discordapp.com' } },
+            orderBy: { createdAt: 'asc' },
+            take: limit,
+        });
+
+        return objects.map((object) => Screenshot.fromArray(object as ScreenshotArray));
+    }
+
     async findByWeek(week: Date): Promise<Screenshot[]> {
         // Previously used dayjs's locale-default `startOf('week')` /
         // `endOf('week')`, which (with no locale configured) is a
