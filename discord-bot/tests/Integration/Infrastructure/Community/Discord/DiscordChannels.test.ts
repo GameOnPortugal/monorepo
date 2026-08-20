@@ -24,7 +24,10 @@ describe('resolveDiscordIds', () => {
             GUILD_ID: '818108848492773377',
             SCREENSHOTS: '827646847483904040',
             MARKETPLACE: '818447274266591243',
-            ADMIN: '',
+            // #⚛server-log, verified against the live Discord API 2026-08-20.
+            // M6.4 and M6.8 both shipped with this unset because neither had a
+            // confirmed ID at the time; it has one now.
+            ADMIN: '818108848492773380',
         });
     });
 
@@ -57,10 +60,10 @@ describe('resolveDiscordIds', () => {
 });
 
 /**
- * M6.4: the ADMIN channel has no verified production ID (unlike
- * GUILD_ID/SCREENSHOTS/MARKETPLACE), so resolving it when unset must fail
- * loudly instead of silently returning an empty channel ID that a job could
- * post into by accident.
+ * Every CommunityChannels member must resolve to a real snowflake. ADMIN has
+ * a verified default now, so the empty case is only reachable by explicitly
+ * setting DISCORD_CHANNEL_ADMIN='' — which must fail loudly rather than hand
+ * Discord an empty channel ID that a job could post into by accident.
  */
 describe('convertChannel', () => {
     test('still resolves SCREENSHOTS to its verified default', () => {
@@ -69,9 +72,8 @@ describe('convertChannel', () => {
         );
     });
 
-    test('throws for ADMIN when DISCORD_CHANNEL_ADMIN is not configured', () => {
-        expect(() => convertChannel(CommunityChannels.ADMIN)).toThrow(
-            /DISCORD_CHANNEL_ADMIN is not configured/,
-        );
+    test('resolves ADMIN to its verified default', () => {
+        expect(convertChannel(CommunityChannels.ADMIN)).toBe(DISCORD_IDS_DEFAULTS.ADMIN);
+        expect(DISCORD_IDS_DEFAULTS.ADMIN).not.toBe('');
     });
 });
