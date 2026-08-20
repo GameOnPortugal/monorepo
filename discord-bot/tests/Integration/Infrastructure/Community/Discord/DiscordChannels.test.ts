@@ -28,6 +28,8 @@ describe('resolveDiscordIds', () => {
             // M6.4 and M6.8 both shipped with this unset because neither had a
             // confirmed ID at the time; it has one now.
             ADMIN: '818108848492773380',
+            // No verified channel yet (M7.8) — see DiscordChannels.ts.
+            TROPHIES: '',
         });
     });
 
@@ -37,6 +39,7 @@ describe('resolveDiscordIds', () => {
             DISCORD_CHANNEL_SCREENSHOTS: '222222222222222222',
             DISCORD_CHANNEL_MARKETPLACE: '333333333333333333',
             DISCORD_CHANNEL_ADMIN: '555555555555555555',
+            DISCORD_CHANNEL_TROPHIES: '666666666666666666',
         });
 
         expect(result).toEqual({
@@ -44,6 +47,7 @@ describe('resolveDiscordIds', () => {
             SCREENSHOTS: '222222222222222222',
             MARKETPLACE: '333333333333333333',
             ADMIN: '555555555555555555',
+            TROPHIES: '666666666666666666',
         });
     });
 
@@ -55,6 +59,7 @@ describe('resolveDiscordIds', () => {
             SCREENSHOTS: DISCORD_IDS_DEFAULTS.SCREENSHOTS,
             MARKETPLACE: '444444444444444444',
             ADMIN: DISCORD_IDS_DEFAULTS.ADMIN,
+            TROPHIES: DISCORD_IDS_DEFAULTS.TROPHIES,
         });
     });
 });
@@ -63,7 +68,8 @@ describe('resolveDiscordIds', () => {
  * Every CommunityChannels member must resolve to a real snowflake. ADMIN has
  * a verified default now, so the empty case is only reachable by explicitly
  * setting DISCORD_CHANNEL_ADMIN='' — which must fail loudly rather than hand
- * Discord an empty channel ID that a job could post into by accident.
+ * Discord an empty channel ID that a job could post into by accident. TROPHIES
+ * has no verified default at all yet, so it fails loudly out of the box.
  */
 describe('convertChannel', () => {
     test('still resolves SCREENSHOTS to its verified default', () => {
@@ -75,5 +81,12 @@ describe('convertChannel', () => {
     test('resolves ADMIN to its verified default', () => {
         expect(convertChannel(CommunityChannels.ADMIN)).toBe(DISCORD_IDS_DEFAULTS.ADMIN);
         expect(DISCORD_IDS_DEFAULTS.ADMIN).not.toBe('');
+    });
+
+    test('TROPHIES has no verified default, so it throws until configured', () => {
+        expect(DISCORD_IDS_DEFAULTS.TROPHIES).toBe('');
+        expect(() => convertChannel(CommunityChannels.TROPHIES)).toThrow(
+            /DISCORD_CHANNEL_TROPHIES is not configured/,
+        );
     });
 });

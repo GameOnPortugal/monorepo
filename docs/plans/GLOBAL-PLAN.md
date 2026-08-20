@@ -396,7 +396,7 @@ flags are written as well as read.
 | **M7.5** | ✅ **DONE (2026-08-20)** — **`/trophy create` accepts both URL shapes.** New pure `Domain/Trophy/PsnProfileUrl.ts#extractPsnProfileFromUrl`, ported from the old bot's regex-plus-split `getPsnProfileByUrl`, replacing `CreateTrophyProfileSubcommand`'s own bare-profile-only parser. Table-driven test (`tests/Integration/Domain/Trophy/PsnProfileUrl.test.ts`) over both accepted shapes plus malformed/lookalike input (wrong host, lookalike host, http instead of https, missing segments, trailing slash, too many segments). Rejection message and success message translated to pt-PT. | [§4.6](../discord-bot-feature-gap.md) |
 | **M7.6** | **Rank presentation parity** — the guild's custom plat/gold/silver/bronze emojis for positions 1/2/3/rest, and pagination buttons instead of a `limit` option capped at 10. | [§4.7](../discord-bot-feature-gap.md), C4 |
 | **M7.7** | ✅ **DONE (2026-08-20)** — **`trophies:fix-old` backfill**, a manual **console command** (`src/Ui/Cli/FixOldTrophies.ts`), not a scheduled Job. **Decision**: unlike `trophies:sync`, nothing produces a fresh crop of null-`completionDate` rows on an ongoing basis — `trophies:sync` itself always sets `completionDate` when it creates a trophy, so null rows are a historical/import artefact, not a recurring condition; once backfilled there is nothing left for a schedule to do. Mirrors the old bot's own one-off-script shape. Idempotent (only ever selects rows still missing a date) and bounded (`--limit=N`, default 100); supports `--dry-run`. New `TrophyRepository.findMissingCompletionDate`. | [§4.4](../discord-bot-feature-gap.md) |
-| **M7.8** | **Trophy announcements through the bot, not a webhook.** Post "Parabéns \<@user\>! Acabaste de receber N TP…" via `GuildClient` to a channel from the M1.7 config; delete `TROPHY_WEBHOOK`. **Decided** — see [Decisions taken](#decisions-taken). | [§7.7](../discord-bot-feature-gap.md), [#8](../known-issues.md) |
+| **M7.8** | ✅ **DONE (2026-08-20, #46)** — **Trophy announcements through the bot, not a webhook.** `TrophiesSyncJob` posts "Parabéns \<@user\>! Acabaste de receber N TP (Trophy Points) pelo teu troféu: \<url\>" via `GuildClient.sendMessage(CommunityChannels.TROPHIES, ...)` right after a trophy is created — no separate job, no webhook. `TROPHY_WEBHOOK` was already gone from `.env.example`/compose (an earlier pass cleared it) — verified, nothing left to delete. **M1.7 config decision**: M1.7 itself hasn't landed yet, so rather than block on it this PR does the simplest honest thing the item's own text allows — a new `DISCORD_CHANNEL_TROPHIES` env var, resolved the same way `SCREENSHOTS`/`MARKETPLACE`/`ADMIN` already are in `DiscordChannels.ts`. Unlike those three, it has **no verified default** — nobody has confirmed a real channel for trophy announcements, so `DISCORD_IDS_DEFAULTS.TROPHIES` is `''` and `convertChannel` throws a clear, caught-and-logged error until an operator sets it, the same defensive shape already used for a blanked-out `ADMIN`. **Flood-guard design** (the hard part of this item, per the brief: a first run against a fresh/reconnected profile must not spam the channel): three independent, stacked guards, documented in full in `TrophiesSyncJob.ts`'s "Announcements, and their flood guard" doc comment — (1) **`TROPHIES_ANNOUNCE_ENABLED`** (env, default unset/off), mirroring `TROPHIES_SYNC_ENABLED`'s reasoning: merging to `main` deploys, so a feature that posts publicly must be an operator's opt-in, not a side effect of this PR landing — this alone guarantees the very first run posts nothing; (2) **per-profile batching** — a single profile's walk creating more than `TROPHIES_ANNOUNCE_BATCH_THRESHOLD` (3) new trophies in one run collapses to **one** summary message ("Sincronizámos N troféus novos, num total de X TP…") instead of N individual ones, covering the "profile reconnects after months away" backlog case; (3) a **per-run cap** (`TROPHIES_ANNOUNCE_MAX_MESSAGES_PER_RUN`, 10) across the *whole* run, covering the "operator flips the flag on for the first time against many profiles that already have unannounced trophies" case — trophy creation itself is never affected by any of these, only the announcement is skipped, and always loudly (`trophies:sync.announce.suppressed`, folded into `JobResult.details.announcements`). A failed post (Discord down, misconfigured channel, rate limit) is caught and logged per-message and never fails the profile or the run; `--dry-run` never announces, since an announcement is only queued inside the same `!context.dryRun` branch that calls `TrophyRepository.create`. New tests in `tests/Integration/Infrastructure/Job/Jobs/TrophiesSyncJob.test.ts` (`describe('announcements (M7.8)')`) cover: off by default, dry-run never announces, a small batch posts individually, a backlog collapses to one summary, the per-run cap suppresses without failing the sync, and a failed send is logged but non-fatal. | [§7.7](../discord-bot-feature-gap.md), [#8](../known-issues.md) |
 
 ---
 
@@ -504,6 +504,14 @@ These are not milestones. They are constraints on every PR in every milestone.
 
 Update this table as items land. `—` = not started.
 
+> **Editing this table from a branch?** Change only *your* milestone's row,
+> then **recompute the Total by adding the Done column up** — never by
+> incrementing whatever number you found there. Several branches land in
+> parallel most days, each one bumps the Total, and git merges both bumps into
+> a single wrong number. It has drifted three times already (58 → 59 → 60 → 61
+> against a real 65). If you hit a merge conflict here, it will be these two
+> lines: keep both milestone rows, and recompute.
+
 | Milestone | Items | Done | Status |
 | --------- | ----- | ---- | ------ |
 | M0 Stop the bleeding | 9 | 9 | **complete** — #11 #12 #13 #14 #15. All five live defects verified fixed *in production*, not just in CI |
@@ -513,10 +521,10 @@ Update this table as items land. `—` = not started.
 | M4 Discord API modernisation | 10 | 10 | **complete** — #27 (M4.1 typed interaction layer, M4.2 deferReply, M4.10 embed limits), #28 (M4.4 lifecycle, M4.5 REST-only guild client, M4.6 cache/sweepers, M4.9 attachment ingest), #34 (M4.3 registration), #42 (M4.7 component routing, M4.8 autocomplete). **M5.5/M5.6/M6.5 and M7.6 are unblocked** |
 | M5 Marketplace overhaul | 11 | 3 | #29 (M5.3 lifecycle columns + migration), #35 (M5.1 route to `#anuncios`, M5.2 delete removes the message and soft-deletes the row). Remaining M5.4–M5.11; **M5.5/M5.6 need M4.7** |
 | M6 Jobs, lifecycle & media | 9 | 9 | **complete** — #19 (M6.7), #30 (M6.0 `MediaStorage` + S3/MinIO), #31 (M6.4 winner hardening), #32 (M6.1 runner + M6.8 reporting), #37 (M6.2 fix-at-source, M6.3 relink recovery), #40 (M6.5 `ads:lifecycle`, M6.6 `ads:reconcile`). Every scheduled job the plan asked for now exists and is registered against a working runner |
-| M7 Trophies | 8 | 6 | #24 (M7.1 PSNProfiles source, M7.2 points ladder); this PR adds **M7.3** (`trophies:sync`, scheduling opt-in via `TROPHIES_SYNC_ENABLED` plus a moderation safety valve), **M7.4** (live rank on `/trophy check`), **M7.5** (both `/trophy create` URL shapes) and **M7.7** (`trophies:fix-old` backfill). Remaining: **M7.6** (rank presentation parity — needs M4.7), **M7.8** (announcements) |
+| M7 Trophies | 8 | 7 | #24 (M7.1 PSNProfiles source, M7.2 points ladder); **M7.3** (`trophies:sync`, scheduling opt-in via `TROPHIES_SYNC_ENABLED` plus a moderation safety valve), **M7.4** (live rank on `/trophy check`), **M7.5** (both `/trophy create` URL shapes) and **M7.7** (`trophies:fix-old` backfill); #46 (M7.8, bot-posted announcements with a three-layer flood guard, opt-in via `TROPHIES_ANNOUNCE_ENABLED`). Remaining: **M7.6** (rank presentation parity — needs M4.7) |
 | M8 Community portal | 15 | 0 | — |
 | M9 Feature gap & dead weight | 7 | 5 | #33 — M9.2/M9.3/M9.4 **done**, seven dead models and their tables dropped (migration `20260820102655_drop_dead_models`, guarded and verified against a production copy). M9.1 redesigned onto AutoMod. #44 — **M9.5 verified** (env vars were already clean; fixed the stale trap note in `AGENT.md` instead), **M9.6 done** (`old-discord-bot/` deleted, all references fixed). Remaining: **M9.7** (privacy flag) |
-| **Total** | **93** | **64** | |
+| **Total** | **93** | **65** | |
 
 ### What landed on 2026-08-20 (second session)
 Fourteen more PRs (#23–#37), taking the queue from 41/92 to **54/93** — the
@@ -553,8 +561,20 @@ Wires M7.1/M7.2's `TrophySource`/`TrophyPoints` (#24) into a running job:
 valve, opt-in scheduling via `TROPHIES_SYNC_ENABLED`), live rank on
 `/trophy check`, both `/trophy create` URL shapes, and the
 `trophies:fix-old` backfill. Full design notes are in the M7.3–M7.5/M7.7 rows
-above and the PR description. Remaining in M7: **M7.6** (rank presentation
-parity, needs M4.7 component routing) and **M7.8** (announcements).
+above and the PR description.
+
+### What landed with M7.8 (#46)
+
+`trophies:sync` now announces each newly-credited trophy through
+`GuildClient` — no webhook, no separate process — gated behind its own
+opt-in flag (`TROPHIES_ANNOUNCE_ENABLED`, default off, same reasoning as
+`TROPHIES_SYNC_ENABLED`) plus a per-profile batching threshold and a
+per-run message cap so a large backlog (first sync, or a profile
+reconnecting after months away) can't flood the channel. Full design notes
+are in the M7.8 row above and `TrophiesSyncJob.ts`'s "Announcements, and
+their flood guard" doc comment. Remaining in M7: **M7.6** (rank
+presentation parity, needs M4.7 component routing) — the only item left in
+this milestone.
 
 ### What landed on 2026-08-19/20
 
