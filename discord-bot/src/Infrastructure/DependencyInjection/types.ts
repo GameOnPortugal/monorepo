@@ -23,6 +23,7 @@ const TYPES = {
     HttpClient: Symbol.for('HttpClient'),
     OrmClient: Symbol.for('OrmClient'),
     GuildClient: Symbol.for('GuildClient'),
+    MediaStorage: Symbol.for('MediaStorage'),
 };
 
 export { TYPES };
