@@ -16,6 +16,10 @@ import type { Bot } from '../../../Domain/Bot/Bot.ts';
 import { BotExecutor } from '../BotExecutor.ts';
 import type { SlashCommandContext } from '../../../Domain/Bot/SlashCommandContext.ts';
 import { safeReply } from '../../../Domain/Bot/safeReply.ts';
+import {
+    hashCommandSet,
+    resolveCommandRegistrationTarget,
+} from '../../../Domain/Bot/CommandRegistration.ts';
 
 @injectable()
 export class DiscordBot implements Bot {
@@ -28,6 +32,14 @@ export class DiscordBot implements Bot {
         private readonly clientId: string,
         @inject(TYPES.Logger) private readonly logger: Logger,
         @inject(BotExecutor) private readonly botExecutor: BotExecutor,
+        // M4.3 — dev-only guild for fast, guild-scoped command registration.
+        // Deliberately NOT DISCORD_GUILD_ID (see CommandRegistration.ts for
+        // why): that variable already means "the production guild" and
+        // defaults to it on its own, so reusing it here would risk
+        // registering guild-scoped commands into production. Unset (the
+        // default everywhere except an explicit local dev `.env`) means
+        // global registration — today's behaviour.
+        private readonly devGuildId?: string,
     ) {
         // `allowedMentions: { parse: [] }` is set once here, on the Client
         // itself, so every message sent through this client — regardless of
@@ -158,11 +170,74 @@ export class DiscordBot implements Bot {
             commands.push(handler.builder().toJSON());
         }
 
-        this.logger.log(`Started refreshing ${commands.length} application (/) commands.`);
+        // M4.3 — guild-scoped registration is instant (seconds), global can
+        // take up to an hour to propagate. Which one is live is logged
+        // explicitly and loudly on every boot — this is the "nobody is ever
+        // confused about which set is live" requirement, since a guild-scoped
+        // registration silently shadowing global commands in the wrong guild
+        // is exactly the failure mode a quiet log line would hide.
+        const target = resolveCommandRegistrationTarget(this.clientId, this.devGuildId);
+        const route =
+            target.scope === 'guild'
+                ? Routes.applicationGuildCommands(target.clientId, target.guildId)
+                : Routes.applicationCommands(target.clientId);
+        if (target.scope === 'guild') {
+            this.logger.log(
+                `[DEV] Registering ${commands.length} application (/) commands to GUILD ${target.guildId} ` +
+                    `(DISCORD_DEV_GUILD_ID is set) — guild commands appear instantly, but ONLY in that guild. ` +
+                    `Unset DISCORD_DEV_GUILD_ID to register globally, as production does.`,
+            );
+        } else {
+            this.logger.log(
+                `Registering ${commands.length} application (/) commands GLOBALLY ` +
+                    `(DISCORD_DEV_GUILD_ID is not set) — propagation can take up to an hour.`,
+            );
+        }
+
+        // M4.3 — skip the PUT when it would be a no-op. Discord itself is
+        // asked what it currently has registered (GET) rather than this
+        // process remembering what it last wrote: this bot's container has
+        // no persistent volume (every real deploy — and merging to `main`
+        // deploys, per AGENT.md — is a brand-new container with an empty
+        // filesystem), so a locally-persisted hash would be empty on
+        // essentially every production boot and this optimisation would be
+        // a near no-op exactly where it matters most. Comparing against
+        // Discord's own record survives redeploys for free, and is also
+        // *authoritative* in a way a local record never is — it reflects
+        // drift a local hash cannot see at all (a manual edit in the
+        // Developer Portal, a half-failed previous PUT, a rollback to an
+        // older image).
+        //
+        // A failed/unparseable GET is not fatal — this whole comparison is
+        // an optimisation, not a correctness requirement — so it is logged
+        // distinctly from a PUT failure below and falls through to
+        // registering unconditionally. "When in doubt, PUT": registering
+        // redundantly is harmless, silently skipping a genuinely-changed
+        // command set is not.
+        let remoteCommands: unknown[] | undefined;
+        try {
+            remoteCommands = (await this.rest.get(route)) as unknown[];
+        } catch (getError) {
+            this.logger.warn(
+                'Failed to fetch currently-registered application (/) commands from Discord — registering unconditionally',
+                { error: getError },
+            );
+        }
+
+        if (remoteCommands) {
+            const localHash = hashCommandSet(commands, target.scope);
+            const remoteHash = hashCommandSet(remoteCommands, target.scope);
+            if (localHash === remoteHash) {
+                this.logger.log(
+                    'Command set matches what Discord already has registered — skipping PUT.',
+                );
+                return;
+            }
+        }
 
         try {
-            // The put method is used to fully refresh all commands in the guild with the current set
-            const data = (await this.rest.put(Routes.applicationCommands(this.clientId), {
+            // The put method is used to fully refresh all commands for the target (guild or global) with the current set
+            const data = (await this.rest.put(route, {
                 body: commands,
             })) as unknown[];
 
@@ -171,7 +246,10 @@ export class DiscordBot implements Bot {
             // M1.4: through the injected Logger (not console.error, which
             // bypassed it entirely), and rethrown — start() no longer
             // catches this, so the bot never logs in with a command set
-            // that failed to register.
+            // that failed to register. Deliberately a separate catch/log
+            // from the GET above: a failed GET only costs a redundant PUT,
+            // a failed PUT here means commands are genuinely out of sync,
+            // and the two must never be confused in the logs.
             this.logger.error('Failed to register application (/) commands', { error });
             throw error;
         }

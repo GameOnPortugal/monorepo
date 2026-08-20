@@ -114,4 +114,24 @@ describe('ScreenshotSlashCommand', () => {
         expect(thrown).toBeNull();
         expect(interaction.calls.map((c) => c.method)).toEqual(['reply', 'followUp']);
     });
+
+    describe('builder()', () => {
+        test('is guild-only (M1.10/M4.3): not invokable in DMs, where ListScreenshotSubcommand-style links would break', () => {
+            const logger = new Logger([new InMemoryLogger()]);
+            const noopSubcommand = { handle: async () => {} };
+            const command = new ScreenshotSlashCommand(
+                logger,
+                noopSubcommand as any,
+                noopSubcommand as any,
+                noopSubcommand as any,
+            );
+
+            const json = command.builder().toJSON();
+
+            expect(json.contexts).toEqual([0]); // InteractionContextType.Guild
+            expect(json.integration_types).toEqual([0]); // ApplicationIntegrationType.GuildInstall
+            // Explicitly open to every member — no subcommand here is admin-only.
+            expect(json.default_member_permissions).toBeNull();
+        });
+    });
 });

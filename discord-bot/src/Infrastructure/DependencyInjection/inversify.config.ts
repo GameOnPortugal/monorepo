@@ -175,6 +175,7 @@ if (botEnv.config) {
                 botEnv.config.DISCORD_CLIENT_ID,
                 myContainer.get(TYPES.Logger),
                 myContainer.get(BotExecutor),
+                botEnv.config.DISCORD_DEV_GUILD_ID,
             ),
         );
 } else {

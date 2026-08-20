@@ -2,6 +2,8 @@ import { inject, injectable } from 'inversify';
 import type { SlashCommandHandler } from '../../../../../Domain/Bot/SlashCommandHandler';
 import type { SlashCommandContext } from '../../../../../Domain/Bot/SlashCommandContext';
 import {
+    ApplicationIntegrationType,
+    InteractionContextType,
     MessageFlags,
     SlashCommandBuilder,
     type SlashCommandSubcommandsOnlyBuilder,
@@ -39,6 +41,11 @@ export class TrophySlashCommand implements SlashCommandHandler {
             new SlashCommandBuilder()
                 .setName('trophy')
                 .setDescription('Manage trophy profiles and submissions')
+                .setContexts(InteractionContextType.Guild) // M1.10/M4.3 — not invokable in DMs.
+                .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
+                // Open to every member — no subcommand here is admin-only.
+                // Explicit `null` documents that on purpose.
+                .setDefaultMemberPermissions(null)
                 // Create subcommand
                 .addSubcommand((subcommand) =>
                     subcommand
