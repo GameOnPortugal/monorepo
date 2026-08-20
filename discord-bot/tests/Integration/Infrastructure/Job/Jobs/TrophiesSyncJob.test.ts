@@ -241,4 +241,62 @@ describe('TrophiesSyncJob', () => {
         expect(result.considered).toBe(0);
         expect(trophySource.rankRequests).toEqual([]);
     });
+
+    test('the moderation safety valve suppresses a batch larger than the threshold instead of writing it', async () => {
+        // 11 profiles all reporting no visible rank — over the threshold
+        // (10). This is exactly the failure mode a broken PSNProfiles parser
+        // would produce: everyone suddenly looks rank-less at once.
+        const profiles = [];
+        for (let i = 0; i < 11; i++) {
+            const psnProfile = `SafetyValveUser${i}`;
+            profiles.push(await createTrophyProfile(undefined, `user-safety-${i}`, psnProfile));
+            trophySource.setNoRank(psnProfile);
+        }
+
+        const result = await job.run(context());
+
+        expect(result.details?.moderationSafetyValveTripped).toBe(true);
+        expect(result.details?.moderationSuppressedCount).toBe(11);
+        expect(result.details?.newlyFlagged).toEqual([]);
+
+        // Nothing was actually written — every profile is untouched.
+        for (const profile of profiles) {
+            const stored = await trophyProfileRepository.get(profile.id);
+            expect(stored.isBanned).toBe(false);
+            expect(stored.isExcluded).toBe(false);
+        }
+    });
+
+    test('a batch at or under the threshold is written normally, not suppressed', async () => {
+        const profiles = [];
+        for (let i = 0; i < 5; i++) {
+            const psnProfile = `SmallBatchUser${i}`;
+            profiles.push(await createTrophyProfile(undefined, `user-small-${i}`, psnProfile));
+            trophySource.setNoRank(psnProfile);
+        }
+
+        const result = await job.run(context());
+
+        expect(result.details?.moderationSafetyValveTripped).toBeUndefined();
+        expect(result.details?.newlyFlagged).toHaveLength(5);
+
+        for (const profile of profiles) {
+            const stored = await trophyProfileRepository.get(profile.id);
+            expect(stored.isBanned).toBe(true);
+            expect(stored.isExcluded).toBe(true);
+        }
+    });
+
+    test('a --dry-run still reports what the safety valve would have suppressed, without writing anything', async () => {
+        for (let i = 0; i < 11; i++) {
+            const psnProfile = `DryRunSafetyValveUser${i}`;
+            await createTrophyProfile(undefined, `user-dry-safety-${i}`, psnProfile);
+            trophySource.setNoRank(psnProfile);
+        }
+
+        const result = await job.run(context({ dryRun: true }));
+
+        expect(result.details?.moderationSafetyValveTripped).toBe(true);
+        expect(result.details?.moderationSuppressedCount).toBe(11);
+    });
 });

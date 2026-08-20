@@ -8,9 +8,19 @@ import FixOldTrophies from '../../../../src/Ui/Cli/FixOldTrophies';
  * M7.3/M7.7: "Nothing is reachable until it is bound"
  * (`Infrastructure/DependencyInjection/inversify.config.ts` — see AGENT.md).
  * This asserts the container can actually build `TrophiesSyncJob` and
- * `FixOldTrophies`, and that the sync job is registered with the shared
- * `JobRunner` (M6.1) — a job wired only into `inversify.config.ts` without a
- * `.register()` call would compile and resolve, but never run.
+ * `FixOldTrophies` regardless of scheduling.
+ *
+ * `TrophiesSyncJob`'s registration with the shared `JobRunner` (M6.1) is
+ * gated by `TROPHIES_SYNC_ENABLED` (unset by default — see
+ * `inversify.config.ts` and this job's own doc comment for why: merging to
+ * `main` deploys, and an unconditionally-scheduled run would write
+ * moderation flags on real members before anyone had watched a dry run).
+ * The test environment sets no `TROPHIES_SYNC_ENABLED`, so this pins the
+ * safe default the same way `MediaStorage.container.test.ts` pins the
+ * S3-unset fallback: **not** scheduled, but still fully resolvable and
+ * still runnable by hand (`bun run:command jobs:run trophies:sync
+ * --dry-run`) — see `TrophiesSyncJob.test.ts` for coverage of `run()`
+ * itself, which never goes through the scheduler at all.
  */
 describe('DI container — TrophiesSyncJob / FixOldTrophies', () => {
     test('resolves TrophiesSyncJob without throwing', () => {
@@ -21,9 +31,11 @@ describe('DI container — TrophiesSyncJob / FixOldTrophies', () => {
         expect(() => myContainer.get(FixOldTrophies)).not.toThrow();
     });
 
-    test('trophies:sync is registered with the JobRunner', () => {
+    test('trophies:sync is NOT scheduled by default (TROPHIES_SYNC_ENABLED is unset in tests)', () => {
+        expect(process.env.TROPHIES_SYNC_ENABLED).not.toBe('true');
+
         const jobRunner = myContainer.get(JobRunner);
 
-        expect(jobRunner.listJobs()).toContain('trophies:sync');
+        expect(jobRunner.listJobs()).not.toContain('trophies:sync');
     });
 });

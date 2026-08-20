@@ -21,14 +21,39 @@ interface FailedProfile {
     reason: string;
 }
 
-/** Per-profile outcome, folded into the job-wide JobResult by run(). */
+/**
+ * A profile this run has decided *would* be auto-moderated, not yet
+ * written. Deferred so the whole batch's size can be checked against
+ * `MODERATION_SAFETY_VALVE_THRESHOLD` before any of it is committed — see
+ * `resolveFlags`.
+ */
+interface PendingFlag {
+    profile: TrophyProfile;
+    psnProfile: string;
+    flags: { isBanned?: boolean; hasLeft?: boolean; isExcluded?: boolean };
+    reason: string;
+}
+
+/** Per-profile trophy-walk outcome, folded into the job-wide JobResult by run(). */
 interface ProfileOutcome {
     changed: number;
     skipped: number;
     failed: number;
-    flag?: FlaggedProfile;
-    failure?: FailedProfile;
 }
+
+/**
+ * A single run flagging more than this many profiles is treated as evidence
+ * the PSNProfiles parser broke, not that the community mass-quit — see
+ * `resolveFlags`. Picked as: a legitimate mass departure of more than a
+ * handful of the ~118 tracked members inside one 10-minute window is
+ * implausible for a small community, whereas a markup change breaking
+ * `getProfileRank`'s regex would flag most/all non-excluded profiles at
+ * once. 10 sits comfortably above ordinary single-digit background churn (a
+ * member or two going private, or actually leaving, between runs is
+ * expected and fine) and comfortably below what a systemic parser failure
+ * would produce.
+ */
+const MODERATION_SAFETY_VALVE_THRESHOLD = 10;
 
 /** Tracks how much "work" (network calls) this run has spent, across all profiles. */
 class Budget {
@@ -54,7 +79,25 @@ class Budget {
  * every 10 minutes by the deleted `scheduler/` container
  * (`old-discord-bot`'s `scheduler/config.ini` had it commented out — this is
  * the first time it has run at all in this rewrite). Registered with the
- * same 10-minute cadence here.
+ * same 10-minute cadence in `inversify.config.ts`, but — see "Scheduling is
+ * opt-in" below — only actually scheduled once an operator has reviewed a
+ * dry run and turned it on.
+ *
+ * ## Scheduling is opt-in (`TROPHIES_SYNC_ENABLED`)
+ *
+ * This job is **always** bound in the container and runnable by hand
+ * (`bun run:command jobs:run trophies:sync --dry-run`), but
+ * `inversify.config.ts` only calls `JobRunner.register(...)` for it when
+ * `TROPHIES_SYNC_ENABLED=true` is set. Merging to `main` *is* the deploy
+ * pipeline here, so an unconditionally-registered job would start writing
+ * trophy rows and setting `isBanned`/`isExcluded` on all ~118 real community
+ * members every 10 minutes from the moment this lands — before anyone had
+ * watched a single run. Given `isExcluded` removes a profile from
+ * `findAllNonExcluded()` (so a flagged profile is never reconsidered) and
+ * there is no automatic un-flagging, the first run needs to be a decision
+ * an operator makes, not a side effect of a merge. See `inversify.config.ts`
+ * for the boot-time log this produces when the flag is unset, and the PR
+ * description / GLOBAL-PLAN M7.3 for the full enable runbook.
  *
  * ## Catch-up mode
  *
@@ -85,12 +128,12 @@ class Budget {
  *
  * Because `bin/console.ts` exits the process after one run, this only ever
  * affects that single manual invocation — the long-lived bot process (which
- * schedules this job every 10 minutes) reads its environment once at boot,
- * so an operator's one-off override can't leak into the schedule unless
- * `TROPHIES_SYNC_ALL` is set in the bot's own persistent environment, which
- * nothing in this repo does.
+ * schedules this job every 10 minutes, once enabled) reads its environment
+ * once at boot, so an operator's one-off override can't leak into the
+ * schedule unless `TROPHIES_SYNC_ALL` is set in the bot's own persistent
+ * environment, which nothing in this repo does.
  *
- * ## Auto-moderation
+ * ## Auto-moderation, and its safety valve
  *
  * Ported verbatim from the old bot's per-profile checks, run before the
  * trophy walk on every non-excluded profile:
@@ -100,6 +143,20 @@ class Budget {
  *  - The linked Discord account is no longer in the guild
  *    (`GuildClient.isGuildMember` false, Discord error 10007 under the
  *    hood) → flag `hasLeft` + `isExcluded`.
+ *
+ * These decisions are **deferred**, not written immediately: `syncProfile`
+ * collects them into `pendingFlags` instead of calling the repository, and
+ * `resolveFlags` only commits the batch once every profile in the run has
+ * been considered. If the batch is larger than
+ * `MODERATION_SAFETY_VALVE_THRESHOLD`, that is treated as a broken parser,
+ * not a mass exodus (see the constant's doc comment): the whole batch is
+ * logged loudly, reported in `JobResult.details`, and **none of it is
+ * written**. Trophy-row creation for every other profile in the same run is
+ * unaffected — the valve only gates the moderation writes. A profile whose
+ * flag was suppressed this way keeps its trophies un-walked for this run
+ * (same as if the flag had been committed), but since nothing was actually
+ * written it is not excluded either, so it is reconsidered — rank check,
+ * membership check and all — from scratch on the very next scheduled run.
  *
  * Both flags are written via `TrophyProfileRepository.save`, never a
  * hard-delete (cross-cutting rule 2). `isExcluded` is what actually removes
@@ -127,6 +184,9 @@ export class TrophiesSyncJob implements Job {
     public readonly name = 'trophies:sync';
     // Matches the old bot's `@every 10m` cadence (scheduler/config.ini,
     // commented out there — this is the first time it actually runs).
+    // Whether this schedule is actually registered with the JobRunner is
+    // gated by TROPHIES_SYNC_ENABLED in inversify.config.ts, not here — see
+    // this class's doc comment.
     public readonly schedule = '*/10 * * * *';
 
     constructor(
@@ -164,7 +224,7 @@ export class TrophiesSyncJob implements Job {
         let changed = 0;
         let skipped = 0;
         let failed = 0;
-        const newlyFlagged: FlaggedProfile[] = [];
+        const pendingFlags: PendingFlag[] = [];
         const failedProfiles: FailedProfile[] = [];
 
         for (const profile of profiles) {
@@ -182,13 +242,16 @@ export class TrophiesSyncJob implements Job {
             const isFullRescan = forceAll && forceProfile === profile.psnProfile;
 
             try {
-                const outcome = await this.syncProfile(profile, context, isFullRescan, budget);
+                const outcome = await this.syncProfile(
+                    profile,
+                    context,
+                    isFullRescan,
+                    budget,
+                    pendingFlags,
+                );
                 changed += outcome.changed;
                 skipped += outcome.skipped;
                 failed += outcome.failed;
-                if (outcome.flag) {
-                    newlyFlagged.push(outcome.flag);
-                }
             } catch (error) {
                 failed++;
                 const reason = error instanceof Error ? error.message : String(error);
@@ -200,12 +263,16 @@ export class TrophiesSyncJob implements Job {
             }
         }
 
+        const flagResolution = await this.resolveFlags(pendingFlags, context);
+        changed += flagResolution.applied.length;
+
         this.logger.info('trophies:sync.summary', {
             considered,
             changed,
             skipped,
             failed,
-            newlyFlagged: newlyFlagged.length,
+            newlyFlagged: flagResolution.applied.length,
+            moderationSafetyValveTripped: flagResolution.safetyValveTripped,
             dryRun: context.dryRun,
             workLimitUsed: budget.used,
             workLimit: context.workLimit,
@@ -216,10 +283,21 @@ export class TrophiesSyncJob implements Job {
             changed,
             skipped,
             failed,
-            // Reported separately from the raw counts on purpose (see M7.3's
-            // brief): silently banning/excluding someone must stay visible
-            // in the job's own report, not buried in a "changed" number.
-            details: { newlyFlagged, failedProfiles },
+            details: {
+                // Reported separately from the raw counts on purpose (see
+                // M7.3's brief): silently banning/excluding someone must
+                // stay visible in the job's own report, not buried in a
+                // "changed" number.
+                newlyFlagged: flagResolution.applied,
+                failedProfiles,
+                ...(flagResolution.safetyValveTripped
+                    ? {
+                          moderationSafetyValveTripped: true,
+                          moderationSuppressedCount: pendingFlags.length,
+                          moderationSuppressedProfiles: pendingFlags.map((p) => p.psnProfile),
+                      }
+                    : {}),
+            },
         };
     }
 
@@ -229,6 +307,7 @@ export class TrophiesSyncJob implements Job {
         context: JobContext,
         isFullRescan: boolean,
         budget: Budget,
+        pendingFlags: PendingFlag[],
     ): Promise<ProfileOutcome> {
         const psnProfile = profile.psnProfile as string; // guarded by the caller
 
@@ -236,16 +315,13 @@ export class TrophiesSyncJob implements Job {
         budget.spend();
         const rank = await this.trophySource.getProfileRank(psnProfile);
         if (rank.worldRank === null && rank.countryRank === null) {
-            await this.flagProfile(profile, context, { isBanned: true, isExcluded: true });
-            return {
-                changed: 1,
-                skipped: 0,
-                failed: 0,
-                flag: {
-                    psnProfile,
-                    flag: 'isBanned + isExcluded (sem rank visível no PSNProfiles)',
-                },
-            };
+            pendingFlags.push({
+                profile,
+                psnProfile,
+                flags: { isBanned: true, isExcluded: true },
+                reason: 'isBanned + isExcluded (sem rank visível no PSNProfiles)',
+            });
+            return { changed: 0, skipped: 0, failed: 0 };
         }
 
         // -- auto-moderation: left the guild (Discord error 10007) ---------
@@ -253,16 +329,13 @@ export class TrophiesSyncJob implements Job {
             budget.spend();
             const isMember = await this.guildClient.isGuildMember(profile.userId);
             if (!isMember) {
-                await this.flagProfile(profile, context, { hasLeft: true, isExcluded: true });
-                return {
-                    changed: 1,
-                    skipped: 0,
-                    failed: 0,
-                    flag: {
-                        psnProfile,
-                        flag: 'hasLeft + isExcluded (saiu do servidor, Discord error 10007)',
-                    },
-                };
+                pendingFlags.push({
+                    profile,
+                    psnProfile,
+                    flags: { hasLeft: true, isExcluded: true },
+                    reason: 'hasLeft + isExcluded (saiu do servidor, Discord error 10007)',
+                });
+                return { changed: 0, skipped: 0, failed: 0 };
             }
         }
 
@@ -348,22 +421,53 @@ export class TrophiesSyncJob implements Job {
         return { changed, skipped, failed };
     }
 
-    private async flagProfile(
-        profile: TrophyProfile,
+    /**
+     * Commits (or refuses to commit) the batch of moderation decisions this
+     * run collected. See this class's doc comment ("Auto-moderation, and its
+     * safety valve") for why this is a separate, deferred step rather than
+     * writing each flag as soon as `syncProfile` decides on it.
+     */
+    private async resolveFlags(
+        pendingFlags: PendingFlag[],
         context: JobContext,
-        flags: { isBanned?: boolean; hasLeft?: boolean; isExcluded?: boolean },
-    ): Promise<void> {
-        this.logger.warn('trophies:sync.flag', {
-            psnProfile: profile.psnProfile,
-            userId: profile.userId,
-            flags,
-            dryRun: context.dryRun,
-        });
-
-        if (context.dryRun) {
-            return;
+    ): Promise<{ applied: FlaggedProfile[]; safetyValveTripped: boolean }> {
+        if (pendingFlags.length === 0) {
+            return { applied: [], safetyValveTripped: false };
         }
 
+        if (pendingFlags.length > MODERATION_SAFETY_VALVE_THRESHOLD) {
+            this.logger.error('trophies:sync.moderation-safety-valve-tripped', {
+                pendingCount: pendingFlags.length,
+                threshold: MODERATION_SAFETY_VALVE_THRESHOLD,
+                profiles: pendingFlags.map((pending) => pending.psnProfile),
+                dryRun: context.dryRun,
+            });
+            return { applied: [], safetyValveTripped: true };
+        }
+
+        const applied: FlaggedProfile[] = [];
+        for (const pending of pendingFlags) {
+            this.logger.warn('trophies:sync.flag', {
+                psnProfile: pending.psnProfile,
+                userId: pending.profile.userId,
+                flags: pending.flags,
+                dryRun: context.dryRun,
+            });
+
+            if (!context.dryRun) {
+                await this.writeFlags(pending.profile, pending.flags);
+            }
+
+            applied.push({ psnProfile: pending.psnProfile, flag: pending.reason });
+        }
+
+        return { applied, safetyValveTripped: false };
+    }
+
+    private async writeFlags(
+        profile: TrophyProfile,
+        flags: { isBanned?: boolean; hasLeft?: boolean; isExcluded?: boolean },
+    ): Promise<void> {
         const updated = new TrophyProfile(
             profile.id,
             profile.userId,
