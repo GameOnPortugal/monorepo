@@ -39,12 +39,19 @@ Detailed, self-contained plans written to be handed to independent agents:
 
 ## The 60-second version
 
-Two live subprojects and two retired ones. `discord-bot/` is a Bun +
+One live subproject and one retired one. `discord-bot/` is a Bun +
 TypeScript + discord.js v14 + Prisma/MySQL bot with a clean layered
 architecture, 32 passing integration tests, and a production Docker image that
-still builds today. `old-discord-bot/` is the retired Node 15 predecessor, kept
-only so the un-ported features can be read. `webpage/` is a static site that is
-**not** what serves game-on-portugal.pt.
+still builds today. `webpage/` is a static site that is **not** what serves
+game-on-portugal.pt.
+
+`old-discord-bot/`, the retired Node 15 predecessor, was **deleted 2026-08-20
+(M9.6)** once M7 had taken what it needed from it (the psnprofiles.com
+scraper) and the remaining un-ported features (LFG, stock alerts) were
+formally dropped rather than ported. It is fully preserved in git history —
+`git log -- old-discord-bot` — just no longer checked out. Docs written before
+that date (this one included) still describe it in the present tense in
+places; treat any such reference as historical.
 
 The `scheduler/` container (a Chadburn cron sidecar) **was deleted** because it
 never executed any jobs in production (see [known-issues.md](known-issues.md) #3).

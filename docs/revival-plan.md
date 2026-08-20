@@ -108,9 +108,13 @@ Cheap, self-contained, and it makes everything after it verifiable.
     retire `gameonportugal.github.io`, or delete the directory and its
     release-please/labeler entries. The status quo — a copy that looks live and
     is not — is the worst of both.
-25. **`old-discord-bot/`.** Keep until the port is done (it is the only spec for
-    the scraper, LFG and stock), then delete. Consider moving it to `reference/`
-    so it stops looking like something that builds.
+25. ✅ **`old-discord-bot/`.** **Done (2026-08-20, M9.6).** Deleted outright
+    rather than moved to `reference/` — git history already preserves every
+    version (`git log -- old-discord-bot`), so a `reference/` copy would have
+    been a second, staler copy of the same information. Deleted once M7 had
+    taken what it needed (the psnprofiles.com scraper → `TrophySource` /
+    `PsnProfilesTrophySource`) and LFG/stock/Telegram were formally dropped
+    (M9.3, M9.4) rather than ported.
 26. **Archive the standalone `GameOnPortugal/scheduler` repo** (not yet done, out
     of scope for M6.7; separate from the deleted `scheduler/` directory).
 

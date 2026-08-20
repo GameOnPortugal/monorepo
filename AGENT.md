@@ -107,9 +107,6 @@ there**. Full walkthrough: [`docs/architecture.md`](docs/architecture.md).
   and also why a mis-scoped env silently produces a bot that does nothing.
 - Discord channel and emoji IDs are **hardcoded** in
   `src/Infrastructure/Community/Discord/DiscordChannels.ts` and `DiscordEmoji.ts`.
-- `.env.example` is stale: it advertises `REDIS_DSN`, `SENTRY_DSN`,
-  `TROPHY_WEBHOOK`, `TELEGRAM_ACCESS_TOKEN` (none used) and omits `LOKI_HOST` /
-  `LOKI_AUTH` (both used).
 
 ## Before you claim done
 
