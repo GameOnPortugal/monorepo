@@ -75,4 +75,21 @@ export interface GuildClient {
         channel: CommunityChannels,
         options: ListMessagesOptions,
     ): Promise<CommunityMessage[]>;
+
+    /**
+     * Whether `userId` is currently a member of the community guild.
+     *
+     * Added for the trophies sync job (M7.3), which needs to detect a
+     * linked Discord account that has left the server: Discord's REST API
+     * returns error 10007 (Unknown Member) for a member lookup in that
+     * case. Ported from the old bot's `guild.members.fetch(...)` +
+     * `exception.code === 10007` check in
+     * `old-discord-bot/scripts/parse-psn-profile.js`.
+     *
+     * Returns `false` only for that specific "no longer a member" case.
+     * Anything else (network failure, rate limit, missing token) throws
+     * `ClientError` so a transient problem can never be mistaken for "this
+     * person left the server" and silently flag someone who hasn't.
+     */
+    isGuildMember(userId: string): Promise<boolean>;
 }

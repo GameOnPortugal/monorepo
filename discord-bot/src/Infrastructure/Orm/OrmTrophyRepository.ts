@@ -7,6 +7,7 @@ import type { TrophyRepository } from '../../Domain/Trophy/TrophyRepository';
 import type { TrophyRankData } from '../../Domain/Trophy/TrophyRankData';
 import type { UserPosition } from '../../Domain/Trophy/UserPosition';
 import RecordNotFound from '../../Domain/RecordNotFound';
+import { TrophyAlreadyClaimed } from '../../Domain/Trophy/TrophyAlreadyClaimed';
 
 interface DateRange {
     start: Date;
@@ -80,6 +81,51 @@ export class OrmTrophyRepository implements TrophyRepository {
         const trophies = await this.prismaClient.trophies.findMany({
             where: { trophyProfile: profileId },
             orderBy: { completionDate: 'desc' },
+        });
+
+        return trophies.map((trophy) => Trophy.fromArray(trophy as TrophyArray));
+    }
+
+    async existsByProfileAndUrl(profileId: string, url: string): Promise<boolean> {
+        const trophy = await this.prismaClient.trophies.findFirst({
+            where: { trophyProfile: profileId, url },
+            select: { id: true },
+        });
+
+        return trophy !== null;
+    }
+
+    async create(
+        profileId: string,
+        url: string,
+        points: number,
+        completionDate: Date,
+    ): Promise<Trophy> {
+        if (await this.existsByProfileAndUrl(profileId, url)) {
+            throw new TrophyAlreadyClaimed(profileId, url);
+        }
+
+        const now = new Date();
+        const trophy = new Trophy(
+            TrophyId.generate(),
+            profileId,
+            url,
+            points,
+            completionDate,
+            now,
+            now,
+        );
+
+        await this.save(trophy);
+
+        return trophy;
+    }
+
+    async findMissingCompletionDate(limit: number): Promise<Trophy[]> {
+        const trophies = await this.prismaClient.trophies.findMany({
+            where: { completionDate: null },
+            orderBy: { createdAt: 'asc' },
+            take: Math.max(0, Math.trunc(limit)),
         });
 
         return trophies.map((trophy) => Trophy.fromArray(trophy as TrophyArray));

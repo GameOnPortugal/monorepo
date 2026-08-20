@@ -4,6 +4,7 @@ import { TYPES } from '../src/Infrastructure/DependencyInjection/types';
 import type Logger from '../src/Application/Logger/Logger';
 import WeekScreenshotWinner from '../src/Ui/Cli/WeekScreenshotWinner.ts';
 import { RunJobConsoleCommand } from '../src/Infrastructure/Job/RunJobConsoleCommand.ts';
+import FixOldTrophies from '../src/Ui/Cli/FixOldTrophies.ts';
 
 const logger = myContainer.get<Logger>(TYPES.Logger);
 const consoleCommands: Record<string, ConsoleCommand> = {};
@@ -13,6 +14,8 @@ consoleCommands[WeekScreenshotWinner.commandName.toString()] =
 // JobRunner: `bun run:command jobs:run list` / `jobs:run <name> [--dry-run] [--limit=N]`.
 consoleCommands[RunJobConsoleCommand.commandName] =
     myContainer.get<RunJobConsoleCommand>(RunJobConsoleCommand);
+// M7.7 — one-off backfill, not a scheduled job (see FixOldTrophies.ts for why).
+consoleCommands[FixOldTrophies.commandName] = myContainer.get<FixOldTrophies>(FixOldTrophies);
 
 async function run(): Promise<void> {
     const args = process.argv.slice(2);

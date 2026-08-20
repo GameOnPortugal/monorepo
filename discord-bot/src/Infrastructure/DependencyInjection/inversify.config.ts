@@ -57,6 +57,8 @@ import { JobRunner } from '../Job/JobRunner.ts';
 import { RunJobConsoleCommand } from '../Job/RunJobConsoleCommand.ts';
 import { WeekScreenshotWinnerJob } from '../Job/Jobs/WeekScreenshotWinnerJob.ts';
 import { RelinkScreenshotsJob } from '../Job/Jobs/RelinkScreenshotsJob.ts';
+import { TrophiesSyncJob } from '../Job/Jobs/TrophiesSyncJob.ts';
+import FixOldTrophies from '../../Ui/Cli/FixOldTrophies.ts';
 import { DiscordChannels } from '../Community/Discord/DiscordChannels.ts';
 import { InMemoryGuildClient } from '../Community/InMemory/InMemoryGuildClient.ts';
 import type { MediaStorage } from '../../Domain/Media/MediaStorage.ts';
@@ -227,6 +229,7 @@ myContainer.bind(TYPES.SafeImageFetcher).toConstantValue(new SafeImageFetcher())
 
 // Console Command
 myContainer.bind(WeekScreenshotWinner).toSelf();
+myContainer.bind(FixOldTrophies).toSelf();
 
 // Jobs (M6.1, M6.8) — an in-process replacement for the deleted `scheduler/`
 // container. Register a new job here alongside its dependencies; it becomes
@@ -248,9 +251,11 @@ myContainer
 myContainer.bind(JobRunner).toSelf().inSingletonScope();
 myContainer.bind(WeekScreenshotWinnerJob).toSelf();
 myContainer.bind(RelinkScreenshotsJob).toSelf();
+myContainer.bind(TrophiesSyncJob).toSelf();
 myContainer.bind(RunJobConsoleCommand).toSelf();
 
 myContainer.get(JobRunner).register(myContainer.get(WeekScreenshotWinnerJob));
 myContainer.get(JobRunner).register(myContainer.get(RelinkScreenshotsJob));
+myContainer.get(JobRunner).register(myContainer.get(TrophiesSyncJob));
 
 export { myContainer };

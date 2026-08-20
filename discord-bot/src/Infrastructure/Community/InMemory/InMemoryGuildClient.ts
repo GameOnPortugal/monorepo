@@ -45,6 +45,9 @@ export class InMemoryGuildClient implements GuildClient {
     /** When set, the next call to sendMessage() throws this instead of posting. */
     public failNextSendWith: Error | undefined = undefined;
 
+    /** userIds explicitly marked as having left the guild — see markMemberLeft(). */
+    private readonly membersWhoLeft = new Set<string>();
+
     /**
      * Registers a message so it can be "found" by the methods below.
      * `reactions` keeps its original signature (a bare emoji->count record)
@@ -76,12 +79,22 @@ export class InMemoryGuildClient implements GuildClient {
         this.messages.delete(messageId);
     }
 
+    /**
+     * Simulates a linked Discord account that has left the guild — the next
+     * (and every subsequent) `isGuildMember(userId)` call returns `false`,
+     * mirroring the real client's error-10007 case.
+     */
+    markMemberLeft(userId: string): void {
+        this.membersWhoLeft.add(userId);
+    }
+
     reset(): void {
         this.messages.clear();
         this.sentMessages.length = 0;
         this.deletedMessages.length = 0;
         this.nextMessageId = 1;
         this.failNextSendWith = undefined;
+        this.membersWhoLeft.clear();
     }
 
     async getTotalReactionsByEmoji(
@@ -177,5 +190,9 @@ export class InMemoryGuildClient implements GuildClient {
                 embedImageUrls: [...message.embedImageUrls],
             };
         });
+    }
+
+    async isGuildMember(userId: string): Promise<boolean> {
+        return !this.membersWhoLeft.has(userId);
     }
 }

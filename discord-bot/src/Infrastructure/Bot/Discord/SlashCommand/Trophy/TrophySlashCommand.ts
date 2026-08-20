@@ -152,7 +152,7 @@ export class TrophySlashCommand implements SlashCommandHandler {
                     break;
                 default:
                     await context.interaction.reply({
-                        content: `Unknown subcommand: ${subcommand}`,
+                        content: `Subcomando desconhecido: ${subcommand}`,
                         flags: MessageFlags.Ephemeral,
                     });
             }
@@ -166,7 +166,7 @@ export class TrophySlashCommand implements SlashCommandHandler {
             // before throwing; safeReply avoids InteractionAlreadyReplied
             // masking the real error above.
             await safeReply(context.interaction, {
-                content: 'An error occurred while processing your command.',
+                content: 'Ocorreu um erro ao processar o comando.',
                 flags: MessageFlags.Ephemeral,
             });
         }
