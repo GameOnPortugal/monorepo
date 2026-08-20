@@ -77,73 +77,13 @@ model Ad {
   @@map("ads")
 }
 
-// Other models from the original project
-// These can be implemented as needed
-
-model LFGProfile {
-  id             String             @id @default(uuid())
-  user_id        String?
-  is_banned      Boolean?           @default(false)
-  banned_at      DateTime?
-  points         Int?               @default(0)
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-  games          LFGGame[]
-  events         LFGEvent[]
-  participations LFGParticipation[]
-
-  @@map("lfgprofile")
-}
-
-model LFGGame {
-  id           String             @id @default(uuid())
-  game         String?            @db.Text
-  description  String?            @db.Text
-  players      Int?
-  playAt       DateTime?
-  message_id   String?
-  platform     String?
-  lfgProfile   String?
-  profile      LFGProfile?        @relation(fields: [lfgProfile], references: [id])
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
-  participants LFGParticipation[]
-  events       LFGEvent[]
-
-  @@map("lfggames")
-}
-
-model LFGParticipation {
-  id             String      @id @default(uuid())
-  lfg_game_id    String?
-  lfg_profile_id String?
-  lfgGame        LFGGame?    @relation(fields: [lfg_game_id], references: [id], onDelete: Cascade)
-  lfgProfile     LFGProfile? @relation(fields: [lfg_profile_id], references: [id], onDelete: Cascade)
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-
-  @@map("lfgparticipations")
-}
-
-model LFGEvent {
-  id             String      @id @default(uuid())
-  type           String?
-  points         Int?
-  detail         String?     @db.Text
-  is_addressed   Boolean?    @default(false)
-  admin_note     String?     @db.Text
-  report_user_id String?
-  admin_user_id  String?
-  is_parsed      Boolean?    @default(false)
-  lfg_profile_id String?
-  lfg_game_id    String?
-  lfgProfile     LFGProfile? @relation(fields: [lfg_profile_id], references: [id])
-  game           LFGGame?    @relation(fields: [lfg_game_id], references: [id])
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-
-  @@map("lfgevents")
-}
+// LFG (4 models), StockUrls, SpecialChannel and CommandChannelLink were
+// removed here (M9.2/M9.3/M9.4/M9.6) — all seven tables held 0 rows in
+// production. LFG will not be ported (Luis, 2026-08-19/2026-08-20, closed to
+// discussion); stock alerts, the special-channel message validator and the
+// command→channel link table are dropped outright — see
+// docs/plans/GLOBAL-PLAN.md M9.2/M9.3/M9.4 and the "Standing instructions
+// from Luis" section. Dropped in migration 20260820102655_drop_dead_models.
 
 model Screenshot {
   id         String   @id @default(uuid())
@@ -187,34 +127,3 @@ model Trophies {
   @@map("trophies")
 }
 
-model StockUrls {
-  id           String   @id @default(uuid())
-  userId       String?
-  url          String?
-  is_validated Boolean? @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  @@map("stockurls")
-}
-
-model SpecialChannel {
-  id          String   @id @default(uuid())
-  channelId   String?
-  specialType String?
-  data        String?  @db.Text
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("specialchannels")
-}
-
-model CommandChannelLink {
-  id        String   @id @default(uuid())
-  command   String?
-  channelId String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("commandchannellinks")
-}
