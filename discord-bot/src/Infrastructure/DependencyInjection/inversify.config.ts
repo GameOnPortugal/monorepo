@@ -12,6 +12,8 @@ import EventDispatcher from '../../Application/Event/EventDispatcher/EventDispat
 import type { HttpClient } from '../../Domain/Http/HttpClient.ts';
 import RetryHttpClient from '../Http/RetryHttpClient.ts';
 import FetchHttpClient from '../Http/FetchHttpClient.ts';
+import type { TrophySource } from '../../Domain/Trophy/TrophySource.ts';
+import { PsnProfilesTrophySource } from '../Trophy/PsnProfilesTrophySource.ts';
 import { PingHandler } from '../../Application/Query/Ping/PingHandler.ts';
 import { DiscordBot } from '../Bot/Discord/DiscordBot.ts';
 import { BotExecutor } from '../Bot/BotExecutor.ts';
@@ -117,6 +119,7 @@ myContainer.bind<EventDispatcher>(EventDispatcher).toSelf();
 myContainer.bind(FetchHttpClient).toSelf();
 myContainer.bind(RetryHttpClient).toSelf();
 myContainer.bind<HttpClient>(TYPES.HttpClient).to(RetryHttpClient);
+myContainer.bind<TrophySource>(TYPES.TrophySource).to(PsnProfilesTrophySource);
 
 // Bot
 myContainer
