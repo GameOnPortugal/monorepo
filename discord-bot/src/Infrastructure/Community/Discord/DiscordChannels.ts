@@ -12,12 +12,18 @@ import { CommunityChannels } from '../../../Domain/Community/CommunityChannels.t
  *   - GUILD_ID:    the Game On Portugal guild itself.
  *   - SCREENSHOTS: #screenshots — already wired, used by /screenshot and the
  *                  weekly winner job.
- *   - MARKETPLACE: #anuncios — the intended marketplace channel (62 of 70
- *                  production ads already live there). NOT yet wired to any
- *                  behaviour: today ads post to whichever channel the
- *                  command was invoked in (5 ended up in #chat, 3 in a DM).
- *                  Routing ads here is M5.1, a separate work item — this
- *                  only makes the ID available and configurable.
+ *   - MARKETPLACE: #anuncios — the marketplace channel. `SellSubcommand` posts
+ *                  every listing here via `GuildClient` (M5.1), regardless of
+ *                  which channel the command was invoked from. Before M5.1,
+ *                  62 of 70 production ads had already ended up here by
+ *                  accident; the other 8 did not — 5 in #chat and 3 in a
+ *                  **DM channel** (verified 2026-08-20: channel
+ *                  1026852888636555366 is type 1). Those legacy rows keep
+ *                  their own `channel_id`, which is exactly why
+ *                  `GuildClient.deleteMessage` takes a raw channel id rather
+ *                  than a CommunityChannels member — a DM channel id can
+ *                  never be expressed as one, so routing deletes through
+ *                  MARKETPLACE would silently fail to clean those up.
  *   - ADMIN:       #⚛server-log, in the 🏴Administration🏴 category. Used for
  *                  supervised dry runs of jobs before they are allowed to
  *                  post publicly (M6.4) and for per-run job summaries
@@ -84,5 +90,7 @@ export const convertChannel = (channel: CommunityChannels): string => {
                 );
             }
             return DiscordChannels.ADMIN;
+        case CommunityChannels.MARKETPLACE:
+            return DiscordChannels.MARKETPLACE;
     }
 };

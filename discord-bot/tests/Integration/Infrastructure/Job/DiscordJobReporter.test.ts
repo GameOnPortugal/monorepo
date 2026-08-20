@@ -30,6 +30,15 @@ class FakeGuildClient implements GuildClient {
         return 'https://discord.com/channels/x/y/z';
     }
 
+    // M5.1/M5.2 added deleteMessage to the GuildClient port after this fake
+    // was written. Recorded rather than ignored so a future reporter change
+    // that started deleting messages would be visible in a test, not silent.
+    public deletedMessages: { channelId: string; messageId: string }[] = [];
+
+    async deleteMessage(channelId: string, messageId: string): Promise<void> {
+        this.deletedMessages.push({ channelId, messageId });
+    }
+
     async sendMessage(channel: CommunityChannels, message: string): Promise<string> {
         if (this.shouldThrowOnSend) {
             throw new Error('discord is down');
