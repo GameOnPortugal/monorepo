@@ -115,6 +115,25 @@ ulimit -c 0
 # Run migrations
 bunx prisma migrate deploy
 
+# Everything above this line is startup work that mutates the database.
+# Signal that it is finished.
+#
+# CI waits for this marker before it runs `bun run test:setup`, which is
+# `prisma migrate reset --force` -- a DROP and recreate of the whole schema.
+# Without the marker, CI's readiness probe was `docker compose exec
+# discord-bot true`, which succeeds the moment the *container* is up: that is
+# already true while this script is still in its DB wait or halfway through
+# `migrate deploy`. The reset then dropped `_prisma_migrations` underneath the
+# deploy, which failed with P1014, `set -e` killed this script, the container
+# died, and the in-flight `docker compose exec` returned 137 -- a red CI run
+# with nothing in the test output to explain it. It is a race, so it passed
+# most of the time.
+#
+# /tmp rather than the app directory: the container runs as the unprivileged
+# `app` user and /tmp is the one path guaranteed writable regardless of how
+# the image is built.
+: > /tmp/entrypoint-ready
+
 # If a command was given (docker-compose.ci.yml uses this to keep the
 # container alive for `docker compose exec` -- see the comment there for
 # why), run that instead of starting the bot.
