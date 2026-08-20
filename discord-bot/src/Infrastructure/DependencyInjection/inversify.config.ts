@@ -45,6 +45,13 @@ import { SellSubcommand } from '../Bot/Discord/SlashCommand/Marketplace/SellSubc
 import { ListUserAdsHandler } from '../../Application/Query/Marketplace/ListUserAds/ListUserAdsHandler';
 import { ListAdsSubcommand } from '../Bot/Discord/SlashCommand/Marketplace/ListAdsSubcommand';
 import { GetScreenshotWinnerHandler } from '../../Application/Query/Screenshot/GetScreenshotWinner/GetScreenshotWinnerHandler';
+import { ExpireAdHandler } from '../../Application/Write/Marketplace/ExpireAd/ExpireAdHandler.ts';
+import { MarkAdPendingRenewalHandler } from '../../Application/Write/Marketplace/MarkAdPendingRenewal/MarkAdPendingRenewalHandler.ts';
+import { RenewAdHandler } from '../../Application/Write/Marketplace/RenewAd/RenewAdHandler.ts';
+import { FindAdsDueForLifecycleActionHandler } from '../../Application/Query/Marketplace/FindAdsDueForLifecycleAction/FindAdsDueForLifecycleActionHandler.ts';
+import { FindActiveAdsForReconcileHandler } from '../../Application/Query/Marketplace/FindActiveAdsForReconcile/FindActiveAdsForReconcileHandler.ts';
+import { AdsLifecycleJob } from '../Job/Jobs/AdsLifecycleJob.ts';
+import { AdsReconcileJob } from '../Job/Jobs/AdsReconcileJob.ts';
 import type { GuildClient } from '../../Domain/Community/GuildClient.ts';
 import { DiscordGuildClient } from '../Community/Discord/DiscordGuildClient.ts';
 import WeekScreenshotWinner from '../../Ui/Cli/WeekScreenshotWinner.ts';
@@ -103,6 +110,12 @@ myContainer.bind(TYPES.CommandHandler).to(CreateAdHandler);
 myContainer.bind(TYPES.CommandHandler).to(ListUserAdsHandler);
 myContainer.bind(TYPES.CommandHandler).to(DeleteAdHandler);
 myContainer.bind(TYPES.CommandHandler).to(GetScreenshotWinnerHandler);
+// M6.5/M6.6 — ad lifecycle and reconcile.
+myContainer.bind(TYPES.CommandHandler).to(ExpireAdHandler);
+myContainer.bind(TYPES.CommandHandler).to(MarkAdPendingRenewalHandler);
+myContainer.bind(TYPES.CommandHandler).to(RenewAdHandler);
+myContainer.bind(TYPES.CommandHandler).to(FindAdsDueForLifecycleActionHandler);
+myContainer.bind(TYPES.CommandHandler).to(FindActiveAdsForReconcileHandler);
 
 // Slash Commands
 myContainer.bind(TYPES.SlashCommandHandler).to(PingSlashCommand);
@@ -238,8 +251,13 @@ myContainer
     );
 myContainer.bind(JobRunner).toSelf().inSingletonScope();
 myContainer.bind(WeekScreenshotWinnerJob).toSelf();
+// M6.5/M6.6 — see AdsLifecycleJob.ts / AdsReconcileJob.ts for behaviour.
+myContainer.bind(AdsLifecycleJob).toSelf();
+myContainer.bind(AdsReconcileJob).toSelf();
 myContainer.bind(RunJobConsoleCommand).toSelf();
 
 myContainer.get(JobRunner).register(myContainer.get(WeekScreenshotWinnerJob));
+myContainer.get(JobRunner).register(myContainer.get(AdsLifecycleJob));
+myContainer.get(JobRunner).register(myContainer.get(AdsReconcileJob));
 
 export { myContainer };

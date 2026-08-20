@@ -3,6 +3,7 @@ import type { GuildClient } from '../../../Domain/Community/GuildClient.ts';
 import { CommunityChannels } from '../../../Domain/Community/CommunityChannels.ts';
 import { CustomEmoji } from '../../../Domain/Community/CustomEmoji.ts';
 import { ClientError } from '../../../Domain/Community/ClientError.ts';
+import type { DirectMessagePayload } from '../../../Domain/Community/DirectMessage.ts';
 
 interface InMemoryMessage {
     reactions: Partial<Record<CustomEmoji, number>>;
@@ -16,6 +17,11 @@ export interface SentMessage {
 export interface DeletedMessage {
     channelId: string;
     messageId: string;
+}
+
+export interface SentDirectMessage {
+    userId: string;
+    message: DirectMessagePayload;
 }
 
 /**
@@ -33,6 +39,8 @@ export class InMemoryGuildClient implements GuildClient {
     private nextMessageId = 1;
     public readonly sentMessages: SentMessage[] = [];
     public readonly deletedMessages: DeletedMessage[] = [];
+    public readonly sentDirectMessages: SentDirectMessage[] = [];
+    private readonly closedDmUsers = new Set<string>();
 
     /** When set, the next call to sendMessage() throws this instead of posting. */
     public failNextSendWith: Error | undefined = undefined;
@@ -47,10 +55,22 @@ export class InMemoryGuildClient implements GuildClient {
         this.messages.delete(messageId);
     }
 
+    /**
+     * Simulates a user with DMs closed (privacy settings, or having blocked
+     * the bot) — `sendDirectMessage` returns `null` for them instead of
+     * recording anything, mirroring `DiscordGuildClient`'s 50007/10013
+     * handling.
+     */
+    closeDmFor(userId: string): void {
+        this.closedDmUsers.add(userId);
+    }
+
     reset(): void {
         this.messages.clear();
         this.sentMessages.length = 0;
         this.deletedMessages.length = 0;
+        this.sentDirectMessages.length = 0;
+        this.closedDmUsers.clear();
         this.nextMessageId = 1;
         this.failNextSendWith = undefined;
     }
@@ -101,5 +121,27 @@ export class InMemoryGuildClient implements GuildClient {
     async deleteMessage(channelId: string, messageId: string): Promise<void> {
         this.messages.delete(messageId);
         this.deletedMessages.push({ channelId, messageId });
+    }
+
+    async sendDirectMessage(userId: string, message: DirectMessagePayload): Promise<string | null> {
+        if (this.closedDmUsers.has(userId)) {
+            return null;
+        }
+
+        if (this.failNextSendWith) {
+            const error = this.failNextSendWith;
+            this.failNextSendWith = undefined;
+            throw error;
+        }
+
+        const messageId = `in-memory-dm-${this.nextMessageId++}`;
+        this.sentDirectMessages.push({ userId, message });
+        this.messages.set(messageId, { reactions: {} });
+
+        return messageId;
+    }
+
+    async messageExists(_channelId: string, messageId: string): Promise<boolean> {
+        return this.messages.has(messageId);
     }
 }

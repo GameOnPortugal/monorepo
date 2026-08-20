@@ -1,5 +1,6 @@
 import type { CustomEmoji } from './CustomEmoji.ts';
 import type { CommunityChannels } from './CommunityChannels.ts';
+import type { DirectMessagePayload } from './DirectMessage.ts';
 
 export interface GuildClient {
     getTotalReactionsByEmoji(
@@ -32,4 +33,31 @@ export interface GuildClient {
      * fail just because the Discord side of it was already gone.
      */
     deleteMessage(channelId: string, messageId: string): Promise<void>;
+
+    /**
+     * Sends a direct message to a user (not a guild channel) — M6.5's
+     * renewal prompt. Returns the sent message's id, or `null` if the DM
+     * could not be delivered.
+     *
+     * `null`, not a thrown error, is deliberate: a user with DMs from
+     * server members disabled, or who has blocked the bot, is routine and
+     * expected — not every member accepts unsolicited DMs from a bot they
+     * have never interacted with — and per M6.5's non-negotiable, **a
+     * closed DM is not grounds for expiring anything early**. A caller that
+     * wants to log/count that outcome checks for `null`; a genuine
+     * transport failure (network, auth) still throws.
+     */
+    sendDirectMessage(userId: string, message: DirectMessagePayload): Promise<string | null>;
+
+    /**
+     * True if the given message still exists in the given channel — M6.6's
+     * reconcile check. Takes a raw channel id for the same reason
+     * `deleteMessage` does: the row's own stored `channel_id`, which for a
+     * handful of production ads is a DM channel, not
+     * `CommunityChannels.MARKETPLACE`. A vanished channel (e.g. a deleted
+     * category, or a DM channel that no longer resolves) counts as "the
+     * message does not exist" too — from a reconcile job's point of view
+     * both mean the same thing: there is nothing left to point at.
+     */
+    messageExists(channelId: string, messageId: string): Promise<boolean>;
 }
