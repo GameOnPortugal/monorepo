@@ -12,6 +12,7 @@ export default class DatabaseUtil {
         await prismaClient.$executeRaw`TRUNCATE TABLE trophies`;
         await prismaClient.$executeRaw`TRUNCATE TABLE screenshots`;
         await prismaClient.$executeRaw`TRUNCATE TABLE ads`;
+        await prismaClient.$executeRaw`TRUNCATE TABLE job_runs`;
 
         await prismaClient.$executeRaw`SET FOREIGN_KEY_CHECKS=1`;
     }
