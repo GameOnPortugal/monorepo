@@ -38,9 +38,20 @@ bun test                      # must be green
 ```
 
 Plus: a test that would have caught the bug, a Conventional-Commit PR title with
-a scope (`fix(marketplace): …`, `feat(trophy): …` — **not** `chore:`, which cuts
+a scope (`fix(marketplace): …`, `feat(trophies): …` — **not** `chore:`, which cuts
 no release), and a migration (`make db.diff NAME=…`) if `schema.prisma` changed,
 because the production entrypoint runs `prisma migrate deploy` on every boot.
+
+The scope is **validated by CI** (`.github/workflows/pr-title.yml`) against a
+closed list, so a plausible-looking scope that is not on it fails the PR:
+
+```
+bot  marketplace  screenshots  trophies  media  scheduler
+portal  portal-api  portal-web  db  ci  docker  infra  deps  deps-dev
+```
+
+Note `trophies`, not `trophy`. If a genuinely new area appears, add it to that
+workflow in the same PR rather than picking the nearest existing scope.
 
 ### Where the evidence lives
 
