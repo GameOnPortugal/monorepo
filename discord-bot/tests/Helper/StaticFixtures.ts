@@ -12,6 +12,7 @@ import type { TrophyRepository } from '../../src/Domain/Trophy/TrophyRepository.
 import { Trophy } from '../../src/Domain/Trophy/Trophy.ts';
 import { AdId } from '../../src/Domain/Marketplace/AdId.ts';
 import { Ad } from '../../src/Domain/Marketplace/Ad.ts';
+import type { AdStatus } from '../../src/Domain/Marketplace/AdStatus.ts';
 import type { AdRepository } from '../../src/Domain/Marketplace/AdRepository.ts';
 
 const prismaClient: PrismaClient = myContainer.get(TYPES.OrmClient);
@@ -148,6 +149,13 @@ export const createAd = async (
     adType?: string,
     createdAt?: Date,
     updatedAt?: Date,
+    status?: AdStatus,
+    priceCents?: number | null,
+    images?: string[],
+    bumpedAt?: Date | null,
+    expiresAt?: Date | null,
+    soldAt?: Date | null,
+    deletedAt?: Date | null,
 ): Promise<Ad> => {
     const ad = new Ad(
         id ?? AdId.generate(),
@@ -164,6 +172,13 @@ export const createAd = async (
         adType ?? 'sale',
         createdAt ?? new Date(),
         updatedAt ?? new Date(),
+        status,
+        priceCents,
+        images,
+        bumpedAt,
+        expiresAt,
+        soldAt,
+        deletedAt,
     );
 
     await myContainer.get<AdRepository>(TYPES.AdRepository).save(ad);

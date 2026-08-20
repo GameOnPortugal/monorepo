@@ -26,10 +26,54 @@ model Ad {
   dispatch    String?
   warranty    String?
   description String?  @db.Text
+  // Historically 'sell' | 'sale' | 'wanted' — 'sale' and 'sell' meant the same
+  // thing to two different authors. Normalised to 'sell' | 'wanted' by
+  // migration 20260820000000_ad_lifecycle. See docs/known-issues.md #22.
   adType      String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  // Ad lifecycle (M5.3). One of 'active' | 'sold' | 'expired' | 'deleted'.
+  // Existing rows backfilled to 'active'. Kept a plain string, like adType,
+  // rather than a DB enum — validity is enforced by the domain's AdStatus VO,
+  // matching how the rest of this legacy table is unvalidated at the DB level.
+  //
+  // These seven columns are declared after createdAt/updatedAt (rather than
+  // grouped with the fields they conceptually belong with, above) so their
+  // declaration order matches the physical column order the migration's
+  // `ALTER TABLE ... ADD COLUMN` produces — MariaDB always appends new
+  // columns at the end. Reordering fields here without a matching migration
+  // would make `prisma migrate diff` report phantom drift on every one of
+  // them, since it compares by ordinal position.
+  status      String    @default("active")
+  // Parsed from the free-text `price` column where unambiguous (see the M5.3
+  // migration for the exact rule). NULL means "could not parse", not "free".
+  price_cents Int?
+  // Durable, re-hosted image URLs (never Discord CDN links — cross-cutting
+  // rule 3). JSON-encoded array of strings, NULL for every pre-M5.3 row since
+  // none of the legacy ads have images at all.
+  //
+  // Plain `@db.Text` rather than Prisma's `Json` type: MariaDB has no native
+  // JSON type — `JSON` is just an alias for `LONGTEXT CHECK (json_valid())` —
+  // and `prisma migrate diff` does not recognise that shape as satisfying a
+  // `Json`-typed field on this provider, so it reports permanent phantom
+  // drift no migration can fix. A `Text` column storing JSON, encoded/decoded
+  // in the Domain layer (`Ad.fromArray` / `OrmAdRepository`), stores exactly
+  // the same bytes without the tooling mismatch — the same trade-off this
+  // table already makes for `description`.
+  images      String?   @db.Text
+  bumped_at   DateTime?
+  expires_at  DateTime?
+  sold_at     DateTime?
+  deleted_at  DateTime?
 
+  // Lifecycle sweep: "every active ad whose expiry has passed".
+  @@index([status, expires_at])
+  // Idle-bump sweep and default listing sort (most recently bumped first).
+  @@index([status, bumped_at])
+  // "my active ads" / the 10-active-ads-per-user limit.
+  @@index([author_id, status])
+  // search() (M5.9) filtering by type within a status, newest first.
+  @@index([status, adType, createdAt])
   @@map("ads")
 }
 
