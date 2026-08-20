@@ -5,7 +5,7 @@ import RecordNotFound from '../../Domain/RecordNotFound';
 import { Screenshot, type ScreenshotArray } from '../../Domain/Screenshot/Screenshot';
 import { ScreenshotId } from '../../Domain/Screenshot/ScreenshotId';
 import type { ScreenshotRepository } from '../../Domain/Screenshot/ScreenshotRepository.ts';
-import dayjs from 'dayjs';
+import { computeWeekWindow } from '../../Domain/Screenshot/ScreenshotWeekWindow.ts';
 
 @injectable()
 export default class OrmScreenshotRepository implements ScreenshotRepository {
@@ -59,14 +59,18 @@ export default class OrmScreenshotRepository implements ScreenshotRepository {
     }
 
     async findByWeek(week: Date): Promise<Screenshot[]> {
-        const startOfWeek = dayjs(week).startOf('week').toDate();
-        const endOfWeek = dayjs(week).endOf('week').toDate();
+        // Previously used dayjs's locale-default `startOf('week')` /
+        // `endOf('week')`, which (with no locale configured) is a
+        // Sunday->Saturday window — not the Monday->Sunday window the old
+        // bot used. See ScreenshotWeekWindow.ts for the ported calculation
+        // and its timezone assumption.
+        const { start, end } = computeWeekWindow(week);
 
         const screenshots = await this.prismaClient.screenshot.findMany({
             where: {
                 createdAt: {
-                    gte: startOfWeek,
-                    lte: endOfWeek,
+                    gte: start,
+                    lte: end,
                 },
             },
             orderBy: {

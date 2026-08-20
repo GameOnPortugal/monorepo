@@ -57,6 +57,7 @@ import { JobRunner } from '../Job/JobRunner.ts';
 import { RunJobConsoleCommand } from '../Job/RunJobConsoleCommand.ts';
 import { WeekScreenshotWinnerJob } from '../Job/Jobs/WeekScreenshotWinnerJob.ts';
 import { DiscordChannels } from '../Community/Discord/DiscordChannels.ts';
+import { InMemoryGuildClient } from '../Community/InMemory/InMemoryGuildClient.ts';
 import type { MediaStorage } from '../../Domain/Media/MediaStorage.ts';
 import { S3MediaStorage } from '../Media/S3MediaStorage.ts';
 import { InMemoryMediaStorage } from '../Media/InMemoryMediaStorage.ts';
@@ -147,11 +148,23 @@ myContainer.bind<TrophySource>(TYPES.TrophySource).to(PsnProfilesTrophySource);
 // process — calls validateBotEnv() again and exits(1) if it's missing.
 const botEnv = validateBotEnv();
 
-myContainer
-    .bind<GuildClient>(TYPES.GuildClient)
-    .toConstantValue(
-        new DiscordGuildClient(botEnv.config?.DISCORD_TOKEN, myContainer.get(TYPES.Logger)),
-    );
+// Mirrors the Bot binding below, and combines what M4.5 and M6.4 each needed
+// from this binding. A DiscordGuildClient is only ever constructed with a
+// real token — M4.5 made it fail fast rather than silently build an invalid
+// REST client, so handing it `undefined` here would just move that failure to
+// first use. Without a token, tests and local runs get an in-memory
+// stand-in instead, which is what makes the M6.4 winner job's
+// tie / vanished-message / dry-run behaviour assertable without a mocking
+// library.
+if (botEnv.config) {
+    myContainer
+        .bind<GuildClient>(TYPES.GuildClient)
+        .toConstantValue(
+            new DiscordGuildClient(botEnv.config.DISCORD_TOKEN, myContainer.get(TYPES.Logger)),
+        );
+} else {
+    myContainer.bind<GuildClient>(TYPES.GuildClient).to(InMemoryGuildClient).inSingletonScope();
+}
 myContainer.bind(BotExecutor).toSelf();
 if (botEnv.config) {
     myContainer

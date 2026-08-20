@@ -2,7 +2,9 @@ import { describe, test, expect } from 'bun:test';
 import {
     DISCORD_IDS_DEFAULTS,
     resolveDiscordIds,
+    convertChannel,
 } from '../../../../../src/Infrastructure/Community/Discord/DiscordChannels.ts';
+import { CommunityChannels } from '../../../../../src/Domain/Community/CommunityChannels.ts';
 
 /**
  * Regression coverage for M1.7 (#16): the Discord guild/channel IDs used to
@@ -22,9 +24,10 @@ describe('resolveDiscordIds', () => {
             GUILD_ID: '818108848492773377',
             SCREENSHOTS: '827646847483904040',
             MARKETPLACE: '818447274266591243',
-            // M6.8: unset by default — there is no verified admin channel,
-            // so the job runner logs but doesn't post until this is set.
-            ADMIN: '',
+            // #⚛server-log, verified against the live Discord API 2026-08-20.
+            // M6.4 and M6.8 both shipped with this unset because neither had a
+            // confirmed ID at the time; it has one now.
+            ADMIN: '818108848492773380',
         });
     });
 
@@ -53,5 +56,24 @@ describe('resolveDiscordIds', () => {
             MARKETPLACE: '444444444444444444',
             ADMIN: DISCORD_IDS_DEFAULTS.ADMIN,
         });
+    });
+});
+
+/**
+ * Every CommunityChannels member must resolve to a real snowflake. ADMIN has
+ * a verified default now, so the empty case is only reachable by explicitly
+ * setting DISCORD_CHANNEL_ADMIN='' — which must fail loudly rather than hand
+ * Discord an empty channel ID that a job could post into by accident.
+ */
+describe('convertChannel', () => {
+    test('still resolves SCREENSHOTS to its verified default', () => {
+        expect(convertChannel(CommunityChannels.SCREENSHOTS)).toBe(
+            DISCORD_IDS_DEFAULTS.SCREENSHOTS,
+        );
+    });
+
+    test('resolves ADMIN to its verified default', () => {
+        expect(convertChannel(CommunityChannels.ADMIN)).toBe(DISCORD_IDS_DEFAULTS.ADMIN);
+        expect(DISCORD_IDS_DEFAULTS.ADMIN).not.toBe('');
     });
 });
