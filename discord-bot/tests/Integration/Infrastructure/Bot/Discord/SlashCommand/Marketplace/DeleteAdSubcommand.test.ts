@@ -10,6 +10,9 @@ import type { AdRepository } from '../../../../../../../src/Domain/Marketplace/A
 import type { SlashCommandContext } from '../../../../../../../src/Domain/Bot/SlashCommandContext';
 import { MessageFlags } from 'discord.js';
 
+/** Discord's ManageMessages permission bit, as the raw HTTP bitfield string isGuildAdmin() reads. */
+const MANAGE_MESSAGES_BIT = '8192';
+
 describe('DeleteAdSubcommand Integration Test', () => {
     let deleteAdSubcommand: DeleteAdSubcommand;
     let adRepository: AdRepository;
@@ -98,6 +101,30 @@ describe('DeleteAdSubcommand Integration Test', () => {
         );
         // The ad still exists.
         await expect(adRepository.get(ad.id)).resolves.toBeDefined();
+    });
+
+    it("M5.10 — lets a guild admin (ManageMessages) delete another member's ad", async () => {
+        const ownerId = '123456789012345678';
+        const adminId = '987654321098765432';
+        const ad = await createAd(undefined, 'Test Ad', ownerId);
+        const interaction = new FakeInteraction(
+            { id: ad.id.toString() },
+            adminId,
+            undefined,
+            undefined,
+            {},
+            {},
+            {},
+            '',
+            'test-user',
+            'fake-interaction-1',
+            MANAGE_MESSAGES_BIT,
+        );
+
+        await deleteAdSubcommand.handle(buildContext(interaction));
+
+        expect(interaction.editReplyCalls[0].content).toBe('🗑️ Anúncio apagado com sucesso.');
+        await expect(adRepository.get(ad.id)).rejects.toThrow();
     });
 
     it('reports a clean message when the ad does not exist', async () => {

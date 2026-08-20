@@ -68,6 +68,28 @@ describe('DeleteAdHandler Integration Test', () => {
         await expect(commandHandlerManager.handle(command)).rejects.toThrow(UnauthorizedAdDeletion);
     });
 
+    // M5.10 — admin override.
+
+    it('lets a non-owner with isAdmin=true delete the ad', async () => {
+        const ownerId = '123456789012345678';
+        const adminId = '987654321098765432';
+        const ad = await createAd(undefined, 'Test Ad', ownerId);
+
+        await commandHandlerManager.handle(new DeleteAd(ad.id, adminId, true));
+
+        await expect(adRepository.get(ad.id)).rejects.toThrow(RecordNotFound);
+    });
+
+    it('still refuses a non-owner without isAdmin, even though the flag exists', async () => {
+        const ownerId = '123456789012345678';
+        const differentUserId = '987654321098765432';
+        const ad = await createAd(undefined, 'Test Ad', ownerId);
+
+        await expect(
+            commandHandlerManager.handle(new DeleteAd(ad.id, differentUserId, false)),
+        ).rejects.toThrow(UnauthorizedAdDeletion);
+    });
+
     // M5.2: delete removes the Discord message.
 
     it('deletes the Discord message the ad was posted as', async () => {
