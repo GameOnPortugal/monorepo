@@ -3,8 +3,9 @@ import { createHash } from 'crypto';
 /**
  * M4.3 — registration overhaul. Two framework-light pieces factored out of
  * `DiscordBot.registerSlashCommands()` specifically so they are unit
- * testable without a real Discord REST client: which route to PUT to, and
- * whether the command set actually changed since the last successful PUT.
+ * testable without a real Discord REST client: which route to PUT/GET, and
+ * whether the locally-built command set actually differs from what Discord
+ * currently has registered.
  */
 
 /**
@@ -43,20 +44,125 @@ export function resolveCommandRegistrationTarget(
 }
 
 /**
- * A stable digest of a slash-command payload array (the `.toJSON()` output
- * of every registered `SlashCommandHandler.builder()`), used to skip the
- * `PUT` to Discord when the set hasn't changed since the last successful
- * registration — every boot re-registers unconditionally today.
- *
- * `JSON.stringify` is only a safe basis for a stable hash here because
- * `SlashCommandBuilder#toJSON()` always emits the same key order for a given
- * builder chain (it builds a plain object literal in fixed field order, not
- * from a `Map` or object spread of varying inputs) and the handler list this
- * is called with (`BotExecutor.slashCommandHandlers`) is registered in a
- * fixed order in `inversify.config.ts`. This is not a general-purpose
- * "hash any object" helper — don't reuse it for input whose key/array order
- * can legitimately vary between equivalent values.
+ * The subset of an application-command option's wire shape this codebase
+ * actually sets (`addStringOption`/`addIntegerOption`/`addUserOption`/
+ * `addAttachmentOption`, `addSubcommand`, `.setRequired()`, `.addChoices()`,
+ * `.setMinValue()`/`.setMaxValue()`). Both the payload this process builds
+ * (`SlashCommandBuilder#toJSON()`) and the payload Discord's `GET` returns
+ * (`APIApplicationCommandOption`) satisfy this loosely — deliberately loose
+ * (defensive reads, no strict typing) because this also has to survive
+ * whatever Discord actually sends back, not just what our own builders
+ * produce.
  */
-export function hashCommandSet(commands: readonly unknown[]): string {
-    return createHash('sha256').update(JSON.stringify(commands)).digest('hex');
+interface RawCommandOption {
+    type?: unknown;
+    name?: unknown;
+    description?: unknown;
+    required?: unknown;
+    autocomplete?: unknown;
+    min_value?: unknown;
+    max_value?: unknown;
+    choices?: readonly { name?: unknown; value?: unknown }[];
+    options?: readonly RawCommandOption[];
+}
+
+interface RawCommand {
+    name?: unknown;
+    description?: unknown;
+    options?: readonly RawCommandOption[];
+    default_member_permissions?: unknown;
+    contexts?: readonly unknown[] | null;
+    integration_types?: readonly unknown[];
+}
+
+function canonicalizeOption(option: RawCommandOption): Record<string, unknown> {
+    const choices = [...(option.choices ?? [])]
+        .map((choice) => ({ name: choice.name ?? null, value: choice.value ?? null }))
+        .sort((a, b) => String(a.value).localeCompare(String(b.value)));
+
+    const nestedOptions = [...(option.options ?? [])]
+        .map(canonicalizeOption)
+        .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+
+    return {
+        type: option.type ?? null,
+        name: option.name ?? null,
+        description: option.description ?? null,
+        // Discord fills these in with a default when echoing a command back
+        // via GET even though we never set them explicitly — comparing
+        // against the same default on both sides is what keeps this from
+        // permanently mismatching.
+        required: option.required ?? false,
+        autocomplete: option.autocomplete ?? false,
+        min_value: option.min_value ?? null,
+        max_value: option.max_value ?? null,
+        choices,
+        options: nestedOptions,
+    };
+}
+
+/**
+ * Projects one command (either our own `.toJSON()` output or one entry of
+ * Discord's `GET` response) down to a canonical, order-independent shape
+ * containing only the fields this codebase actually manages.
+ *
+ * This is the fiddly part, and it's where a naive `JSON.stringify` diff
+ * would go wrong in two ways:
+ *  1. Discord echoes back fields we never sent (`id`, `application_id`,
+ *     `version`, `guild_id`, a defaulted `nsfw`, the deprecated
+ *     `dm_permission`/`default_permission`, localisation dictionaries) —
+ *     excluded here entirely rather than matched, since we don't manage
+ *     them and never will via this path.
+ *  2. Discord does not guarantee the order of the top-level commands array
+ *     or of an individual command's `options` array — every array that
+ *     matters is sorted here before hashing.
+ *
+ * `contexts` / `integration_types` are Discord-API-documented as
+ * "only for globally-scoped commands" — a guild-scoped `PUT` silently drops
+ * them, so `GET`ting a guild's commands back never includes them. Comparing
+ * them for a guild-scoped target would therefore *always* mismatch and
+ * force a `PUT` on every single boot, defeating the point — so
+ * `includeGlobalOnlyFields` (true only for `scope: 'global'`, see
+ * `hashCommandSet` below) drops them from the projection instead.
+ */
+function canonicalizeCommand(
+    command: RawCommand,
+    includeGlobalOnlyFields: boolean,
+): Record<string, unknown> {
+    const options = [...(command.options ?? [])]
+        .map(canonicalizeOption)
+        .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+
+    return {
+        name: command.name ?? null,
+        description: command.description ?? null,
+        default_member_permissions: command.default_member_permissions ?? null,
+        contexts: includeGlobalOnlyFields ? [...(command.contexts ?? [])].sort() : null,
+        integration_types: includeGlobalOnlyFields
+            ? [...(command.integration_types ?? [])].sort()
+            : null,
+        options,
+    };
+}
+
+/**
+ * A stable digest of a slash-command payload array — either the locally
+ * built `.toJSON()` output of every registered `SlashCommandHandler`, or
+ * Discord's own `GET` response for the same scope — used to skip the `PUT`
+ * when the two already agree, instead of unconditionally re-registering on
+ * every boot.
+ *
+ * `scope` matters (see `canonicalizeCommand`'s doc comment): it decides
+ * whether `contexts`/`integration_types` — meaningful only for global
+ * commands — are part of the comparison at all.
+ */
+export function hashCommandSet(
+    commands: readonly unknown[],
+    scope: CommandRegistrationTarget['scope'],
+): string {
+    const canonical = commands
+        .map((command) => canonicalizeCommand(command as RawCommand, scope === 'global'))
+        .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+
+    return createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
 }

@@ -20,13 +20,11 @@ import {
     hashCommandSet,
     resolveCommandRegistrationTarget,
 } from '../../../Domain/Bot/CommandRegistration.ts';
-import { CommandSetHashStore } from './CommandSetHashStore.ts';
 
 @injectable()
 export class DiscordBot implements Bot {
     private readonly client: Client;
     private readonly rest: REST;
-    private readonly hashStore: CommandSetHashStore;
     private destroyed = false;
 
     constructor(
@@ -43,7 +41,6 @@ export class DiscordBot implements Bot {
         // global registration — today's behaviour.
         private readonly devGuildId?: string,
     ) {
-        this.hashStore = new CommandSetHashStore();
         // `allowedMentions: { parse: [] }` is set once here, on the Client
         // itself, so every message sent through this client — regardless of
         // which handler built it — has all mention parsing disabled by
@@ -184,8 +181,6 @@ export class DiscordBot implements Bot {
             target.scope === 'guild'
                 ? Routes.applicationGuildCommands(target.clientId, target.guildId)
                 : Routes.applicationCommands(target.clientId);
-        const scopeKey = target.scope === 'guild' ? `guild-${target.guildId}` : 'global';
-
         if (target.scope === 'guild') {
             this.logger.log(
                 `[DEV] Registering ${commands.length} application (/) commands to GUILD ${target.guildId} ` +
@@ -199,17 +194,45 @@ export class DiscordBot implements Bot {
             );
         }
 
-        // M4.3 — skip the PUT when the command set is byte-for-byte what was
-        // last successfully registered for this exact scope, instead of
-        // rewriting all commands on every boot. See CommandSetHashStore.ts
-        // for where this is kept and why a redeploy still re-registers once.
-        const hash = hashCommandSet(commands);
-        const previousHash = await this.hashStore.read(scopeKey);
-        if (previousHash === hash) {
-            this.logger.log(
-                `Command set unchanged since last successful registration (${scopeKey}) — skipping PUT.`,
+        // M4.3 — skip the PUT when it would be a no-op. Discord itself is
+        // asked what it currently has registered (GET) rather than this
+        // process remembering what it last wrote: this bot's container has
+        // no persistent volume (every real deploy — and merging to `main`
+        // deploys, per AGENT.md — is a brand-new container with an empty
+        // filesystem), so a locally-persisted hash would be empty on
+        // essentially every production boot and this optimisation would be
+        // a near no-op exactly where it matters most. Comparing against
+        // Discord's own record survives redeploys for free, and is also
+        // *authoritative* in a way a local record never is — it reflects
+        // drift a local hash cannot see at all (a manual edit in the
+        // Developer Portal, a half-failed previous PUT, a rollback to an
+        // older image).
+        //
+        // A failed/unparseable GET is not fatal — this whole comparison is
+        // an optimisation, not a correctness requirement — so it is logged
+        // distinctly from a PUT failure below and falls through to
+        // registering unconditionally. "When in doubt, PUT": registering
+        // redundantly is harmless, silently skipping a genuinely-changed
+        // command set is not.
+        let remoteCommands: unknown[] | undefined;
+        try {
+            remoteCommands = (await this.rest.get(route)) as unknown[];
+        } catch (getError) {
+            this.logger.warn(
+                'Failed to fetch currently-registered application (/) commands from Discord — registering unconditionally',
+                { error: getError },
             );
-            return;
+        }
+
+        if (remoteCommands) {
+            const localHash = hashCommandSet(commands, target.scope);
+            const remoteHash = hashCommandSet(remoteCommands, target.scope);
+            if (localHash === remoteHash) {
+                this.logger.log(
+                    'Command set matches what Discord already has registered — skipping PUT.',
+                );
+                return;
+            }
         }
 
         try {
@@ -219,24 +242,14 @@ export class DiscordBot implements Bot {
             })) as unknown[];
 
             this.logger.log(`Successfully reloaded ${data.length} application (/) commands.`);
-
-            try {
-                await this.hashStore.write(scopeKey, hash);
-            } catch (hashError) {
-                // Registration itself succeeded — losing the cache write
-                // only costs one redundant (but harmless) PUT on the next
-                // boot, so this is a warning, not a reason to fail start().
-                this.logger.warn('Failed to persist the registered command-set hash', {
-                    error: hashError,
-                });
-            }
         } catch (error) {
             // M1.4: through the injected Logger (not console.error, which
             // bypassed it entirely), and rethrown — start() no longer
             // catches this, so the bot never logs in with a command set
-            // that failed to register. Note the hash is only persisted on
-            // success (above), so a failed PUT here is retried — never
-            // silently skipped — on the next boot.
+            // that failed to register. Deliberately a separate catch/log
+            // from the GET above: a failed GET only costs a redundant PUT,
+            // a failed PUT here means commands are genuinely out of sync,
+            // and the two must never be confused in the logs.
             this.logger.error('Failed to register application (/) commands', { error });
             throw error;
         }
