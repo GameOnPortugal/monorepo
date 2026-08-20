@@ -18,12 +18,16 @@ const TYPES = {
     TrophyProfileRepository: Symbol.for('TrophyProfileRepository'),
     TrophyRepository: Symbol.for('TrophyRepository'),
     AdRepository: Symbol.for('AdRepository'),
+    JobStateRepository: Symbol.for('JobStateRepository'),
 
     // Clients
     HttpClient: Symbol.for('HttpClient'),
     TrophySource: Symbol.for('TrophySource'),
     OrmClient: Symbol.for('OrmClient'),
     GuildClient: Symbol.for('GuildClient'),
+
+    // Jobs
+    JobReporter: Symbol.for('JobReporter'),
 };
 
 export { TYPES };

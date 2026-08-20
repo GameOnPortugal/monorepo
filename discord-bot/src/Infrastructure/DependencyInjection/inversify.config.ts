@@ -49,6 +49,14 @@ import type { GuildClient } from '../../Domain/Community/GuildClient.ts';
 import { DiscordGuildClient } from '../Community/Discord/DiscordGuildClient.ts';
 import WeekScreenshotWinner from '../../Ui/Cli/WeekScreenshotWinner.ts';
 import { InMemoryClient } from '../Bot/InMemory/InMemoryClient.ts';
+import type { JobStateRepository } from '../../Domain/Job/JobStateRepository.ts';
+import OrmJobStateRepository from '../Orm/OrmJobStateRepository.ts';
+import type { JobReporter } from '../../Domain/Job/JobReporter.ts';
+import { DiscordJobReporter } from '../Job/DiscordJobReporter.ts';
+import { JobRunner } from '../Job/JobRunner.ts';
+import { RunJobConsoleCommand } from '../Job/RunJobConsoleCommand.ts';
+import { WeekScreenshotWinnerJob } from '../Job/Jobs/WeekScreenshotWinnerJob.ts';
+import { DiscordChannels } from '../Community/Discord/DiscordChannels.ts';
 
 const myContainer = new Container();
 
@@ -143,5 +151,28 @@ if (process.env.DISCORD_TOKEN) {
 
 // Console Command
 myContainer.bind(WeekScreenshotWinner).toSelf();
+
+// Jobs (M6.1, M6.8) — an in-process replacement for the deleted `scheduler/`
+// container. Register a new job here alongside its dependencies; it becomes
+// both scheduled (via JobRunner.start(), wired in src/index.ts) and manually
+// runnable (`bun run:command jobs:run <name>`) with no other wiring needed.
+myContainer
+    .bind<JobStateRepository>(TYPES.JobStateRepository)
+    .to(OrmJobStateRepository)
+    .inSingletonScope();
+myContainer
+    .bind<JobReporter>(TYPES.JobReporter)
+    .toConstantValue(
+        new DiscordJobReporter(
+            myContainer.get(TYPES.GuildClient),
+            myContainer.get(TYPES.Logger),
+            DiscordChannels.ADMIN,
+        ),
+    );
+myContainer.bind(JobRunner).toSelf().inSingletonScope();
+myContainer.bind(WeekScreenshotWinnerJob).toSelf();
+myContainer.bind(RunJobConsoleCommand).toSelf();
+
+myContainer.get(JobRunner).register(myContainer.get(WeekScreenshotWinnerJob));
 
 export { myContainer };

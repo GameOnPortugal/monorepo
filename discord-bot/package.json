@@ -24,6 +24,7 @@
     },
     "dependencies": {
         "@prisma/client": "^6.6.0",
+        "croner": "^10.0.1",
         "dayjs": "^1.11.23",
         "discord.js": "^14.27.0",
         "inversify": "^7.11.0",

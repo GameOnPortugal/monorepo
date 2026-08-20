@@ -174,3 +174,22 @@ model CommandChannelLink {
 
   @@map("commandchannellinks")
 }
+
+// Persisted last-run state for the in-process job runner (M6.1). Restart
+// safety: the runner compares each job's schedule against `last_run_at`
+// instead of trusting an in-memory timer, so a redeploy mid-schedule can't
+// cause a job to run twice, and a missed slot gets picked up on the next
+// tick after boot. New table — no legacy Sequelize shape to match, so plain
+// snake_case columns rather than a @map per field.
+model JobRun {
+  id          String   @id @default(uuid())
+  job_name    String   @unique
+  last_run_at DateTime
+  status      String
+  summary     String?  @db.Text
+  error       String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("job_runs")
+}
