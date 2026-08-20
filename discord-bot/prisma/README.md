@@ -7,16 +7,13 @@ This directory contains the Prisma schema and database models for the Discord Bo
 The schema includes the following models migrated from the original Sequelize implementation:
 
 - **Ad**: For marketplace advertisements
-- **LFGProfile**: Looking For Game user profiles
-- **LFGGame**: Game sessions for the LFG feature
-- **LFGParticipation**: User participation in LFG games
-- **LFGEvent**: Events related to LFG activities
 - **Screenshot**: User-submitted screenshots
 - **TrophyProfile**: User trophy profiles
 - **Trophies**: Individual trophies earned by users
-- **StockUrls**: URLs for stock checking
-- **SpecialChannel**: Special Discord channel configurations
-- **CommandChannelLink**: Links between commands and channels
+
+LFG (`LFGProfile`/`LFGGame`/`LFGParticipation`/`LFGEvent`), `StockUrls`,
+`SpecialChannel` and `CommandChannelLink` were dropped in migration
+`20260820102655_drop_dead_models` — see `docs/plans/GLOBAL-PLAN.md` M9.2/M9.3/M9.4.
 
 ## Getting Started
 
