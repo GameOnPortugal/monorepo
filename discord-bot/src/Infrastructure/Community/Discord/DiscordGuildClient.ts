@@ -173,6 +173,28 @@ export class DiscordGuildClient implements GuildClient {
         }
     }
 
+    async isGuildMember(userId: string): Promise<boolean> {
+        this.requireToken();
+
+        try {
+            await this.rest.get(Routes.guildMember(DISCORD_GUILD_ID, userId));
+            return true;
+        } catch (error) {
+            // Unknown Member (10007, HTTP 404): the linked Discord account
+            // is no longer in the guild — see the port's doc comment. Any
+            // other failure (rate limit, auth, network) must not be
+            // mistaken for this, so it's rethrown as a ClientError instead
+            // of also returning false.
+            if (
+                error instanceof DiscordAPIError &&
+                (error.code === RESTJSONErrorCodes.UnknownMember || error.status === 404)
+            ) {
+                return false;
+            }
+            throw new ClientError(`Failed to check guild membership: ${(error as Error).message}`);
+        }
+    }
+
     private async fetchRawMessage(
         channel: CommunityChannels,
         messageId: string,

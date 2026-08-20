@@ -57,6 +57,8 @@ import { JobRunner } from '../Job/JobRunner.ts';
 import { RunJobConsoleCommand } from '../Job/RunJobConsoleCommand.ts';
 import { WeekScreenshotWinnerJob } from '../Job/Jobs/WeekScreenshotWinnerJob.ts';
 import { RelinkScreenshotsJob } from '../Job/Jobs/RelinkScreenshotsJob.ts';
+import { TrophiesSyncJob } from '../Job/Jobs/TrophiesSyncJob.ts';
+import FixOldTrophies from '../../Ui/Cli/FixOldTrophies.ts';
 import { DiscordChannels } from '../Community/Discord/DiscordChannels.ts';
 import { InMemoryGuildClient } from '../Community/InMemory/InMemoryGuildClient.ts';
 import type { MediaStorage } from '../../Domain/Media/MediaStorage.ts';
@@ -227,6 +229,7 @@ myContainer.bind(TYPES.SafeImageFetcher).toConstantValue(new SafeImageFetcher())
 
 // Console Command
 myContainer.bind(WeekScreenshotWinner).toSelf();
+myContainer.bind(FixOldTrophies).toSelf();
 
 // Jobs (M6.1, M6.8) — an in-process replacement for the deleted `scheduler/`
 // container. Register a new job here alongside its dependencies; it becomes
@@ -248,9 +251,36 @@ myContainer
 myContainer.bind(JobRunner).toSelf().inSingletonScope();
 myContainer.bind(WeekScreenshotWinnerJob).toSelf();
 myContainer.bind(RelinkScreenshotsJob).toSelf();
+myContainer.bind(TrophiesSyncJob).toSelf();
 myContainer.bind(RunJobConsoleCommand).toSelf();
 
 myContainer.get(JobRunner).register(myContainer.get(WeekScreenshotWinnerJob));
 myContainer.get(JobRunner).register(myContainer.get(RelinkScreenshotsJob));
+
+// trophies:sync (M7.3) is always bound above and always runnable by hand
+// (`bun run:command jobs:run trophies:sync --dry-run`), but registering it
+// with the scheduler is opt-in. Merging to `main` *is* the deploy pipeline
+// here, so an unconditional registration would start writing trophy rows
+// and setting isBanned/isExcluded on ~118 real community members every 10
+// minutes the moment this lands, before anyone had watched a single run —
+// and since isExcluded removes a profile from future consideration with no
+// automatic un-flagging, a bad first run is effectively permanent. See
+// TrophiesSyncJob's doc comment ("Scheduling is opt-in") for the full
+// reasoning and the enable runbook. Mirrors the DISCORD_TOKEN-unset ->
+// InMemoryClient pattern above: a silently-disabled feature is its own
+// failure mode (that one is why M1.3 exists), so this logs clearly rather
+// than just quietly not registering.
+if (process.env.TROPHIES_SYNC_ENABLED === 'true') {
+    myContainer.get(JobRunner).register(myContainer.get(TrophiesSyncJob));
+} else {
+    myContainer
+        .get<Logger>(TYPES.Logger)
+        .warn(
+            'trophies:sync is bound but NOT scheduled (TROPHIES_SYNC_ENABLED is not "true"). ' +
+                'Dry-run it first — bun run:command jobs:run trophies:sync --dry-run — read the ' +
+                'report (especially any newly-flagged profiles), then set ' +
+                'TROPHIES_SYNC_ENABLED=true to schedule it every 10 minutes.',
+        );
+}
 
 export { myContainer };

@@ -75,4 +75,19 @@ export class OrmTrophyProfileRepository implements TrophyProfileRepository {
 
         return TrophyProfile.fromArray(trophyProfile as TrophyProfileArray);
     }
+
+    async findAllNonExcluded(): Promise<TrophyProfile[]> {
+        // `isExcluded: false` (not `{ not: true }`) deliberately matches the
+        // `WHERE tp.isExcluded = false` used elsewhere in this codebase
+        // (OrmTrophyRepository's ranking queries) — a NULL isExcluded row is
+        // treated as excluded by both, so the two never disagree about which
+        // profiles are "live".
+        const trophyProfiles = await this.prismaClient.trophyProfile.findMany({
+            where: { isExcluded: false },
+        });
+
+        return trophyProfiles.map((trophyProfile) =>
+            TrophyProfile.fromArray(trophyProfile as TrophyProfileArray),
+        );
+    }
 }

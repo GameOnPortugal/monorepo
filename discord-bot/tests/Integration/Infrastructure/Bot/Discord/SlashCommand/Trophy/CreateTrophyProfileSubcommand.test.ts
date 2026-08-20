@@ -16,6 +16,10 @@ import type { SlashCommandContext } from '../../../../../../../src/Domain/Bot/Sl
  * The cheap synchronous URL-format check stays a plain (undeferred) reply,
  * since it never touches the database; defer only guards the part of the
  * handler that can actually be slow.
+ *
+ * M7.5 coverage: `Domain/Trophy/PsnProfileUrl.test.ts` table-drives the URL
+ * parsing itself exhaustively; the two tests here only confirm the
+ * subcommand actually wires that parser in for both accepted shapes.
  */
 describe('CreateTrophyProfileSubcommand Integration Test', () => {
     let createTrophyProfileSubcommand: CreateTrophyProfileSubcommand;
@@ -44,7 +48,7 @@ describe('CreateTrophyProfileSubcommand Integration Test', () => {
         };
     }
 
-    it('defers before writing to the database, then edits the deferred reply on success', async () => {
+    it('defers before writing to the database, then edits the deferred reply on success (bare profile URL)', async () => {
         const userId = '123456789012345678';
         const interaction = new FakeInteraction(
             {
@@ -62,6 +66,23 @@ describe('CreateTrophyProfileSubcommand Integration Test', () => {
         expect(interaction.editReplyCalls[0].content).toContain('SomePsnUser');
     });
 
+    it('also accepts the 6-segment trophy URL shape (M7.5)', async () => {
+        const userId = '444444444444444444';
+        const interaction = new FakeInteraction(
+            {
+                psnprofiles_url:
+                    'https://psnprofiles.com/trophies/11783-assassins-creed-valhalla/SomePsnUser',
+            },
+            userId,
+        );
+
+        await createTrophyProfileSubcommand.handle(buildContext(interaction));
+
+        expect(interaction.deferReplyCalls.length).toBe(1);
+        expect(interaction.editReplyCalls.length).toBe(1);
+        expect(interaction.editReplyCalls[0].content).toContain('SomePsnUser');
+    });
+
     it('rejects an invalid URL with a plain (undeferred) reply, without ever deferring', async () => {
         const userId = '987654321098765432';
         const interaction = new FakeInteraction({ psnprofiles_url: 'not-a-url' }, userId);
@@ -70,7 +91,7 @@ describe('CreateTrophyProfileSubcommand Integration Test', () => {
 
         expect(interaction.deferReplyCalls.length).toBe(0);
         expect(interaction.replyCalls.length).toBe(1);
-        expect(interaction.replyCalls[0].content).toContain('Invalid PSNProfiles URL');
+        expect(interaction.replyCalls[0].content).toContain('URL do PSNProfiles inválido');
         expect(interaction.replyCalls[0].flags).toBe(MessageFlags.Ephemeral);
     });
 });

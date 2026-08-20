@@ -3,6 +3,9 @@ import { PrismaClient } from '@prisma/client';
 import { myContainer } from '../../../../src/Infrastructure/DependencyInjection/inversify.config';
 import { TYPES } from '../../../../src/Infrastructure/DependencyInjection/types';
 import type { TrophyRepository } from '../../../../src/Domain/Trophy/TrophyRepository';
+import { TrophyAlreadyClaimed } from '../../../../src/Domain/Trophy/TrophyAlreadyClaimed';
+import { Trophy } from '../../../../src/Domain/Trophy/Trophy';
+import { TrophyId } from '../../../../src/Domain/Trophy/TrophyId';
 import DatabaseUtil from '../../../Helper/DatabaseUtil';
 import { createTrophyProfile, createTrophy } from '../../../Helper/StaticFixtures';
 
@@ -177,5 +180,118 @@ describe('OrmTrophyRepository Integration Test', () => {
 
         expect(position.totalPoints).toBe(0);
         expect(position.ranks[1].position).toBe(0);
+    });
+
+    // M7.3: existsByProfileAndUrl / create — the write-side enforcement of
+    // one claim per (profile, url), which TrophiesSyncJob's catch-up mode
+    // depends on.
+    describe('existsByProfileAndUrl / create', () => {
+        test('existsByProfileAndUrl is false for a url never claimed by this profile', async () => {
+            const profile = await createTrophyProfile(undefined, 'user-1', 'Profile1');
+
+            const exists = await trophyRepository.existsByProfileAndUrl(
+                profile.id.toString(),
+                'https://psnprofiles.com/trophies/1-game/Profile1',
+            );
+
+            expect(exists).toBe(false);
+        });
+
+        test('create() saves a new trophy and existsByProfileAndUrl then reports true', async () => {
+            const profile = await createTrophyProfile(undefined, 'user-2', 'Profile2');
+            const url = 'https://psnprofiles.com/trophies/2-game/Profile2';
+
+            const trophy = await trophyRepository.create(
+                profile.id.toString(),
+                url,
+                250,
+                new Date(),
+            );
+
+            expect(trophy.url).toBe(url);
+            expect(trophy.points).toBe(250);
+            expect(await trophyRepository.existsByProfileAndUrl(profile.id.toString(), url)).toBe(
+                true,
+            );
+        });
+
+        test('create() throws TrophyAlreadyClaimed for a (profile, url) pair claimed twice', async () => {
+            const profile = await createTrophyProfile(undefined, 'user-3', 'Profile3');
+            const url = 'https://psnprofiles.com/trophies/3-game/Profile3';
+
+            await trophyRepository.create(profile.id.toString(), url, 100, new Date());
+
+            await expect(
+                trophyRepository.create(profile.id.toString(), url, 100, new Date()),
+            ).rejects.toBeInstanceOf(TrophyAlreadyClaimed);
+        });
+
+        test('the same url claimed by two different profiles does not collide', async () => {
+            const profileA = await createTrophyProfile(undefined, 'user-4a', 'Profile4a');
+            const profileB = await createTrophyProfile(undefined, 'user-4b', 'Profile4b');
+            const url = 'https://psnprofiles.com/trophies/4-game/shared-trophy-page';
+
+            await trophyRepository.create(profileA.id.toString(), url, 100, new Date());
+
+            await expect(
+                trophyRepository.create(profileB.id.toString(), url, 100, new Date()),
+            ).resolves.toBeDefined();
+        });
+    });
+
+    describe('findMissingCompletionDate', () => {
+        // create() requires a real Date (TrophiesSyncJob only ever has one to
+        // give it); a null completionDate is a historical/imported-data case,
+        // so these fixtures go through save() directly, matching how such
+        // rows actually get into the table.
+        function trophyWithNullCompletionDate(profileId: string, url: string): Trophy {
+            return new Trophy(
+                TrophyId.generate(),
+                profileId,
+                url,
+                100,
+                null,
+                new Date(),
+                new Date(),
+            );
+        }
+
+        test('returns only rows with a null completionDate, bounded by limit', async () => {
+            const profile = await createTrophyProfile(undefined, 'user-5', 'Profile5');
+            const withDate = await createTrophy(
+                undefined,
+                profile.id.toString(),
+                'https://psnprofiles.com/trophies/5-game/with-date',
+                100,
+                new Date(),
+            );
+            const missing1 = trophyWithNullCompletionDate(
+                profile.id.toString(),
+                'https://psnprofiles.com/trophies/5-game/missing-1',
+            );
+            await trophyRepository.save(missing1);
+
+            const results = await trophyRepository.findMissingCompletionDate(10);
+
+            const ids = results.map((trophy) => trophy.id.toString());
+            expect(ids).toContain(missing1.id.toString());
+            expect(ids).not.toContain(withDate.id.toString());
+        });
+
+        test('respects the limit', async () => {
+            const profile = await createTrophyProfile(undefined, 'user-6', 'Profile6');
+            for (let i = 0; i < 5; i++) {
+                await trophyRepository.save(
+                    trophyWithNullCompletionDate(
+                        profile.id.toString(),
+                        `https://psnprofiles.com/trophies/6-game/missing-${i}`,
+                    ),
+                );
+            }
+
+            const results = await trophyRepository.findMissingCompletionDate(2);
+
+            expect(results).toHaveLength(2);
+        });
     });
 });

@@ -14,4 +14,14 @@ export interface TrophyProfileRepository {
     findByUserId(userId: string): Promise<TrophyProfile | null>;
 
     findByPsnProfile(psnProfile: string): Promise<TrophyProfile | null>;
+
+    /**
+     * Every profile not already excluded from ranking — the candidate set
+     * for the `trophies:sync` job (M7.3), mirroring the old bot's
+     * `TrophyProfileManager.findAllNonExcluded`. A profile that becomes
+     * excluded (auto-moderation flag, or manual) simply stops appearing
+     * here on the next run, which is also why the sync job never needs to
+     * "un-consider" a profile explicitly.
+     */
+    findAllNonExcluded(): Promise<TrophyProfile[]>;
 }
