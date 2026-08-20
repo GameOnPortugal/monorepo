@@ -171,6 +171,15 @@ describes the in-process cron replacement (M6.1) that will restore this capabili
 
 ### `old-discord-bot/` — the retired predecessor
 
+**The directory was deleted during work item M9.6 (2026-08-20).** By then M7
+had taken what it needed from the psnprofiles.com scraper (`TrophySource` /
+`PsnProfilesTrophySource` in `discord-bot/src`), and LFG / stock alerts / the
+Telegram bridge had all been formally dropped rather than ported (M9.3, M9.4).
+Nothing else in the tree referenced the directory by path — it is preserved in
+full in git history (`git log -- old-discord-bot`), just no longer checked out.
+The table below is left as it stood in the 2026-08-19 snapshot, for the
+historical record.
+
 Node 15 + discord.js v12 + Sequelize + MySQL 5.6, with Redis, Sentry, Telegram
 and a Puppeteer/JSDOM scraper for psnprofiles.com. No CI workflow references it;
 it is not built, tested or deployed. Its value is as a specification for the

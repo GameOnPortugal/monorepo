@@ -1,38 +1,42 @@
 {
     "_comment": [
-        "M9.1 (docs/plans/GLOBAL-PLAN.md) — Discord AutoMod rules for the Game On Portugal guild,",
-        "reconciled by `bun run:command automod:apply --apply` (Infrastructure/Community/Discord/DiscordAutoModClient.ts).",
-        "STARTER FILE — the one rule below is disabled and its keyword is a placeholder, not a real",
-        "blocklist. Nobody has been asked what this Portuguese community actually wants blocked, and",
-        "that call belongs to Luis, not to whoever wrote the mechanism. Before this is ever applied for",
-        "real: 1) decide the actual keyword/regex blocklist (pt-PT slurs/spam/scam patterns are the",
-        "obvious candidates, per the old bot's `regex` validator), 2) decide which role(s), if any, go",
-        "in exemptRoles so moderators are never blocked by their own rules, 3) decide which channels (if",
-        "any) belong in commandsOnlyChannels below — the old `specialchannels` table was empty in",
-        "production, so there is nothing to port forward, only a fresh decision to make, 4) flip",
-        "`enabled` to true on the rules you actually want live. Until then this file only documents the",
-        "mechanism; running `--apply` with it as-is creates one disabled, harmless placeholder rule and",
-        "touches no channel permissions at all."
+        "M9.1 (docs/plans/GLOBAL-PLAN.md) — AutoMod rules THIS REPO manages for the Game On Portugal",
+        "guild, reconciled by `bun run:command automod:apply --apply`.",
+        "",
+        "DELIBERATELY EMPTY. The guild is already moderated, and not from here.",
+        "",
+        "Checked against the live guild (818108848492773377) on 2026-08-20, there are five enabled",
+        "AutoMod rules, all created by hand in the Discord UI by a moderator:",
+        "",
+        "  1. 'Custom Keyword Rule'          keyword   — 1 keyword; block + alert + 60s timeout",
+        "  2. 'Commonly Flagged Words'       preset    — Discord presets 1,2,3 (profanity, sexual",
+        "                                                content, slurs); block + alert",
+        "  3. 'Block Spam Content'           spam      — block + alert",
+        "  4. 'Block Mention Spam'           mentions  — block + timeout + alert",
+        "  5. 'Sharing links - non verified' keyword   — 7 keywords, 3 exempt roles; block + alert",
+        "",
+        "That is a real, curated moderation policy — including exempt roles someone thought about —",
+        "and it is better than anything invented from outside the community. So it stays where it is,",
+        "owned by the moderators who wrote it, and this file does not attempt to mirror it.",
+        "",
+        "Importing those five rules here would be actively worse: it would create a second source of",
+        "truth for the same policy, and it would bring them under this reconciler's management, so a",
+        "later `--apply` would silently revert whatever a moderator had since changed in the UI. A",
+        "config file that fights the people using the product is not configuration, it is a trap.",
+        "",
+        "Nothing here can touch those rules. Reconciliation only ever reads, writes or deletes rules",
+        "whose name carries the `[gop-managed:<key>]` marker (Domain/Moderation/ManagedName.ts); none",
+        "of the five names match, so they are invisible to the plan — including under",
+        "`--prune-orphaned`. AutoModPlan.test.ts pins that as a property.",
+        "",
+        "The old bot's `specialchannels` table — the equivalent of `commandsOnlyChannels` below — held",
+        "0 rows in production, so there is nothing to port forward there either.",
+        "",
+        "WHEN TO ADD SOMETHING HERE: when a rule needs to be reviewable in git, or applied identically",
+        "to more than one guild, or changed as part of a code change. Day-to-day moderation tweaks",
+        "belong in the Discord UI, where a moderator can make them without a deploy. Add a rule with a",
+        "`key`, set `enabled`, and run `automod:apply` (dry-run by default) to see the diff first."
     ],
-    "rules": [
-        {
-            "key": "starter-keyword-blocklist",
-            "displayName": "Starter keyword blocklist (placeholder — do not enable)",
-            "enabled": false,
-            "eventType": "MESSAGE_SEND",
-            "triggerType": "KEYWORD",
-            "keywordFilter": ["examplebadword"],
-            "regexPatterns": [],
-            "allowList": [],
-            "exemptRoles": [],
-            "exemptChannels": [],
-            "actions": [
-                {
-                    "type": "BLOCK_MESSAGE",
-                    "customMessage": "Esta mensagem foi bloqueada pelas regras do servidor."
-                }
-            ]
-        }
-    ],
+    "rules": [],
     "commandsOnlyChannels": []
 }

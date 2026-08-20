@@ -1,4 +1,0 @@
-module.exports = {
-	EVERYONE: '-1001223226617',
-	ALERTAS_PRIME: '-1001388203573',
-};
