@@ -38,6 +38,7 @@ jobs:
             trophies
             media
             scheduler
+            plans
             portal
             portal-api
             portal-web

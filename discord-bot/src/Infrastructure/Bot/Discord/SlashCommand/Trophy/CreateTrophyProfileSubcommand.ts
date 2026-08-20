@@ -8,6 +8,7 @@ import { CreateProfile } from '../../../../../Application/Write/Trophy/CreatePro
 import { TrophyProfileId } from '../../../../../Domain/Trophy/TrophyProfileId';
 import { ProfileAlreadyExists } from '../../../../../Application/Write/Trophy/CreateProfile/ProfileAlreadyExists';
 import { safeReply } from '../../../../../Domain/Bot/safeReply';
+import { extractPsnProfileFromUrl } from '../../../../../Domain/Trophy/PsnProfileUrl';
 
 @injectable()
 export class CreateTrophyProfileSubcommand {
@@ -24,13 +25,18 @@ export class CreateTrophyProfileSubcommand {
     public async handle(context: SlashCommandContext): Promise<void> {
         const psnprofilesUrl = context.interaction.options.getString('psnprofiles_url', true);
 
-        // Extract PSN profile name from URL (e.g., https://psnprofiles.com/username -> username)
-        const psnProfile = this.extractPsnProfileFromUrl(psnprofilesUrl);
+        // M7.5: accepts both a bare profile URL
+        // (https://psnprofiles.com/username) and a 6-segment trophy URL
+        // (https://psnprofiles.com/trophies/<id>-<game>/username) — see
+        // Domain/Trophy/PsnProfileUrl.ts.
+        const psnProfile = extractPsnProfileFromUrl(psnprofilesUrl);
 
         if (!psnProfile) {
             await context.interaction.reply({
                 content:
-                    'Invalid PSNProfiles URL. Please provide a valid profile URL (e.g., https://psnprofiles.com/username)',
+                    'URL do PSNProfiles inválido. Indica um URL de perfil válido ' +
+                    '(ex: https://psnprofiles.com/username) ou de um troféu ' +
+                    '(ex: https://psnprofiles.com/trophies/123-jogo/username).',
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -51,13 +57,13 @@ export class CreateTrophyProfileSubcommand {
             await this.commandHandlerManager.handle(command);
 
             await context.interaction.editReply({
-                content: `Successfully registered PSN profile: ${psnProfile}`,
+                content: `Perfil PSN registado com sucesso: ${psnProfile}`,
             });
         } catch (error) {
             if (error instanceof ProfileAlreadyExists) {
                 if (error.userId === context.interaction.user.id) {
                     await safeReply(context.interaction, {
-                        content: 'You have already registered this PSN profile.',
+                        content: 'Já tens este perfil PSN registado.',
                         flags: MessageFlags.Ephemeral,
                     });
                     return;
@@ -65,7 +71,8 @@ export class CreateTrophyProfileSubcommand {
 
                 await safeReply(context.interaction, {
                     content:
-                        'Someone else has already registered this PSN profile. If you think this is an error please report to an administrator',
+                        'Este perfil PSN já foi registado por outra pessoa. Se achas que isto é ' +
+                        'um erro, contacta um administrador.',
                     flags: MessageFlags.Ephemeral,
                 });
                 return;
@@ -78,28 +85,9 @@ export class CreateTrophyProfileSubcommand {
             });
 
             await safeReply(context.interaction, {
-                content: 'An error occurred while registering your PSN profile.',
+                content: 'Ocorreu um erro ao registar o teu perfil PSN.',
                 flags: MessageFlags.Ephemeral,
             });
-        }
-    }
-
-    private extractPsnProfileFromUrl(url: string): string | null {
-        try {
-            if (!url.startsWith('https://psnprofiles.com/')) {
-                return null;
-            }
-
-            const parsedUrl = new URL(url);
-            if (parsedUrl.hostname !== 'psnprofiles.com') {
-                return null;
-            }
-
-            // The PSN username should be the first path segment
-            const username = parsedUrl.pathname.split('/')[1];
-            return username || null;
-        } catch {
-            return null;
         }
     }
 }

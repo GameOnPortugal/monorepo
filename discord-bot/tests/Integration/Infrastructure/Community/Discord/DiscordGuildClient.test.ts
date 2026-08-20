@@ -78,6 +78,14 @@ describe('DiscordGuildClient — no token configured', () => {
             ClientError,
         );
     });
+
+    // M7.3: isGuildMember() added to the port after this suite was written —
+    // same fail-fast guard as every other method.
+    test('isGuildMember fails fast with a clear error, without making a request', async () => {
+        const client = new DiscordGuildClient(undefined);
+
+        await expect(client.isGuildMember('123456789012345678')).rejects.toThrow(ClientError);
+    });
 });
 
 describe('DiscordGuildClient — construction', () => {

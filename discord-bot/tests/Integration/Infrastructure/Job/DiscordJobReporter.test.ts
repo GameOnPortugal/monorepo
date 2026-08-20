@@ -77,6 +77,13 @@ class FakeGuildClient implements GuildClient {
     ): Promise<CommunityMessage[]> {
         throw new Error('FakeGuildClient.listMessages is not used by DiscordJobReporter');
     }
+
+    // M7.3 added isGuildMember to the GuildClient port after this fake was
+    // written. Not exercised by DiscordJobReporter, so it's a harmless
+    // always-true stub here.
+    async isGuildMember(_userId: string): Promise<boolean> {
+        return true;
+    }
 }
 
 function baseOutcome(overrides: Partial<JobReportOutcome> = {}): JobReportOutcome {
