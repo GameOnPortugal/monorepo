@@ -181,7 +181,8 @@ type requires one) and a `typecheck` script.
     end to end. — done in this PR.
 
 TedRelayer's `game-on-portugal-app` and `game-on-portugal-scheduler` are
-**stopped but intact**; `game-on-portugal-{db,redis,db-backup}` are still
+**stopped but intact** (note: the `scheduler/` directory was deleted from the
+repo 2026-08-19 and is no longer maintained); `game-on-portugal-{db,redis,db-backup}` are still
 running. They stay that way until phase 5 (**2026-09-02**) as the rollback
 path:
 
@@ -209,7 +210,8 @@ the 2021 GitHub Pages site, on purpose, until the portal exists.
 
 23. Leave the TedRelayer stack **stopped but intact** for at least two weeks.
     In progress: `game-on-portugal-app` and `game-on-portugal-scheduler` were
-    stopped at cutover (2026-08-19); `game-on-portugal-{db,redis,db-backup}`
+    stopped at cutover (2026-08-19); the `scheduler/` directory was deleted from
+    the repo 2026-08-19 and is no longer maintained; `game-on-portugal-{db,redis,db-backup}`
     are still running as of this doc. Two weeks from cutover is **2026-09-02**.
 24. Then remove it, keeping one final dump in 1Password/NAS.
 25. Update `docs/operations.md`, `AGENT.md` and `remote-hosts.md`. — the first

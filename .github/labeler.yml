@@ -30,4 +30,3 @@ Legacy:
       - any-glob-to-any-file:
           - 'old-discord-bot/**'
           - 'webpage/**'
-          - 'scheduler/**'

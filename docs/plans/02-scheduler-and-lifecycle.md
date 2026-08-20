@@ -5,20 +5,21 @@
 
 Read [`00-overview.md`](00-overview.md) first.
 
-## Why the scheduler is dead
+## The scheduler directory has been deleted (M6.7, 2026-08-19)
 
-Not a crash — a stale image. `docker exec game-on-portugal-scheduler cat
-/srv/config.ini` shows **every job commented out**, including a
-`weekly-screenshot-winner` still calling the old bot's
-`node scripts/screenshot-winners.js`. The repo enabled the bun-based job in
-commit `c28a73f` (2025-04-20 09:56); `joshlopes/game-on-portugal-scheduler:latest`
-was last pushed **2025-04-19 14:27**, seventeen hours earlier, and was never
-rebuilt.
+The `scheduler/` container never ran any jobs in production — its image was stale
+and every job in its config was commented out. Instead of fixing it, the entire
+directory was removed as part of the HTZ1 migration. The container had also
+mounted `/var/run/docker.sock` (root-equivalent host access) and carried three
+Trivy CVEs, making it a security liability.
 
-So the container has run zero jobs since deployment. Its logs contain nothing but
-the `update-container-id` supervisord loop firing every two minutes.
+**What this means**: there is currently **no automated trigger** for the
+`week-screenshot-winner` job. This plan's goal now is to replace the deleted
+container with an **in-process cron runner inside the bot** (M6.1). The screenshot
+recovery (M6.3) and ad lifecycle (M6.5) jobs will depend on it.
 
-**And fixing that alone would not help**, because of the next section.
+**And fixing the trigger alone would not help**, because of the next section — 
+the data stored for screenshots is wrong.
 
 ## The weekly winner would find nothing even if it ran
 
@@ -173,14 +174,15 @@ row; log it for manual cleanup).
 | 4 | **Unblock and harden `screenshots:winner`.** | Dry run on real data names a plausible winner with a real reaction count |
 | 5 | **`ads:lifecycle`.** Depends on plan 01 tasks 4 + 6 (status columns, buttons). | Integration test covers: prompt sent, renew bumps in place, silence expires without deleting |
 | 6 | **`ads:reconcile`.** | Detects a manually-deleted ad message and marks the row |
-| 7 | **Retire `scheduler/`** (or reduce it to labels). Update compose, `AGENT.md`, `docs/operations.md`. | Production runs one fewer container; no docker.sock mount |
+| 7 | ✅ **Retire `scheduler/`** (DONE, 2026-08-19). Updated docs, removed from compose, deleted directory. | No docker.sock mount; separate repo archive still pending |
 | 8 | **Job observability**: per-run summary to an admin channel. | A failed run is visible without SSH |
 
 ## Deployment reminder
 
-CI cannot deploy (issue #2). After merging, build and push the image, then on
-TedRelayer: `cd ~/game-on-portugal && docker compose pull && docker compose up -d`.
-Then verify **inside the container** that the job list is what you expect.
+As of 2026-08-19, CI deploys to HTZ1 on merge. After merging, the workflow will
+build, push the image, and roll the Portainer stack. Then verify **inside the
+container** that the job list is what you expect — trusting the repo is exactly
+how the scheduler breakage went unnoticed for sixteen months.
 
 ## Decisions (settled — do not relitigate)
 

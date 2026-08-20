@@ -27,11 +27,10 @@ community is actually hitting.
    it means matching ads to messages in the marketplace channel by author and
    timestamp. Skip it unless `has-been-sold` (item 24) is going to be ported,
    since that is the only thing that needs them.
-3. **Rebuild and redeploy the scheduler image.** *(issue #3)* The weekly
-   screenshot winner has never run. Rebuild, redeploy, then verify **inside the
-   container** (`docker exec … cat /srv/config.ini`) — the repo lying about what
-   is deployed is exactly how this went unnoticed for sixteen months. Do a
-   `--dry-run` invocation before letting it post publicly and grant 1000 XP.
+3. **The scheduler directory has been deleted.** *(issue #3, resolved)* The
+   `scheduler/` container never ran any jobs in production and was not migrated
+   to HTZ1; it has been removed. The `week-screenshot-winner` command now has
+   no automatic trigger. See plan 02 (M6.1) for the in-process cron replacement.
 4. **Stop printing the DB password in the container logs.** *(issue #11)* One
    line in `entrypoint.sh`. Do it before anyone enables Loki.
 
@@ -98,9 +97,9 @@ Cheap, self-contained, and it makes everything after it verifiable.
 20. **`::set-output` → `$GITHUB_OUTPUT`** in `shared.build-image.yaml`. *(#13)*
 21. **Bound the entrypoint's DB wait**, fail loudly, parse `DATABASE_URL`
     robustly. *(issue #12)*
-22. **Get release-please working.** *(issue #6)* Add `scheduler` to
-    `.release-please-manifest.json`, verify the token, and use conventional
-    commits — 30+ consecutive `chore:` commits is why nothing has ever released.
+22. **Get release-please working.** *(issue #6)* Verify the token and use
+    conventional commits — 30+ consecutive `chore:` commits is why nothing has
+    ever released. (Note: `scheduler` component removed from manifest.)
 23. **Move the hardcoded channel/emoji IDs to config.** *(issue #16)*
 
 ## Phase 5 — Decide the fate of the dead weight
@@ -112,8 +111,8 @@ Cheap, self-contained, and it makes everything after it verifiable.
 25. **`old-discord-bot/`.** Keep until the port is done (it is the only spec for
     the scraper, LFG and stock), then delete. Consider moving it to `reference/`
     so it stops looking like something that builds.
-26. **Archive the standalone `GameOnPortugal/scheduler` repo**, as was already
-    done for `GameOnPortugal/discord-bot`.
+26. **Archive the standalone `GameOnPortugal/scheduler` repo** (not yet done, out
+    of scope for M6.7; separate from the deleted `scheduler/` directory).
 
 ## Phase 6 — Close the feature gap
 
@@ -122,19 +121,19 @@ Cheap, self-contained, and it makes everything after it verifiable.
     2024** as though it were current. 118 profiles are waiting for data. The
     scraper lives in `old-discord-bot/scripts/parse-psn-profile.js`;
     `RetryAxiosHttpClient` is already bound and unused, clearly in anticipation.
-    Re-enable the `parse-psn-profiles` scheduler job once ported.
+    Once ported, it will be triggered by the in-process job runner (plan 02, M6.1).
 28. **LFG.** The largest gap: 11 subcommands plus a points engine. The Prisma
     models exist but the tables are **empty**, so this is greenfield — no
     migration, but also no continuity with the community's old rankings, which
     is worth telling users. Port subcommand-by-subcommand, each with a test.
-29. **`has-been-sold`** — marketplace cleanup. Small, re-enables a commented-out
-    scheduler job, and depends on `message_id` being correct (items 1–2).
+29. **`has-been-sold`** — marketplace cleanup. Small, depends on `message_id`
+    being correct (items 1–2), and will be triggered by the in-process job
+    runner (plan 02, M6.1).
 30. **`market wanted`** — the counterpart to `/marketplace sell`.
 31. **`stock`** — stock-alert URL watching. Lowest value; consider dropping.
 
-As each lands, uncomment the matching job in `scheduler/config.ini`, change its
-`command` from `node scripts/…` to `bun run:command …`, **rebuild the image**,
-and verify inside the container.
+As each lands, add it to the in-process job runner (plan 02, M6.1). The old
+scheduler container directory has been deleted.
 
 ## If you only do one thing
 

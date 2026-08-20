@@ -5,7 +5,8 @@ does that the rewrite (`discord-bot/`, Bun + discord.js v14 + Prisma + Inversify
 
 Method: full read of `old-discord-bot/src` (commands, subcommands, services, utils, events) and
 `old-discord-bot/scripts`, compared against `discord-bot/src`, `discord-bot/bin/console.ts`,
-`discord-bot/prisma/schema.prisma` and `scheduler/config.ini`.
+and `discord-bot/prisma/schema.prisma`. (Note: the `scheduler/` directory was deleted 2026-08-19;
+historical references to `scheduler/config.ini` below are kept for context.)
 
 > Note on the DB: `discord-bot/prisma/schema.prisma` **already declares every legacy table**
 > (LFG*, StockUrls, SpecialChannel, CommandChannelLink, …). The models exist, but no domain,
