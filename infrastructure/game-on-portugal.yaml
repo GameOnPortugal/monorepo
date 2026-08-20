@@ -137,20 +137,33 @@ services:
     networks:
       - internal
 
-  # --- Portal (added by docs/plans/03-portal.md) ---------------------------
-  # Deliberately absent until the images exist — Portainer fails a stack whose
-  # image cannot be pulled, which would take the bot down with it. Add these
-  # together with the portal-api / portal-web release-please components.
-  #
-  # portal-api:
-  #   image: docker.io/joshlopes/game-on-portugal-portal-api:${APP_VERSION:-latest}
-  #   container_name: gop-portal-api
-  #   networks: [internal]
-  #
-  # portal-web:
-  #   image: docker.io/joshlopes/game-on-portugal-portal-web:${APP_VERSION:-latest}
-  #   container_name: gop-portal-web
-  #   networks: [proxy, internal]
+  # --- Portal (added by docs/plans/03-portal.md, scaffolded M8.2/M8.3/M8.5) -
+  # Read-only over the bot's schema (see portal/api/src/db.ts) — never runs a
+  # migration. deploy.yml builds and pushes both images alongside the bot's on
+  # every push to main, so by the time this stack file lands `docker compose
+  # pull`/Portainer has something to pull.
+  portal-api:
+    image: docker.io/joshlopes/game-on-portugal-portal-api:${APP_VERSION:-latest}
+    container_name: gop-portal-api
+    environment:
+      DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in the Portainer stack env}@db:3306/discord-bot
+      PORT: "3001"
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+
+  portal-web:
+    image: docker.io/joshlopes/game-on-portugal-portal-web:${APP_VERSION:-latest}
+    container_name: gop-portal-web
+    restart: unless-stopped
+    depends_on:
+      - portal-api
+    networks:
+      - proxy      # Caddy serves this at game-on-portugal.pt (see infrastructure/caddy/)
+      - internal   # nginx inside this image proxies /api/ and /health to portal-api
 
 networks:
   # Shared with the host's Caddy; must already exist (`docker network create proxy`).

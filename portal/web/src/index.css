@@ -1,0 +1,118 @@
+@import "tailwindcss";
+
+/* Self-hosted webfonts (no third-party CDN — see portal/README.md). Archivo
+   Black is the stand-in "heavy display face echoing the wordmark's brush
+   weight" until M8.1 (brand vendoring) traces/sources the real one; Inter is
+   the neutral body sans. Two families total, per docs/plans/03-portal.md. */
+@import "@fontsource/archivo-black";
+@import "@fontsource-variable/inter";
+
+/*
+ * Design tokens — docs/plans/03-portal.md "Brand and design direction" +
+ * docs/plans/00-overview.md "Brand assets" (palette sampled from the guild
+ * icon). This @theme block is the SINGLE place these values are defined;
+ * every component consumes them as Tailwind utilities (bg-background,
+ * text-accent-blue, font-display, etc.) rather than hardcoding hex codes.
+ *
+ * Dark-first, not dark-mode-as-afterthought: there is no light theme in v1
+ * (settled, GLOBAL-PLAN M8 note) — --color-background/--color-foreground are
+ * applied directly in the `body` rule below, not behind a `dark:` variant.
+ */
+@theme {
+  --color-background: #060302;
+  --color-foreground: #ffffff;
+
+  /* The four brand face-button colours. This is the ONE place the
+     platform → colour mapping is defined; src/lib/platforms.ts imports
+     these same four names and must never introduce a fifth. See that file
+     for the platform assignment and the reasoning behind it. */
+  --color-accent-red: #ea3223;
+  --color-accent-blue: #4199e7;
+  --color-accent-mint: #8afbcc;
+  --color-accent-yellow: #fffd54;
+
+  /* Muted surface tones for cards/borders on the near-black background —
+     not in the brand sample, derived to give hairline separation without
+     introducing a new hue. */
+  --color-surface: #120d0a;
+  --color-surface-border: #2a211c;
+
+  --font-display: "Archivo Black", "Arial Black", system-ui, sans-serif;
+  --font-body: "Inter Variable", "Inter", system-ui, sans-serif;
+
+  /* Chamfered corners ("restrained gaming cues", plan 03) instead of rounded
+     ones — a single cut-corner radius token used everywhere via `rounded-chamfer`
+     is more consistent than every component picking its own clip-path. */
+  --radius-chamfer: 0.5rem;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground font-body antialiased;
+    /* Hairline scanline texture at very low opacity on hero surfaces only —
+       applied via the .scanlines utility below, not globally: plan 03 warns
+       against loud/animated backgrounds everywhere. */
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-display;
+  }
+}
+
+@layer utilities {
+  /* Restrained "gaming cue" #1: a low-opacity scanline texture, hero
+     surfaces only (see plan 03's design principles). Pure CSS, no image
+     asset. */
+  .scanlines {
+    background-image: repeating-linear-gradient(
+      to bottom,
+      rgb(255 255 255 / 0.035) 0px,
+      rgb(255 255 255 / 0.035) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+  }
+
+  /* Restrained "gaming cue" #2: chamfered (cut) corners on hero/card
+     surfaces, applied with clip-path so it composes with a border. */
+  .chamfer {
+    clip-path: polygon(
+      var(--radius-chamfer) 0%,
+      100% 0%,
+      100% calc(100% - var(--radius-chamfer)),
+      calc(100% - var(--radius-chamfer)) 100%,
+      0% 100%,
+      0% var(--radius-chamfer)
+    );
+  }
+
+  /* Focus states glow rather than outline (plan 03) — respects
+     prefers-reduced-motion via the transition being cut to 0 below. */
+  .focus-glow:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--color-background), 0 0 0 5px var(--color-accent-blue), 0 0 16px 2px
+      rgb(65 153 231 / 0.55);
+  }
+}
+
+/* Motion is functional only (page transitions, image loads) — never
+   decorative, and switched off entirely for anyone who asked for less
+   motion. Do this once, globally, rather than trusting every component to
+   remember the media query. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

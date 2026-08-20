@@ -20,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       bot: ${{ steps.filter.outputs.bot }}
+      portal-api: ${{ steps.filter.outputs.portal-api }}
+      portal-web: ${{ steps.filter.outputs.portal-web }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -28,6 +30,12 @@ jobs:
           filters: |
             bot:
               - 'discord-bot/**'
+              - '.github/workflows/ci.yml'
+            portal-api:
+              - 'portal/api/**'
+              - '.github/workflows/ci.yml'
+            portal-web:
+              - 'portal/web/**'
               - '.github/workflows/ci.yml'
 
   bot:
@@ -165,10 +173,96 @@ jobs:
         working-directory: discord-bot
         run: bun run audit
 
+  portal-api:
+    name: Portal API — typecheck & test
+    needs: changes
+    if: ${{ needs.changes.outputs.portal-api == 'true' }}
+    runs-on: ubuntu-latest
+    # The portal reads the bot's schema and must never run a migration of its
+    # own (docs/plans/03-portal.md "Schema ownership") — this job applies the
+    # bot's own migrations to seed a throwaway CI database, exactly as the
+    # `bot` job above does, then points portal-api's read-only client at it.
+    services:
+      mariadb:
+        image: mariadb:11.7.2
+        env:
+          MARIADB_ROOT_PASSWORD: rootpassword
+          MARIADB_DATABASE: discord_bot
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "/usr/local/bin/healthcheck.sh --su-mysql --connect --innodb_initialized"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: mysql://root:rootpassword@127.0.0.1:3306/discord_bot
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.2"
+
+      # Prisma's preinstall hook requires Node >= 18.18.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install bot dependencies (schema owner)
+        working-directory: discord-bot
+        run: bun install --frozen-lockfile
+
+      - name: Apply bot migrations to the CI database
+        working-directory: discord-bot
+        run: bunx prisma migrate deploy
+
+      - name: Install portal-api dependencies
+        working-directory: portal/api
+        run: bun install --frozen-lockfile
+
+      # Writes into discord-bot/node_modules/@prisma/client, NOT a copy in
+      # portal/api — see portal/api/src/db.ts.
+      - name: Generate Prisma client from discord-bot's schema
+        working-directory: portal/api
+        run: bun run db:generate
+
+      - name: Type-check
+        working-directory: portal/api
+        run: bunx tsc --noEmit
+
+      - name: Test
+        working-directory: portal/api
+        run: bun test
+
+  portal-web:
+    name: Portal Web — typecheck & build
+    needs: changes
+    if: ${{ needs.changes.outputs.portal-web == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.2"
+
+      - name: Install dependencies
+        working-directory: portal/web
+        run: bun install --frozen-lockfile
+
+      - name: Type-check
+        working-directory: portal/web
+        run: bun run typecheck
+
+      - name: Build
+        working-directory: portal/web
+        run: bun run build
+
   # Single required status check — green when every triggered job is.
   ci:
     name: CI
-    needs: [bot, quality]
+    needs: [bot, quality, portal-api, portal-web]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
