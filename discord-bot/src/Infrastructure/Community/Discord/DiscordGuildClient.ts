@@ -1,30 +1,74 @@
 import type { GuildClient } from '../../../Domain/Community/GuildClient.ts';
 import { injectable } from 'inversify';
-import { Client, type Message, TextChannel } from 'discord.js';
+import type { APIMessage, InvalidRequestWarningData, RateLimitData } from 'discord.js';
+import { REST, Routes, RESTEvents } from 'discord.js';
 import { CommunityChannels } from '../../../Domain/Community/CommunityChannels.ts';
 import { CustomEmoji } from '../../../Domain/Community/CustomEmoji.ts';
-import { convertChannel } from './DiscordChannels.ts';
+import { convertChannel, DISCORD_GUILD_ID } from './DiscordChannels.ts';
 import { convertEmoji } from './DiscordEmoji.ts';
 import { ClientError } from '../../../Domain/Community/ClientError.ts';
+import type Logger from '../../../Application/Logger/Logger.ts';
 
+// REST-only client (M4.5 / A5). The previous implementation lazily built and
+// `login()`-ed a *second whole gateway `Client`* on the same bot token and
+// never `destroy()`-ed it, so any process that touched GuildClient (the CLI,
+// most notably `week-screenshot-winner`) held an open gateway session for its
+// entire lifetime. Nothing here — fetching a message, reading its reactions,
+// posting a message — needs a gateway connection; it is plain REST, so
+// `@discordjs/rest` (re-exported by `discord.js`, no new dependency) is
+// enough. `REST`/`Routes`/`RESTEvents` and the `APIMessage` response shape
+// all come from that same re-export (`discord.js` does `export * from
+// '@discordjs/rest'` and `export * from 'discord-api-types/v10'`).
 @injectable()
 export class DiscordGuildClient implements GuildClient {
-    private client: Client | undefined = undefined;
+    private readonly rest: REST;
 
-    constructor(private readonly token: string) {}
+    constructor(
+        // `string | undefined`, not `string` with a `?? ''` fallback at the
+        // call site (A6): when DISCORD_TOKEN is unset (tests, bin/console.ts
+        // without a bot process) this is undefined, and every public method
+        // below fails loudly via `requireToken()` instead of silently
+        // making an unauthenticated request that would 401 deep inside
+        // discord.js with no context.
+        private readonly token: string | undefined,
+        private readonly logger?: Logger,
+    ) {
+        this.rest = new REST({ version: '10' }).setToken(this.token ?? '');
+
+        // M4.6: an invalid-request spike or a sustained rate limit is how
+        // you find out you're heading for a Cloudflare ban before it
+        // happens — wire both into the injected Logger instead of letting
+        // @discordjs/rest handle them silently.
+        if (this.logger) {
+            const logger = this.logger;
+            this.rest.on(RESTEvents.RateLimited, (info: RateLimitData) => {
+                logger.warn('Discord REST rate limit hit', {
+                    route: info.route,
+                    method: info.method,
+                    timeToReset: info.timeToReset,
+                    global: info.global,
+                });
+            });
+            this.rest.on(RESTEvents.InvalidRequestWarning, (info: InvalidRequestWarningData) => {
+                logger.warn('Discord REST invalid request warning', {
+                    count: info.count,
+                    remainingTime: info.remainingTime,
+                });
+            });
+        }
+    }
 
     async getTotalReactionsByEmoji(
         channel: CommunityChannels,
         messageId: string,
         emoji: CustomEmoji,
     ): Promise<number> {
-        const discordEmoji = convertEmoji(emoji);
+        const discordEmojiId = convertEmoji(emoji);
 
         const message = await this.getMessage(channel, messageId);
-        const reactions = message.reactions.cache.filter(
-            (reaction) => reaction.emoji.id === discordEmoji,
+        const reaction = (message.reactions ?? []).find(
+            (candidate) => candidate.emoji.id === discordEmojiId,
         );
-        const reaction = reactions.first();
         if (!reaction) {
             throw new ClientError('Reaction not found');
         }
@@ -33,43 +77,54 @@ export class DiscordGuildClient implements GuildClient {
     }
 
     async getMessageUrl(channel: CommunityChannels, messageId: string): Promise<string> {
-        const message = await this.getMessage(channel, messageId);
-        return message.url;
+        // Confirms the message actually exists (and surfaces a ClientError
+        // if not), matching the previous gateway-based behaviour, before
+        // building the URL. The URL shape itself
+        // (`/channels/{guild}/{channel}/{message}`) is exactly what
+        // discord.js's `Message#url` produces — this is a single-guild bot,
+        // so the guild ID is the configured one rather than something that
+        // needs to be read off the message.
+        await this.getMessage(channel, messageId);
+        return `https://discord.com/channels/${DISCORD_GUILD_ID}/${convertChannel(channel)}/${messageId}`;
     }
 
     async sendMessage(channel: CommunityChannels, message: string): Promise<string> {
-        const client = await this.getClient();
-        const discordChannel = await client.channels.fetch(convertChannel(channel));
+        this.requireToken();
+        const channelId = convertChannel(channel);
 
-        if (!discordChannel?.isTextBased()) {
-            throw new ClientError('Channel not found or is not a text channel');
+        try {
+            // No `allowed_mentions` override here: unlike DiscordBot.ts's
+            // gateway client (which sets `allowedMentions: { parse: [] }`
+            // globally to stop user-supplied text from mass-pinging), the
+            // one caller of this method — the weekly winner announcement —
+            // intentionally mentions the winning user. Matches the previous
+            // gateway-client behaviour, which also had no override.
+            const created = (await this.rest.post(Routes.channelMessages(channelId), {
+                body: { content: message },
+            })) as APIMessage;
+            return created.id;
+        } catch (error) {
+            throw new ClientError(`Failed to send message: ${(error as Error).message}`);
         }
-
-        const sentMessage = await (discordChannel as TextChannel).send(message);
-        return sentMessage.id;
     }
 
-    private async getMessage(channel: CommunityChannels, messageId: string): Promise<Message> {
-        const client = await this.getClient();
-        const discordChannel = await client.channels.fetch(convertChannel(channel));
+    private async getMessage(channel: CommunityChannels, messageId: string): Promise<APIMessage> {
+        this.requireToken();
+        const channelId = convertChannel(channel);
 
-        if (!discordChannel?.isTextBased()) {
-            throw new ClientError('Channel not found or is not a text channel');
+        try {
+            return (await this.rest.get(Routes.channelMessage(channelId, messageId))) as APIMessage;
+        } catch (error) {
+            throw new ClientError(`Message not found: ${(error as Error).message}`);
         }
-        const message = await discordChannel.messages.fetch(messageId);
-        if (!message) {
-            throw new ClientError('Message not found');
-        }
-
-        return message;
     }
 
-    private async getClient(): Promise<Client> {
-        if (this.client === undefined) {
-            this.client = new Client({ intents: [] });
-            await this.client.login(this.token);
+    private requireToken(): string {
+        if (!this.token) {
+            throw new ClientError(
+                'DISCORD_TOKEN is not configured; GuildClient cannot call the Discord API',
+            );
         }
-
-        return this.client;
+        return this.token;
     }
 }

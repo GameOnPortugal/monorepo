@@ -38,9 +38,20 @@ bun test                      # must be green
 ```
 
 Plus: a test that would have caught the bug, a Conventional-Commit PR title with
-a scope (`fix(marketplace): …`, `feat(trophy): …` — **not** `chore:`, which cuts
+a scope (`fix(marketplace): …`, `feat(trophies): …` — **not** `chore:`, which cuts
 no release), and a migration (`make db.diff NAME=…`) if `schema.prisma` changed,
 because the production entrypoint runs `prisma migrate deploy` on every boot.
+
+The scope is **validated by CI** (`.github/workflows/pr-title.yml`) against a
+closed list, so a plausible-looking scope that is not on it fails the PR:
+
+```
+bot  marketplace  screenshots  trophies  media  scheduler
+portal  portal-api  portal-web  db  ci  docker  infra  deps  deps-dev
+```
+
+Note `trophies`, not `trophy`. If a genuinely new area appears, add it to that
+workflow in the same PR rather than picking the nearest existing scope.
 
 ### Where the evidence lives
 
@@ -307,7 +318,7 @@ staying in sync.
 | -- | ---- | -------- |
 | **M5.1** | **Route ads to `📖anuncios`** via `GuildClient` instead of `interaction.reply()`. Five ads are currently sitting in `💬chat` and three elsewhere. | [#20](../known-issues.md), [G2.4](../discord-bot-feature-gap.md), [01 T2](01-marketplace-overhaul.md) |
 | **M5.2** | **Delete removes the Discord message**, tolerating an already-deleted one. The channel is accumulating listings for ads that no longer exist. | [#21](../known-issues.md), [G2.2](../discord-bot-feature-gap.md), [01 T3](01-marketplace-overhaul.md) |
-| **M5.3** | **Schema migration**: `status`, `price_cents`, `images`, `bumped_at`, `expires_at`, `sold_at`, `deleted_at`, plus indexes. Backfill `status='active'`, normalise `adType` (`'sale'` → `'sell'`, 3 values → 2 concepts), parse `price_cents` where unambiguous. | [#22](../known-issues.md), [01 T4](01-marketplace-overhaul.md) |
+| **M5.3** | **Schema migration**: `status`, `price_cents`, `images`, `bumped_at`, `expires_at`, `sold_at`, `deleted_at`, plus indexes. Backfill `status='active'`, normalise `adType` (`'sale'` → `'sell'`), parse `price_cents` where unambiguous. **Corrected history** (checked directly against production, 2026-08-20 — the wording above and in docs/known-issues.md #22 undersold this): `sell` (35 rows) is what the **old** bot wrote, Nov 2024 – Apr 2025. `sale` (28 rows) is what the **current, rewritten** bot has written for every ad since the April 2025 rewrite — `adType='sale' AND message_id IS NULL` is the exact same 28-row set as the orphaned-`message_id` bug (#0/#1); they are one population, not two. So this was never a one-time historical cleanup: the live write path (`SellSubcommand` → `CreateAd`) was still emitting `'sale'` on every new ad. Migration alone would not have fixed it — the drift would have reappeared on the next `/marketplace sell`. Fixed by normalising in `Domain/Marketplace/Ad.ts` (the one place every `Ad` is constructed) rather than editing `SellSubcommand.ts`, which is owned by a parallel PR (`Infrastructure/Bot/**`). PR [#29](https://github.com/GameOnPortugal/monorepo/pull/29) open on branch `feat/m5-ad-schema` (2026-08-20) — mark done once merged. | [#22](../known-issues.md), [01 T4](01-marketplace-overhaul.md) |
 | **M5.4** | **pt-PT copy pass** across every marketplace string, plus `setDescriptionLocalizations`. | [#24](../known-issues.md), [G7.11](../discord-bot-feature-gap.md), [01 T5](01-marketplace-overhaul.md) |
 | **M5.5** | **Listing embed + buttons** — `💬 Contactar` / `✅ Marcar vendido` / `🔄 Renovar`, colour-coded by type, ad ID in the footer so a row can be recovered from the message alone. | [01 T6](01-marketplace-overhaul.md) |
 | **M5.6** | **`sold` / `bump` / `edit` subcommands.** Bump rate-limited to once per ad per 72h. | [01 T7](01-marketplace-overhaul.md) |
