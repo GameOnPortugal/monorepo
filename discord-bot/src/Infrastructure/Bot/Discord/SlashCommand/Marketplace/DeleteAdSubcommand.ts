@@ -6,12 +6,10 @@ import { TYPES } from '../../../../DependencyInjection/types';
 import type Logger from '../../../../../Application/Logger/Logger';
 import CommandHandlerManager from '../../../../CommandHandler/CommandHandlerManager';
 import { DeleteAd } from '../../../../../Application/Write/Marketplace/DeleteAd/DeleteAd';
-import { ListUserAds } from '../../../../../Application/Query/Marketplace/ListUserAds/ListUserAds';
 import { AdId } from '../../../../../Domain/Marketplace/AdId';
 import { UnauthorizedAdDeletion } from '../../../../../Domain/Marketplace/UnauthorizedAdDeletion';
 import RecordNotFound from '../../../../../Domain/RecordNotFound';
 import { InvalidId } from '../../../../../Domain/InvalidId';
-import type { Ad } from '../../../../../Domain/Marketplace/Ad';
 
 @injectable()
 export class DeleteAdSubcommand {
@@ -26,31 +24,32 @@ export class DeleteAdSubcommand {
         const identifier = interaction.options.getString('id', true);
         const userId = interaction.user.id;
 
-        // Deferred first: resolving a numeric position requires a ListUserAds
-        // query before the delete itself, so this can already be slower than
-        // the 3s interaction-ack window. Every reply below is ephemeral, so
-        // fixing that at defer time changes nothing about visibility.
+        // Still deferred: the delete itself does a read, a Discord message
+        // delete and a write, which is not reliably inside the 3s
+        // interaction-ack window. Every reply below is ephemeral, so fixing
+        // that at defer time changes nothing about visibility.
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
+        // M4.8 — the option is autocompleted (MarketplaceAutocompleteHandler),
+        // so `identifier` is an ad id that Discord filled in from the member's
+        // own rows. The positional-index fallback that used to live here —
+        // "or type 2 for your second ad" — is gone: it resolved the position
+        // against a *fresh* ListUserAds query, so an ad created or expired
+        // between the member reading `/marketplace list` and typing the
+        // number shifted every position after it and deleted the wrong row.
+        //
+        // The option is still free text, though: a client can send whatever
+        // it likes without opening the suggestion list. So parse defensively
+        // here, and let DeleteAdHandler own the ownership check.
         let adId: AdId;
         try {
-            if (/^\d+$/.test(identifier)) {
-                const position = parseInt(identifier, 10) - 1;
-                const ads: Ad[] = await this.commandHandlerManager.handle(new ListUserAds(userId));
-                // Look the ad up rather than bounds-check then index: `noUncheckedIndexedAccess`
-                // types the element as possibly-undefined and cannot see the guard above.
-                const ad = ads[position];
-                if (!ad) {
-                    await interaction.editReply({ content: 'Invalid ad position' });
-                    return;
-                }
-                adId = ad.id;
-            } else {
-                adId = AdId.fromString(identifier);
-            }
+            adId = AdId.fromString(identifier.trim());
         } catch (error) {
             if (error instanceof InvalidId) {
-                await interaction.editReply({ content: 'Invalid Ad ID' });
+                await interaction.editReply({
+                    content:
+                        'ID de anúncio inválido. Escolhe um anúncio a partir das sugestões em vez de escreveres o ID à mão.',
+                });
                 return;
             }
             throw error;

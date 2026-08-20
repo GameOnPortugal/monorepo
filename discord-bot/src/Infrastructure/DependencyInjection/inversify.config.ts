@@ -17,6 +17,8 @@ import { PsnProfilesTrophySource } from '../Trophy/PsnProfilesTrophySource.ts';
 import { PingHandler } from '../../Application/Query/Ping/PingHandler.ts';
 import { DiscordBot } from '../Bot/Discord/DiscordBot.ts';
 import { BotExecutor } from '../Bot/BotExecutor.ts';
+import { MarketplaceAutocompleteHandler } from '../Bot/Discord/Autocomplete/MarketplaceAutocompleteHandler.ts';
+import { ScreenshotAutocompleteHandler } from '../Bot/Discord/Autocomplete/ScreenshotAutocompleteHandler.ts';
 import { PingSlashCommand } from '../Bot/Discord/SlashCommand/PingSlashCommand.ts';
 import { ScreenshotSlashCommand } from '../Bot/Discord/SlashCommand/Screenshot/ScreenshotSlashCommand.ts';
 import { CreateScreenshotHandler } from '../../Application/Write/Screenshot/CreateScreenshot/CreateScreenshotHandler.ts';
@@ -126,6 +128,18 @@ myContainer.bind(TYPES.SlashCommandHandler).to(PingSlashCommand);
 myContainer.bind(TYPES.SlashCommandHandler).to(ScreenshotSlashCommand);
 myContainer.bind(TYPES.SlashCommandHandler).to(TrophySlashCommand);
 myContainer.bind(TYPES.SlashCommandHandler).to(MarketplaceSlashCommand);
+
+// Autocomplete handlers (M4.8) — matched to a slash command by getName().
+// Bound to the symbol (which is what BotExecutor multi-injects) *and* toSelf,
+// so a test can resolve one directly without going through the executor.
+myContainer.bind(MarketplaceAutocompleteHandler).toSelf();
+myContainer.bind(ScreenshotAutocompleteHandler).toSelf();
+myContainer.bind(TYPES.AutocompleteHandler).toService(MarketplaceAutocompleteHandler);
+myContainer.bind(TYPES.AutocompleteHandler).toService(ScreenshotAutocompleteHandler);
+
+// Component handlers (M4.7) — matched by custom ID namespace. None yet;
+// M5.5/M5.6/M6.5/M7.6 are the first consumers. The multi-inject is
+// @optional() precisely so this list can legitimately be empty.
 
 // Subcommands
 myContainer.bind(CreateScreenshotSubcommand).toSelf();
