@@ -5,6 +5,7 @@ import { TYPES } from './Infrastructure/DependencyInjection/types.ts';
 import type { PrismaClient } from '@prisma/client';
 import { exitOnEnvErrors, validateBotEnv } from './Infrastructure/Config/env.ts';
 import { createShutdown } from './Infrastructure/Bot/GracefulShutdown.ts';
+import { JobRunner } from './Infrastructure/Job/JobRunner.ts';
 
 // M1.3: this is the one entry point that actually starts a live Discord
 // bot, so it is the one that enforces DISCORD_TOKEN / DISCORD_CLIENT_ID
@@ -16,6 +17,7 @@ exitOnEnvErrors(validateBotEnv().errors);
 
 const logger = myContainer.get<Logger>(TYPES.Logger);
 const app = myContainer.get<Bot>(TYPES.Bot);
+const jobRunner = myContainer.get(JobRunner);
 
 // The Domain/Bot/Bot.ts port only requires start() — deliberately not
 // widened here to add destroy(), since only DiscordBot implements it
@@ -30,8 +32,17 @@ const stoppableApp = app as StoppableBot;
 // uncaughtException that arrives mid-shutdown, must not double-destroy the
 // client or double-disconnect Prisma) lives in createShutdown itself — see
 // GracefulShutdown.ts and its tests.
+//
+// M6.1's job runner is stopped from inside this same sequence rather than
+// from a second `process.on('SIGTERM')` handler. Two independent handlers
+// would race: createShutdown ends in process.exit(), which would kill an
+// in-flight job the runner was still draining. Ordering it here means
+// scheduling stops first, in-flight work finishes, and only then does the
+// gateway close and Prisma disconnect.
 const shutdown = createShutdown({
     destroy: async () => {
+        await jobRunner.stop();
+
         if (typeof stoppableApp.destroy === 'function') {
             await stoppableApp.destroy();
         }
@@ -65,6 +76,7 @@ process.on('uncaughtException', (error) => {
     try {
         await app.start();
         logger.info('⚡️ Discord Bot app is running!');
+        await jobRunner.start();
     } catch (error) {
         logger.error('Error starting app:', { error });
         // M1.4: registerSlashCommands() (and start() more generally) now
