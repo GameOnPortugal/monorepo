@@ -3,6 +3,7 @@ import type {
     CommunityMessage,
     GuildClient,
     ListMessagesOptions,
+    RichMessageContent,
 } from '../../../Domain/Community/GuildClient.ts';
 import { CommunityChannels } from '../../../Domain/Community/CommunityChannels.ts';
 import { CustomEmoji } from '../../../Domain/Community/CustomEmoji.ts';
@@ -19,6 +20,17 @@ interface InMemoryMessage {
 export interface SentMessage {
     channel: CommunityChannels;
     message: string;
+}
+
+export interface SentRichMessage {
+    channel: CommunityChannels;
+    content: RichMessageContent;
+}
+
+export interface EditedRichMessage {
+    channelId: string;
+    messageId: string;
+    content: RichMessageContent;
 }
 
 export interface DeletedMessage {
@@ -40,6 +52,8 @@ export class InMemoryGuildClient implements GuildClient {
     private readonly messages = new Map<string, InMemoryMessage>();
     private nextMessageId = 1;
     public readonly sentMessages: SentMessage[] = [];
+    public readonly sentRichMessages: SentRichMessage[] = [];
+    public readonly editedRichMessages: EditedRichMessage[] = [];
     public readonly deletedMessages: DeletedMessage[] = [];
 
     /** When set, the next call to sendMessage() throws this instead of posting. */
@@ -91,6 +105,8 @@ export class InMemoryGuildClient implements GuildClient {
     reset(): void {
         this.messages.clear();
         this.sentMessages.length = 0;
+        this.sentRichMessages.length = 0;
+        this.editedRichMessages.length = 0;
         this.deletedMessages.length = 0;
         this.nextMessageId = 1;
         this.failNextSendWith = undefined;
@@ -137,6 +153,49 @@ export class InMemoryGuildClient implements GuildClient {
         });
 
         return messageId;
+    }
+
+    /** M5.5 — records what a rich (embed + buttons) message *would have* posted; see the class doc comment. */
+    async sendRichMessage(
+        channel: CommunityChannels,
+        content: RichMessageContent,
+    ): Promise<string> {
+        if (this.failNextSendWith) {
+            const error = this.failNextSendWith;
+            this.failNextSendWith = undefined;
+            throw error;
+        }
+
+        const messageId = `in-memory-${this.nextMessageId++}`;
+        this.sentRichMessages.push({ channel, content });
+        this.messages.set(messageId, {
+            reactions: {},
+            content: content.description ?? '',
+            createdAt: new Date(),
+            attachmentUrls: [],
+            embedImageUrls: content.imageUrl ? [content.imageUrl] : [],
+        });
+
+        return messageId;
+    }
+
+    /**
+     * Mirrors `DiscordGuildClient.editRichMessage`'s idempotency (M5.6): a
+     * `messageId` this fake never registered (or already forgot) is a
+     * no-op, not a throw — same reasoning as `deleteMessage` below.
+     */
+    async editRichMessage(
+        channelId: string,
+        messageId: string,
+        content: RichMessageContent,
+    ): Promise<void> {
+        this.editedRichMessages.push({ channelId, messageId, content });
+
+        const existing = this.messages.get(messageId);
+        if (existing) {
+            existing.content = content.description ?? '';
+            existing.embedImageUrls = content.imageUrl ? [content.imageUrl] : [];
+        }
     }
 
     /**

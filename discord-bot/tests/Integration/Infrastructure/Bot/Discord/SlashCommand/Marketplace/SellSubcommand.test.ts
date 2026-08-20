@@ -67,8 +67,10 @@ describe('SellSubcommand Integration Test', () => {
 
         await sellSubcommand.handle(buildContext(interaction));
 
-        expect(guildClient.sentMessages.length).toBe(1);
-        const [sent] = guildClient.sentMessages;
+        // M5.5: the listing is now posted as a rich embed + buttons via
+        // sendRichMessage, not a plain string via sendMessage.
+        expect(guildClient.sentRichMessages.length).toBe(1);
+        const [sent] = guildClient.sentRichMessages;
         // The listing was sent through the GuildClient port to the
         // marketplace channel — never to `interaction.channelId`, which is
         // exactly what let ads land in #chat before M5.1.
@@ -123,7 +125,7 @@ describe('SellSubcommand Integration Test', () => {
         expect(errorReply.content).toContain('ref:');
 
         // ...nothing was posted to the marketplace channel...
-        expect(guildClient.sentMessages.length).toBe(0);
+        expect(guildClient.sentRichMessages.length).toBe(0);
 
         // ...and no ad row was ever written.
         const ads = await adRepository.findByUserId(userId);
@@ -145,7 +147,7 @@ describe('SellSubcommand Integration Test', () => {
         await sellSubcommand.handle(buildContext(interaction));
 
         // Exactly one message was posted to the marketplace channel...
-        expect(guildClient.sentMessages.length).toBe(1);
+        expect(guildClient.sentRichMessages.length).toBe(1);
         // ...the user was told via an ephemeral follow-up, not a second
         // reply, and the message does not leak the raw database error...
         expect(interaction.followUpCalls.length).toBe(1);

@@ -112,4 +112,55 @@ export class Ad {
             array.deleted_at,
         );
     }
+
+    /**
+     * Returns a new `Ad` with the given fields replaced — everything else,
+     * including `id`, carried over unchanged (M5.6). `Ad` has no other
+     * mutation surface (every field is `readonly`), so the sold/bump/edit
+     * transitions this backs would otherwise mean re-listing all twenty-one
+     * constructor arguments at every call site — exactly the kind of
+     * copy-paste that silently drops a field on the next one added.
+     * `updatedAt` defaults to "now" on every call, matching Prisma's
+     * `@updatedAt` semantics for the column it maps to. Keys are checked
+     * with `in` rather than `??`/`?.` so a caller can deliberately set a
+     * field back to `null` (e.g. clearing `bumpedAt`) without that being
+     * indistinguishable from "leave it alone".
+     */
+    public cloneWith(
+        changes: Partial<{
+            channelId: string | null;
+            messageId: string | null;
+            status: AdStatus;
+            price: string | null;
+            priceCents: number | null;
+            description: string | null;
+            bumpedAt: Date | null;
+            soldAt: Date | null;
+            updatedAt: Date;
+        }>,
+    ): Ad {
+        return new Ad(
+            this.id,
+            this.name,
+            this.authorId,
+            'channelId' in changes ? (changes.channelId ?? null) : this.channelId,
+            'messageId' in changes ? (changes.messageId ?? null) : this.messageId,
+            this.state,
+            'price' in changes ? (changes.price ?? null) : this.price,
+            this.zone,
+            this.dispatch,
+            this.warranty,
+            'description' in changes ? (changes.description ?? null) : this.description,
+            this.adType,
+            this.createdAt,
+            changes.updatedAt ?? new Date(),
+            changes.status ?? this.status,
+            'priceCents' in changes ? (changes.priceCents ?? null) : this.priceCents,
+            this.images,
+            'bumpedAt' in changes ? (changes.bumpedAt ?? null) : this.bumpedAt,
+            this.expiresAt,
+            'soldAt' in changes ? (changes.soldAt ?? null) : this.soldAt,
+            this.deletedAt,
+        );
+    }
 }

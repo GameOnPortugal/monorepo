@@ -28,6 +28,43 @@ export interface ListMessagesOptions {
     limit: number;
 }
 
+/**
+ * A button on a `RichMessageContent` (M5.5). Deliberately a plain,
+ * discord.js-free shape — `GuildClient` lives in `Domain/Community`, which
+ * (unlike `Domain/Bot`) stays framework-free, so callers describe *what* a
+ * button says and does, and the discord.js adapter (`DiscordGuildClient`)
+ * is the only place that turns it into an actual `ButtonBuilder`.
+ * `customId` must come from `buildCustomId()` (`Domain/Bot/CustomId.ts`) —
+ * never string-concatenated — so it round-trips through `BotExecutor`'s
+ * namespace routing.
+ */
+export interface MessageButton {
+    customId: string;
+    label: string;
+    emoji?: string;
+    style: 'primary' | 'secondary' | 'success' | 'danger';
+}
+
+/**
+ * A rich (embed + buttons) message, in the same domain-shaped,
+ * discord.js-free spirit as `CommunityMessage` above. Introduced for the
+ * marketplace listing embed (M5.5: colour-coded by type, item image, author,
+ * ad id in the footer, action buttons) but deliberately generic — not
+ * `AdListingContent` — so a future rich message (M7.6's rank presentation,
+ * `wanted`'s M5.7) can reuse `sendRichMessage`/`editRichMessage` instead of
+ * both ad-hoc string-building and a second bespoke port method.
+ */
+export interface RichMessageContent {
+    color: number;
+    title: string;
+    description?: string;
+    imageUrl?: string;
+    authorName?: string;
+    authorIconUrl?: string;
+    footerText?: string;
+    buttons?: MessageButton[];
+}
+
 export interface GuildClient {
     getTotalReactionsByEmoji(
         channel: CommunityChannels,
@@ -38,6 +75,31 @@ export interface GuildClient {
     getMessageUrl(channel: CommunityChannels, messageId: string): Promise<string>;
 
     sendMessage(channel: CommunityChannels, message: string): Promise<string>;
+
+    /**
+     * Posts a `RichMessageContent` (embed + buttons) and returns the new
+     * message's id (M5.5) — the rich-content counterpart to `sendMessage`,
+     * used everywhere a marketplace listing is posted or reposted (create,
+     * bump/renew).
+     */
+    sendRichMessage(channel: CommunityChannels, content: RichMessageContent): Promise<string>;
+
+    /**
+     * Edits a previously-posted rich message in place (M5.6's `edit`,
+     * which amends price/description without moving the listing to the
+     * bottom of the channel the way a bump does). Takes a raw channel id,
+     * like `deleteMessage`, for the same reason: an ad's own stored
+     * `channel_id` is not always `CommunityChannels.MARKETPLACE` (issue
+     * #20). Tolerates an already-gone message the same way `deleteMessage`
+     * does — a moderator having removed it by hand should not turn an
+     * otherwise-successful edit of the underlying row into a user-facing
+     * error.
+     */
+    editRichMessage(
+        channelId: string,
+        messageId: string,
+        content: RichMessageContent,
+    ): Promise<void>;
 
     /**
      * Deletes a previously-posted message.

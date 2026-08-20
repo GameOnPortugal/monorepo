@@ -41,9 +41,17 @@ import { OrmAdRepository } from '../Orm/OrmAdRepository.ts';
 import type { AdRepository } from '../../Domain/Marketplace/AdRepository.ts';
 import { CreateAdHandler } from '../../Application/Write/Marketplace/CreateAd/CreateAdHandler.ts';
 import { DeleteAdHandler } from '../../Application/Write/Marketplace/DeleteAd/DeleteAdHandler.ts';
+import { MarkAdSoldHandler } from '../../Application/Write/Marketplace/MarkAdSold/MarkAdSoldHandler.ts';
+import { BumpAdHandler } from '../../Application/Write/Marketplace/BumpAd/BumpAdHandler.ts';
+import { EditAdHandler } from '../../Application/Write/Marketplace/EditAd/EditAdHandler.ts';
+import { GetAdHandler } from '../../Application/Query/Marketplace/GetAd/GetAdHandler.ts';
 import { DeleteAdSubcommand } from '../Bot/Discord/SlashCommand/Marketplace/DeleteAdSubcommand.ts';
 import { MarketplaceSlashCommand } from '../Bot/Discord/SlashCommand/Marketplace/MarketplaceSlashCommand.ts';
 import { SellSubcommand } from '../Bot/Discord/SlashCommand/Marketplace/SellSubcommand.ts';
+import { SoldAdSubcommand } from '../Bot/Discord/SlashCommand/Marketplace/SoldAdSubcommand.ts';
+import { BumpAdSubcommand } from '../Bot/Discord/SlashCommand/Marketplace/BumpAdSubcommand.ts';
+import { EditAdSubcommand } from '../Bot/Discord/SlashCommand/Marketplace/EditAdSubcommand.ts';
+import { MarketplaceComponentHandler } from '../Bot/Discord/Component/Marketplace/MarketplaceComponentHandler.ts';
 import { ListUserAdsHandler } from '../../Application/Query/Marketplace/ListUserAds/ListUserAdsHandler';
 import { ListAdsSubcommand } from '../Bot/Discord/SlashCommand/Marketplace/ListAdsSubcommand';
 import { GetScreenshotWinnerHandler } from '../../Application/Query/Screenshot/GetScreenshotWinner/GetScreenshotWinnerHandler';
@@ -108,6 +116,10 @@ myContainer.bind(TYPES.CommandHandler).to(GetRankHandler);
 myContainer.bind(TYPES.CommandHandler).to(CreateAdHandler);
 myContainer.bind(TYPES.CommandHandler).to(ListUserAdsHandler);
 myContainer.bind(TYPES.CommandHandler).to(DeleteAdHandler);
+myContainer.bind(TYPES.CommandHandler).to(GetAdHandler);
+myContainer.bind(TYPES.CommandHandler).to(MarkAdSoldHandler);
+myContainer.bind(TYPES.CommandHandler).to(BumpAdHandler);
+myContainer.bind(TYPES.CommandHandler).to(EditAdHandler);
 myContainer.bind(TYPES.CommandHandler).to(GetScreenshotWinnerHandler);
 
 // Slash Commands
@@ -124,9 +136,13 @@ myContainer.bind(ScreenshotAutocompleteHandler).toSelf();
 myContainer.bind(TYPES.AutocompleteHandler).toService(MarketplaceAutocompleteHandler);
 myContainer.bind(TYPES.AutocompleteHandler).toService(ScreenshotAutocompleteHandler);
 
-// Component handlers (M4.7) — matched by custom ID namespace. None yet;
-// M5.5/M5.6/M6.5/M7.6 are the first consumers. The multi-inject is
-// @optional() precisely so this list can legitimately be empty.
+// Component handlers (M4.7) — matched by custom ID namespace.
+// MarketplaceComponentHandler (M5.5/M5.6) is the first consumer, claiming
+// the `mkt` namespace for the listing buttons (contact/sold/bump) and the
+// edit modal submission. Bound to the symbol *and* toSelf, matching the
+// autocomplete handlers above, so a test can resolve it directly.
+myContainer.bind(MarketplaceComponentHandler).toSelf();
+myContainer.bind(TYPES.ComponentHandler).toService(MarketplaceComponentHandler);
 
 // Subcommands
 myContainer.bind(CreateScreenshotSubcommand).toSelf();
@@ -138,6 +154,9 @@ myContainer.bind(RankSubcommand).toSelf();
 myContainer.bind(SellSubcommand).toSelf();
 myContainer.bind(ListAdsSubcommand).toSelf();
 myContainer.bind(DeleteAdSubcommand).toSelf();
+myContainer.bind(SoldAdSubcommand).toSelf();
+myContainer.bind(BumpAdSubcommand).toSelf();
+myContainer.bind(EditAdSubcommand).toSelf();
 
 // Writes
 myContainer.bind<CommandHandlerManager>(CommandHandlerManager).toSelf();
