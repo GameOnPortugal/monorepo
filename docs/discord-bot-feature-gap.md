@@ -178,6 +178,15 @@ Legacy rendered ranks with the guild's custom trophy emojis (plat/gold/silver/br
 
 ## 5. LFG (Looking For Group) — 🚫 will not be ported
 
+> **Closed to discussion.** Luis is not interested in moving LFG — decided
+> 2026-08-19, reaffirmed 2026-08-20. Everything in this section is kept as a
+> record of what the old bot did, **not** as a specification for anything to be
+> built. `M9.3` in
+> [`plans/GLOBAL-PLAN.md`](plans/GLOBAL-PLAN.md#standing-instructions-from-luis)
+> is a deletion item: drop the four (empty) LFG tables and their models. If you
+> are an agent reading this section looking for a feature to port, keep going —
+> this one is not it.
+
 > **Decided 2026-08-19: Luis is not interested in moving LFG.** This was the
 > largest single item in the revival plan — roughly 40% of the old bot's command
 > surface — and it is now closed. The four Prisma models (`LFGProfile`,

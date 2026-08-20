@@ -24,6 +24,9 @@ and in what order**, and it is the file to update as things land.
 - **Nothing here is a suggestion to skip tests.** The reason this repo
   accumulated fourteen months of invisible breakage is that the layer where all
   the bugs live has no tests at all.
+- **Read [Standing instructions from Luis](#standing-instructions-from-luis)
+  before you pick an item up.** It says which item is closed to discussion (LFG)
+  and how much latitude you have on every other one (a lot).
 
 ### Definition of done, for every item
 
@@ -68,6 +71,60 @@ bugs lives — has **no tests**.
 
 So the ordering principle is: **stop the bleeding → restore the signal → make
 deployment real → modernise → build.** Resist starting at M8.
+
+---
+
+## Standing instructions from Luis
+
+Two things that override the wording of any individual work item below.
+Restated **2026-08-20**.
+
+### 1. LFG is not moving. Full stop.
+
+**Luis is not interested in moving LFG.** It will not be ported — not in a
+reduced form, not "just the profiles", not later. This was decided on
+2026-08-19 and reaffirmed on 2026-08-20, and it is not a question anybody
+needs to reopen.
+
+Practically: **M9.3** is a *deletion* item, not a porting item — drop
+`LfgProfile`, `LfgGame`, `LfgEvent` and `LfgParticipation` and their four
+tables (all empty, so there is no data to preserve and no migration risk).
+Everything under [§5 of the feature-gap document](../discord-bot-feature-gap.md)
+is recorded as history, not as a specification. If a future document, ticket or
+agent proposes building LFG, the answer is no; point at this section.
+
+### 2. On every *other* feature, the agent has design latitude
+
+The work items below describe the **outcome** the community should get, not the
+implementation an agent is obliged to produce. They were written from a
+16-month-old codebase and a bot that predates most of the Discord platform
+features that now exist.
+
+So, before implementing any feature item, the agent **must**:
+
+1. **Look at what is actually in the tree today**, not at what the plan assumed
+   was there. The plan is evidence-backed, but it is a snapshot, and items have
+   been landing against it since 2026-08-19.
+2. **Say whether there is a better way to do it now** — a newer Discord
+   primitive, a simpler data model, a smaller surface, or simply not building
+   it at all.
+
+If the agent has a better idea, it is **free to build the better idea** instead
+of the letter of the item. No approval round-trip. Two conditions, both
+non-negotiable:
+
+- The **outcome** for the community must be at least as good. Latitude is
+  permission to redesign, not permission to descope. If it *is* a descope, that
+  is a call for Luis — write it up rather than doing it.
+- **Write the decision down.** Update the item in this file (and the relevant
+  `0X-*.md` design doc) with what you built instead and *why*, in the same shape
+  as the M9.1 AutoMod redesign — that one is the worked example of this rule.
+
+And if an agent evaluates a feature and **decides not to pick it up now**, that
+is fine — but it must record, in the item itself: what it found, why it stopped,
+and what the next agent should do differently. An item silently skipped is
+indistinguishable from an item nobody reached, and that is exactly how this repo
+accumulated fourteen months of invisible breakage.
 
 ---
 
@@ -387,7 +444,7 @@ What remains is deletion work plus the privacy flag.
 | -- | ---- | -------- | ----- |
 | **M9.1** | **Channel rules — reimplemented as Discord AutoMod, not a message pipeline.** Define the guild's AutoMod rules (keyword/regex blocking) as checked-in JSON applied through `@discordjs/rest`, and express "commands only" channels as channel *permissions* (deny `SendMessages`, allow `UseApplicationCommands`) rather than deleting messages after the fact. | [G16 / §6.1](../discord-bot-feature-gap.md) | **Redesigned — see decision 4.** The straight port needed the `MessageContent` privileged intent and a message-event pipeline the rewrite does not have, and it contradicted M4.6's minimal-intents position. AutoMod does the same job server-side, with no intent, no gateway traffic, no bot latency, and it keeps enforcing while the bot is down. The `specialchannels` table is **empty** — drop the model with M9.6. |
 | **M9.2** | ~~`commandchannellink`~~ — **dropped.** Delete the `CommandChannelLink` model and its table. | [G17 / §6.2](../discord-bot-feature-gap.md) | **Decided.** The table is **empty**; M1.7's static channel config covers every real use. Keeping a third unused model would only invite someone to wire it up later. |
-| **M9.3** | ~~**LFG**~~ — **dropped, will not be ported.** Delete the four LFG models (`LfgProfile`, `LfgGame`, `LfgEvent`, `LfgParticipation`) and their tables. | [G13, G14 / §5](../discord-bot-feature-gap.md) | **Decided by Luis, 2026-08-19: he is not interested in moving LFG.** This closes the single largest item in the plan (~40% of the old bot's surface) and removes the one work item that needed its own spec document. All four tables are **empty**, so there is no data to preserve and no migration risk. |
+| **M9.3** | ~~**LFG**~~ — **dropped, will not be ported.** Delete the four LFG models (`LfgProfile`, `LfgGame`, `LfgEvent`, `LfgParticipation`) and their tables. | [G13, G14 / §5](../discord-bot-feature-gap.md) | **Decided by Luis, 2026-08-19 and reaffirmed 2026-08-20: he is not interested in moving LFG** — see [Standing instructions](#standing-instructions-from-luis), where it is restated as closed to discussion. This closes the single largest item in the plan (~40% of the old bot's surface) and removes the one work item that needed its own spec document. All four tables are **empty**, so there is no data to preserve and no migration risk. |
 | **M9.4** | ~~**Stock alerts + Telegram bridge**~~ — **dropped.** Delete the `StockUrls` model and its table, and the `TELEGRAM_ACCESS_TOKEN` env var. | [G15 / §7.5](../discord-bot-feature-gap.md) | **Decided.** `stockurls` holds **0 rows** — the feature has not been used once since the rewrite went live in April 2025. The legacy implementation also lost every pending alert on restart (bare `setTimeout`), so a port would have been a rewrite, not a port. |
 | **M9.5** | **Loki, not Sentry.** Delete `SENTRY_DSN`, `REDIS_DSN`, `TROPHY_WEBHOOK` and `TELEGRAM_ACCESS_TOKEN` from `.env.example` and the compose files. | [G22 / §7.6](../discord-bot-feature-gap.md), [#8](../known-issues.md) | **Decided.** Loki is already half-wired and there is an existing Grafana Cloud stack to ship to; Sentry would be a second vendor for the same signal. Do **not** enable `LOKI_HOST` until M0.7 lands — the entrypoint prints the database password on the first line, and enabling Loki first ships it to Grafana Cloud. Fix the `job: 'tedcrypto-campaign'` label bug in M3.5. |
 | **M9.6** | **Retire `old-discord-bot/`** — move to `reference/` once M7 has taken what it needs from the scraper, then delete. Drop the six now-dead Prisma models in one migration (4 LFG + `StockUrls` + `CommandChannelLink` + `SpecialChannel`). | revival plan item 25 | With M9.1–M9.4 settled, the only thing `old-discord-bot/` is still the sole specification for is the **PSNProfiles scraper and points ladder** (M7.1, M7.2). Once those are ported it can go. |
@@ -422,6 +479,12 @@ These are not milestones. They are constraints on every PR in every milestone.
    repo's 30-commit `chore:` streak is precisely why nothing has ever shipped.
 8. **Verify in production, not in the repo.** The scheduler ran zero jobs for
    sixteen months while the repo said otherwise.
+9. **Evaluate before you implement, and write the decision down.** Every feature
+   item is an outcome, not a spec — see
+   [Standing instructions from Luis](#standing-instructions-from-luis). Check
+   what is in the tree today, prefer the better modern approach where there is
+   one, and record what you chose. The one item with no latitude is **LFG: it
+   is not being ported.**
 
 ---
 
