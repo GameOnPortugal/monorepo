@@ -14,4 +14,13 @@ export enum CommunityChannels {
      * channel the command was run from.
      */
     MARKETPLACE = 'marketplace',
+    /**
+     * Where `trophies:sync` (M7.3) announces a newly-credited trophy
+     * (M7.8), replacing the old bot's `TROPHY_WEBHOOK`. Unlike the three
+     * channels above, there is no verified snowflake for this one yet — see
+     * `DiscordChannels.ts`'s doc comment. An operator must set
+     * `DISCORD_CHANNEL_TROPHIES` before `TROPHIES_ANNOUNCE_ENABLED=true`
+     * does anything visible.
+     */
+    TROPHIES = 'trophies',
 }

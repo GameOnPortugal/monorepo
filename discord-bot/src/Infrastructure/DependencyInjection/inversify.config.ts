@@ -47,6 +47,13 @@ import { SellSubcommand } from '../Bot/Discord/SlashCommand/Marketplace/SellSubc
 import { ListUserAdsHandler } from '../../Application/Query/Marketplace/ListUserAds/ListUserAdsHandler';
 import { ListAdsSubcommand } from '../Bot/Discord/SlashCommand/Marketplace/ListAdsSubcommand';
 import { GetScreenshotWinnerHandler } from '../../Application/Query/Screenshot/GetScreenshotWinner/GetScreenshotWinnerHandler';
+import { ExpireAdHandler } from '../../Application/Write/Marketplace/ExpireAd/ExpireAdHandler.ts';
+import { MarkAdPendingRenewalHandler } from '../../Application/Write/Marketplace/MarkAdPendingRenewal/MarkAdPendingRenewalHandler.ts';
+import { RenewAdHandler } from '../../Application/Write/Marketplace/RenewAd/RenewAdHandler.ts';
+import { FindAdsDueForLifecycleActionHandler } from '../../Application/Query/Marketplace/FindAdsDueForLifecycleAction/FindAdsDueForLifecycleActionHandler.ts';
+import { FindActiveAdsForReconcileHandler } from '../../Application/Query/Marketplace/FindActiveAdsForReconcile/FindActiveAdsForReconcileHandler.ts';
+import { AdsLifecycleJob } from '../Job/Jobs/AdsLifecycleJob.ts';
+import { AdsReconcileJob } from '../Job/Jobs/AdsReconcileJob.ts';
 import type { GuildClient } from '../../Domain/Community/GuildClient.ts';
 import { DiscordGuildClient } from '../Community/Discord/DiscordGuildClient.ts';
 import WeekScreenshotWinner from '../../Ui/Cli/WeekScreenshotWinner.ts';
@@ -109,6 +116,12 @@ myContainer.bind(TYPES.CommandHandler).to(CreateAdHandler);
 myContainer.bind(TYPES.CommandHandler).to(ListUserAdsHandler);
 myContainer.bind(TYPES.CommandHandler).to(DeleteAdHandler);
 myContainer.bind(TYPES.CommandHandler).to(GetScreenshotWinnerHandler);
+// M6.5/M6.6 — ad lifecycle and reconcile.
+myContainer.bind(TYPES.CommandHandler).to(ExpireAdHandler);
+myContainer.bind(TYPES.CommandHandler).to(MarkAdPendingRenewalHandler);
+myContainer.bind(TYPES.CommandHandler).to(RenewAdHandler);
+myContainer.bind(TYPES.CommandHandler).to(FindAdsDueForLifecycleActionHandler);
+myContainer.bind(TYPES.CommandHandler).to(FindActiveAdsForReconcileHandler);
 
 // Slash Commands
 myContainer.bind(TYPES.SlashCommandHandler).to(PingSlashCommand);
@@ -174,28 +187,54 @@ const botEnv = validateBotEnv();
 // stand-in instead, which is what makes the M6.4 winner job's
 // tie / vanished-message / dry-run behaviour assertable without a mocking
 // library.
+// `toDynamicValue`, NOT `toConstantValue(new …(myContainer.get(…)))`.
+//
+// `toConstantValue` needs its argument *now*, so every `myContainer.get()`
+// inside one resolves while this module is still executing — against a
+// container that only holds the bindings declared above this line. That made
+// binding **order** load-bearing, silently, and in a way no test could see:
+// these two branches are the only ones a real `DISCORD_TOKEN` takes, so the
+// test suite and CI (which deliberately run without a token, binding
+// InMemoryGuildClient/InMemoryClient instead) never executed them at all.
+//
+// It cost a production outage. `myContainer.get(BotExecutor)` below pulls in
+// every SlashCommandHandler -> subcommand -> CommandHandlerManager -> every
+// `TYPES.CommandHandler`, and one of those (CreateScreenshotHandler) needs
+// `TYPES.MediaStorage` — which is bound ~40 lines *further down* this file.
+// The live bot crash-looped on `No bindings found for service:
+// "Symbol(MediaStorage)"` while CI stayed green.
+//
+// A dynamic value defers resolution to the first `container.get(TYPES.Bot)`,
+// by which point the whole file has run and every binding exists. Reordering
+// the lines would have fixed today's symptom and left the trap armed for the
+// next binding added in the wrong place.
 if (botEnv.config) {
+    const config = botEnv.config;
     myContainer
         .bind<GuildClient>(TYPES.GuildClient)
-        .toConstantValue(
-            new DiscordGuildClient(botEnv.config.DISCORD_TOKEN, myContainer.get(TYPES.Logger)),
-        );
+        .toDynamicValue(
+            () => new DiscordGuildClient(config.DISCORD_TOKEN, myContainer.get(TYPES.Logger)),
+        )
+        .inSingletonScope();
 } else {
     myContainer.bind<GuildClient>(TYPES.GuildClient).to(InMemoryGuildClient).inSingletonScope();
 }
 myContainer.bind(BotExecutor).toSelf();
 if (botEnv.config) {
+    const config = botEnv.config;
     myContainer
         .bind(TYPES.Bot)
-        .toConstantValue(
-            new DiscordBot(
-                botEnv.config.DISCORD_TOKEN,
-                botEnv.config.DISCORD_CLIENT_ID,
-                myContainer.get(TYPES.Logger),
-                myContainer.get(BotExecutor),
-                botEnv.config.DISCORD_DEV_GUILD_ID,
-            ),
-        );
+        .toDynamicValue(
+            () =>
+                new DiscordBot(
+                    config.DISCORD_TOKEN,
+                    config.DISCORD_CLIENT_ID,
+                    myContainer.get(TYPES.Logger),
+                    myContainer.get(BotExecutor),
+                    config.DISCORD_DEV_GUILD_ID,
+                ),
+        )
+        .inSingletonScope();
 } else {
     // Explicit and loud (M1.3), not a silent accident: InMemoryClient is a
     // deliberate no-op escape hatch for the test suite and bin/console.ts,
@@ -264,12 +303,17 @@ myContainer
     );
 myContainer.bind(JobRunner).toSelf().inSingletonScope();
 myContainer.bind(WeekScreenshotWinnerJob).toSelf();
+// M6.5/M6.6 — see AdsLifecycleJob.ts / AdsReconcileJob.ts for behaviour.
+myContainer.bind(AdsLifecycleJob).toSelf();
+myContainer.bind(AdsReconcileJob).toSelf();
 myContainer.bind(RelinkScreenshotsJob).toSelf();
 myContainer.bind(TrophiesSyncJob).toSelf();
 myContainer.bind(RunJobConsoleCommand).toSelf();
 
 myContainer.get(JobRunner).register(myContainer.get(WeekScreenshotWinnerJob));
 myContainer.get(JobRunner).register(myContainer.get(RelinkScreenshotsJob));
+myContainer.get(JobRunner).register(myContainer.get(AdsLifecycleJob));
+myContainer.get(JobRunner).register(myContainer.get(AdsReconcileJob));
 
 // trophies:sync (M7.3) is always bound above and always runnable by hand
 // (`bun run:command jobs:run trophies:sync --dry-run`), but registering it

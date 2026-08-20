@@ -63,9 +63,11 @@ jobs:
           ignore-unfixed: true
           format: sarif
           output: trivy-results.sarif
-          # old-discord-bot/ is retired reference code (Node 15, never built or
-          # deployed) — scanning it would drown the report in unfixable CVEs.
-          skip-dirs: old-discord-bot,webpage
+          # webpage/ is a static-site copy that isn't what serves the real
+          # site — scanning it would drown the report in unfixable CVEs.
+          # (old-discord-bot/ carried the same exclusion until it was
+          # deleted in M9.6 — 2026-08-20.)
+          skip-dirs: webpage
 
       - name: Upload Trivy results to code scanning
         uses: github/codeql-action/upload-sarif@v3
