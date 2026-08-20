@@ -8,6 +8,13 @@ import { PrismaClient } from '@prisma/client';
 import { myContainer } from '../../../../../../src/Infrastructure/DependencyInjection/inversify.config';
 import DatabaseUtil from '../../../../../Helper/DatabaseUtil.ts';
 
+// This test hits the real network (no mocking library, matching the rest of
+// this suite), so the fixture URL has to be something actually fetchable.
+// `cdn.discordapp.com/embed/avatars/0.png` is one of Discord's static
+// default-avatar assets — unlike a signed attachment URL it does not expire,
+// and unlike the previous `placehold.co` fixture it satisfies the M4.9
+// Discord-CDN host allowlist that CreateScreenshotHandler now enforces
+// (see AttachmentGuard.ts).
 describe('CreateScreenshotHandler Integration Test', () => {
     let commandHandlerManager: CommandHandlerManager;
     let ormClient: PrismaClient;
@@ -31,7 +38,7 @@ describe('CreateScreenshotHandler Integration Test', () => {
         const channelId = 'channel123';
         const messageId = 'message123';
         const platform = 'PS5';
-        const imageUrl = 'https://placehold.co/600x400/png';
+        const imageUrl = 'https://cdn.discordapp.com/embed/avatars/0.png';
 
         const command = new CreateScreenshot(
             screenshotId,
@@ -64,7 +71,7 @@ describe('CreateScreenshotHandler Integration Test', () => {
 
     test('should throw ScreenshotAlreadyExist when screenshot with same MD5 exists', async () => {
         // Arrange
-        const imageUrl = 'https://placehold.co/600x400/png';
+        const imageUrl = 'https://cdn.discordapp.com/embed/avatars/0.png';
 
         // Create first screenshot
         const command1 = new CreateScreenshot(

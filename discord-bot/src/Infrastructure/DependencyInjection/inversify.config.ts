@@ -49,21 +49,26 @@ import type { GuildClient } from '../../Domain/Community/GuildClient.ts';
 import { DiscordGuildClient } from '../Community/Discord/DiscordGuildClient.ts';
 import WeekScreenshotWinner from '../../Ui/Cli/WeekScreenshotWinner.ts';
 import { InMemoryClient } from '../Bot/InMemory/InMemoryClient.ts';
+import { requireEnv, validateBaseEnv, validateBotEnv } from '../Config/env.ts';
 
 const myContainer = new Container();
+
+// Env (M1.3) — DATABASE_URL is required by every entry point that imports
+// this file (src/index.ts, bin/console.ts, the whole test suite via
+// myContainer), so it is validated eagerly here and the process exits(1)
+// with every problem listed if it is missing. DISCORD_TOKEN /
+// DISCORD_CLIENT_ID are deliberately NOT validated this way — see
+// src/Infrastructure/Config/env.ts for why, and src/index.ts for where that
+// validation actually happens.
+const baseEnv = requireEnv(validateBaseEnv());
 
 // Logger
 myContainer.bind(ConsoleLogProvider).toSelf();
 
 const loggerManager = new LoggerManager();
 loggerManager.addProvider(myContainer.get(ConsoleLogProvider));
-if (!isEmpty(process.env.LOKI_HOST)) {
-    loggerManager.addProvider(
-        new LokiLogProvider(
-            String(process.env.LOKI_HOST),
-            isEmpty(process.env.LOKI_AUTH) ? undefined : String(process.env.LOKI_AUTH),
-        ),
-    );
+if (!isEmpty(baseEnv.LOKI_HOST)) {
+    loggerManager.addProvider(new LokiLogProvider(String(baseEnv.LOKI_HOST), baseEnv.LOKI_AUTH));
 }
 myContainer.bind<Logger>(TYPES.Logger).toConstantValue(loggerManager.createLogger({}));
 
@@ -122,22 +127,45 @@ myContainer.bind<HttpClient>(TYPES.HttpClient).to(RetryHttpClient);
 myContainer.bind<TrophySource>(TYPES.TrophySource).to(PsnProfilesTrophySource);
 
 // Bot
+// M1.3: DISCORD_TOKEN / DISCORD_CLIENT_ID are required for the live bot
+// process, but this file is also imported by bin/console.ts and by the
+// entire test suite (via `myContainer`), neither of which sets a Discord
+// token on purpose — that absence is what makes InMemoryClient bind below
+// instead of a real Discord.Client. So this validates but does NOT exit(1)
+// on failure (unlike baseEnv above); only src/index.ts — the actual bot
+// process — calls validateBotEnv() again and exits(1) if it's missing.
+const botEnv = validateBotEnv();
+
 myContainer
     .bind<GuildClient>(TYPES.GuildClient)
-    .toConstantValue(new DiscordGuildClient(process.env.DISCORD_TOKEN ?? ''));
+    .toConstantValue(
+        new DiscordGuildClient(botEnv.config?.DISCORD_TOKEN, myContainer.get(TYPES.Logger)),
+    );
 myContainer.bind(BotExecutor).toSelf();
-if (process.env.DISCORD_TOKEN) {
+if (botEnv.config) {
     myContainer
         .bind(TYPES.Bot)
         .toConstantValue(
             new DiscordBot(
-                process.env.DISCORD_TOKEN ?? '',
-                process.env.DISCORD_CLIENT_ID ?? '',
+                botEnv.config.DISCORD_TOKEN,
+                botEnv.config.DISCORD_CLIENT_ID,
                 myContainer.get(TYPES.Logger),
                 myContainer.get(BotExecutor),
             ),
         );
 } else {
+    // Explicit and loud (M1.3), not a silent accident: InMemoryClient is a
+    // deliberate no-op escape hatch for the test suite and bin/console.ts,
+    // never for the live bot process — which fails fast instead, see
+    // src/index.ts.
+    myContainer
+        .get<Logger>(TYPES.Logger)
+        .warn(
+            'DISCORD_TOKEN/DISCORD_CLIENT_ID not set — binding InMemoryClient (no-op bot, no Discord connection). ' +
+                'Expected for the test suite and bin/console.ts. If you are running the actual bot process ' +
+                '(src/index.ts) and see this, your environment is misconfigured — it validates these ' +
+                'independently at boot and should have already exited(1).',
+        );
     myContainer.bind(TYPES.Bot).toConstantValue(new InMemoryClient());
 }
 
