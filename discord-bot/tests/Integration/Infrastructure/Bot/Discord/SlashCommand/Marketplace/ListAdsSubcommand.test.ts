@@ -86,8 +86,8 @@ describe('ListAdsSubcommand Integration Test', () => {
 
         // The user is told how many listings were left out.
         const footerText = embed.data.footer?.text ?? '';
-        expect(footerText).toContain('25 of 30');
-        expect(footerText).toContain('5 omitted');
+        expect(footerText).toContain('25 de 30');
+        expect(footerText).toContain('5 omitidos');
     });
 
     it('truncates an over-long ad description instead of throwing', async () => {
@@ -127,7 +127,7 @@ describe('ListAdsSubcommand Integration Test', () => {
 
         expect(interaction.deferReplyCalls[0]).toEqual({ flags: MessageFlags.Ephemeral });
         expect(interaction.editReplyCalls.length).toBe(1);
-        expect(interaction.editReplyCalls[0].content).toContain("don't have any active listings");
+        expect(interaction.editReplyCalls[0].content).toContain('tens nenhum anúncio activo');
         // No public reply/followUp anywhere — the whole command stayed on
         // the single ephemeral deferred reply.
         expect(interaction.replyCalls.length).toBe(0);

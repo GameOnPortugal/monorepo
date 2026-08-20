@@ -4,6 +4,7 @@ import type {
     CommunityMessage,
     GuildClient,
     ListMessagesOptions,
+    RichMessageContent,
 } from '../../../../src/Domain/Community/GuildClient.ts';
 import { CommunityChannels } from '../../../../src/Domain/Community/CommunityChannels.ts';
 import type { CustomEmoji } from '../../../../src/Domain/Community/CustomEmoji.ts';
@@ -83,6 +84,25 @@ class FakeGuildClient implements GuildClient {
     // always-true stub here.
     async isGuildMember(_userId: string): Promise<boolean> {
         return true;
+    }
+
+    // M5.5/M5.6 added sendRichMessage/editRichMessage to the GuildClient
+    // port after this fake was written. Neither is exercised by
+    // DiscordJobReporter, so these are harmless stubs, same as getMessage/
+    // listMessages above.
+    async sendRichMessage(
+        _channel: CommunityChannels,
+        _content: RichMessageContent,
+    ): Promise<string> {
+        throw new Error('FakeGuildClient.sendRichMessage is not used by DiscordJobReporter');
+    }
+
+    async editRichMessage(
+        _channelId: string,
+        _messageId: string,
+        _content: RichMessageContent,
+    ): Promise<void> {
+        throw new Error('FakeGuildClient.editRichMessage is not used by DiscordJobReporter');
     }
 }
 

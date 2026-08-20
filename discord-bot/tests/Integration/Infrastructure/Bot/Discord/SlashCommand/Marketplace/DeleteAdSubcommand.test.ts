@@ -52,7 +52,7 @@ describe('DeleteAdSubcommand Integration Test', () => {
         expect(interaction.deferReplyCalls[0]).toEqual({ flags: MessageFlags.Ephemeral });
         expect(interaction.replyCalls.length).toBe(0);
         expect(interaction.editReplyCalls.length).toBe(1);
-        expect(interaction.editReplyCalls[0].content).toBe('Ad deleted successfully');
+        expect(interaction.editReplyCalls[0].content).toBe('🗑️ Anúncio apagado com sucesso.');
         await expect(adRepository.get(ad.id)).rejects.toThrow();
     });
 
@@ -94,7 +94,7 @@ describe('DeleteAdSubcommand Integration Test', () => {
 
         expect(interaction.editReplyCalls.length).toBe(1);
         expect(interaction.editReplyCalls[0].content).toBe(
-            'You are not authorized to delete this ad',
+            'Não tens permissão para apagar este anúncio.',
         );
         // The ad still exists.
         await expect(adRepository.get(ad.id)).resolves.toBeDefined();
@@ -110,6 +110,6 @@ describe('DeleteAdSubcommand Integration Test', () => {
         await deleteAdSubcommand.handle(buildContext(interaction));
 
         expect(interaction.editReplyCalls.length).toBe(1);
-        expect(interaction.editReplyCalls[0].content).toBe('Ad not found');
+        expect(interaction.editReplyCalls[0].content).toBe('Anúncio não encontrado.');
     });
 });
