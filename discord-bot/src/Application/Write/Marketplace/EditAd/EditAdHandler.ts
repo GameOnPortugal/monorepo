@@ -34,7 +34,7 @@ export class EditAdHandler implements CommandHandler<EditAd> {
             );
         }
 
-        const updated = ad.cloneWith({
+        const updated = ad.withChanges({
             price: command.price,
             priceCents: parsePriceCents(command.price),
             description: command.description,

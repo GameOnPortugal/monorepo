@@ -239,14 +239,21 @@ Discord regularly deprecates and eventually removes API behaviour; a bot pinned
 to a 14-month-old library version is the most likely source of a silent future
 breakage.
 
-### 8. `.env.example` describes a bot that no longer exists
+### 8. `.env.example` describes a bot that no longer exists — ✅ FIXED (M1.6/M9.5)
 
-It advertises `REDIS_DSN`, `SENTRY_DSN`, `TROPHY_WEBHOOK` and
+It advertised `REDIS_DSN`, `SENTRY_DSN`, `TROPHY_WEBHOOK` and
 `TELEGRAM_ACCESS_TOKEN` — **none** of which appear anywhere in `discord-bot/src`
-— while omitting `LOKI_HOST` and `LOKI_AUTH`, which are used. It also gives
-`DATABASE_URL` a host (`db`) that matches no service in either compose file
+— while omitting `LOKI_HOST` and `LOKI_AUTH`, which are used. It also gave
+`DATABASE_URL` a host (`db`) that matched no service in either compose file
 (the service is `mariadb`). Since `Makefile` does `include .env`, this is the
-first file a new contributor copies, and it is wrong in three ways.
+first file a new contributor copies, and it was wrong in three ways.
+
+Verified 2026-08-20 (M9.5): `discord-bot/.env.example` now carries `LOKI_HOST`
+/ `LOKI_AUTH` (commented, optional) and a `DATABASE_URL` host of `mariadb`
+matching both compose files; the four dead vars are gone from `.env.example`,
+both `docker-compose*.yml` files and `infrastructure/game-on-portugal.yaml`.
+`grep -rn` across the whole repo turns up the four dead names only in
+historical/decision prose in `docs/` — nothing reads them.
 
 ### 9. `webpage/` is deployed by nothing
 

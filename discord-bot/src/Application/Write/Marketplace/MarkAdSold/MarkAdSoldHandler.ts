@@ -48,7 +48,9 @@ export class MarkAdSoldHandler implements CommandHandler<MarkAdSold> {
             await this.guildClient.deleteMessage(ad.channelId, ad.messageId);
         }
 
-        await this.adRepository.save(ad.cloneWith({ status: AdStatus.sold(), soldAt: new Date() }));
+        await this.adRepository.save(
+            ad.withChanges({ status: AdStatus.sold(), soldAt: new Date() }),
+        );
 
         this.logger.info('Ad marked sold', {
             id: command.id.toString(),

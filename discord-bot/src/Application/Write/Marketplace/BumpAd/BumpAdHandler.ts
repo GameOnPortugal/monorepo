@@ -64,7 +64,7 @@ export class BumpAdHandler implements CommandHandler<BumpAd> {
         );
 
         await this.adRepository.save(
-            ad.cloneWith({
+            ad.withChanges({
                 channelId: command.channelId,
                 messageId: newMessageId,
                 bumpedAt: now,

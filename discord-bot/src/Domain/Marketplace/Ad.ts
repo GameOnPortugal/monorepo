@@ -115,18 +115,28 @@ export class Ad {
 
     /**
      * Returns a new `Ad` with the given fields replaced — everything else,
-     * including `id`, carried over unchanged (M5.6). `Ad` has no other
-     * mutation surface (every field is `readonly`), so the sold/bump/edit
-     * transitions this backs would otherwise mean re-listing all twenty-one
+     * including `id`, carried over unchanged. `Ad` has no other mutation
+     * surface (every field is `readonly`), so a lifecycle transition (M6.5's
+     * active → pending_renewal → expired/active) or a sold/bump/edit
+     * transition (M5.6) would otherwise mean re-listing all twenty-one
      * constructor arguments at every call site — exactly the kind of
      * copy-paste that silently drops a field on the next one added.
+     *
      * `updatedAt` defaults to "now" on every call, matching Prisma's
-     * `@updatedAt` semantics for the column it maps to. Keys are checked
-     * with `in` rather than `??`/`?.` so a caller can deliberately set a
-     * field back to `null` (e.g. clearing `bumpedAt`) without that being
+     * `@updatedAt` semantics for the column it maps to. Keys are tested with
+     * `in` rather than `??`/`?.` so a caller can deliberately set a field
+     * back to `null` (e.g. clearing `bumpedAt`) without that being
      * indistinguishable from "leave it alone".
+     *
+     * The mutable-field list is the union of what M5.6 and M6.5 each need:
+     * the two landed in parallel as `withChanges` and `withChanges`, two
+     * near-identical methods differing only in which fields they let through.
+     * Merged into one at integration rather than kept as a pair — two
+     * spellings of "copy this entity with edits" is precisely how a field
+     * ends up updatable through one path and silently ignored through the
+     * other.
      */
-    public cloneWith(
+    public withChanges(
         changes: Partial<{
             channelId: string | null;
             messageId: string | null;
@@ -135,7 +145,9 @@ export class Ad {
             priceCents: number | null;
             description: string | null;
             bumpedAt: Date | null;
+            expiresAt: Date | null;
             soldAt: Date | null;
+            deletedAt: Date | null;
             updatedAt: Date;
         }>,
     ): Ad {
@@ -158,9 +170,9 @@ export class Ad {
             'priceCents' in changes ? (changes.priceCents ?? null) : this.priceCents,
             this.images,
             'bumpedAt' in changes ? (changes.bumpedAt ?? null) : this.bumpedAt,
-            this.expiresAt,
+            'expiresAt' in changes ? (changes.expiresAt ?? null) : this.expiresAt,
             'soldAt' in changes ? (changes.soldAt ?? null) : this.soldAt,
-            this.deletedAt,
+            'deletedAt' in changes ? (changes.deletedAt ?? null) : this.deletedAt,
         );
     }
 }

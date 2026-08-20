@@ -99,8 +99,16 @@ jobs:
         working-directory: discord-bot
         run: |
           docker compose -f docker-compose.ci.yml up -d
-          # Wait for the app container to be ready, then set up the test DB.
-          timeout 300 bash -c 'until docker compose -f docker-compose.ci.yml exec -T discord-bot true 2>/dev/null; do sleep 3; done'
+          # Wait for entrypoint.sh to have FINISHED its startup work -- not
+          # merely for the container to be up. `exec ... true` (what this used
+          # to be) succeeds while the entrypoint is still waiting on the DB or
+          # midway through `prisma migrate deploy`, so `test:setup` below --
+          # `prisma migrate reset --force`, a DROP of the whole schema -- raced
+          # it: the deploy failed P1014, `set -e` killed the entrypoint, the
+          # container exited, and the in-flight `exec` came back 137 with
+          # nothing in the test output to explain it. See entrypoint.sh for
+          # where the marker is written.
+          timeout 300 bash -c 'until docker compose -f docker-compose.ci.yml exec -T discord-bot test -f /tmp/entrypoint-ready 2>/dev/null; do sleep 3; done'
           docker compose -f docker-compose.ci.yml exec -T discord-bot bun run test:setup
           docker compose -f docker-compose.ci.yml exec -T discord-bot bun test
 

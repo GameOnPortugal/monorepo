@@ -8,6 +8,7 @@ import type {
 } from '../../../../src/Domain/Community/GuildClient.ts';
 import { CommunityChannels } from '../../../../src/Domain/Community/CommunityChannels.ts';
 import type { CustomEmoji } from '../../../../src/Domain/Community/CustomEmoji.ts';
+import type { DirectMessagePayload } from '../../../../src/Domain/Community/DirectMessage.ts';
 import type { JobReportOutcome } from '../../../../src/Domain/Job/JobReporter.ts';
 import InMemoryLogger from '../../../Helper/InMemoryLogger.ts';
 import Logger from '../../../../src/Application/Logger/Logger.ts';
@@ -50,6 +51,21 @@ class FakeGuildClient implements GuildClient {
         }
         this.sentMessages.push({ channel, message });
         return 'message-id';
+    }
+
+    // M6.5 added these to the GuildClient port after this fake was written.
+    // DiscordJobReporter never calls either — recorded rather than ignored
+    // so a future change that started sending DMs from here would show up
+    // in a test, not silently pass.
+    public sentDirectMessages: { userId: string; message: DirectMessagePayload }[] = [];
+
+    async sendDirectMessage(userId: string, message: DirectMessagePayload): Promise<string | null> {
+        this.sentDirectMessages.push({ userId, message });
+        return 'dm-message-id';
+    }
+
+    async messageExists(_channelId: string, _messageId: string): Promise<boolean> {
+        return true;
     }
 
     async getMessage(_channel: CommunityChannels, _messageId: string): Promise<CommunityMessage> {
