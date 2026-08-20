@@ -21,7 +21,12 @@ description = "Discord channel and guild snowflakes are public identifiers, not 
 # literal values, so that:
 #   - a real DISCORD_TOKEN or client *secret* still fails the scan, and
 #   - adding a new channel does not require editing this file again.
+#
+# Anchored to the whole line (not just a substring) — regexTarget = "line"
+# allowlists the entire line when the regex matches anywhere in it, so an
+# unanchored pattern would also suppress a real secret appended to the same
+# line as a snowflake assignment.
 regexTarget = "line"
 regexes = [
-  '''DISCORD_(GUILD_ID|CHANNEL_[A-Z0-9_]+)\s*=\s*[0-9]{17,20}''',
+  '''^\s*DISCORD_(GUILD_ID|CHANNEL_[A-Z0-9_]+)\s*=\s*[0-9]{17,20}\s*$''',
 ]
