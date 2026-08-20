@@ -48,6 +48,14 @@ export interface BaseEnv {
 export interface BotEnv {
     DISCORD_TOKEN: string;
     DISCORD_CLIENT_ID: string;
+    // M4.3 — dev-only guild for guild-scoped (near-instant) slash-command
+    // registration. Optional and unset by default: unset means global
+    // registration, same as production. Deliberately separate from
+    // DISCORD_GUILD_ID (Infrastructure/Community/Discord/DiscordChannels.ts),
+    // which already means "the production guild" and defaults to it —
+    // reusing it here would risk guild-scoped commands shadowing the global
+    // ones in production. See Domain/Bot/CommandRegistration.ts.
+    DISCORD_DEV_GUILD_ID?: string;
 }
 
 export interface EnvValidationResult<T> {
@@ -83,6 +91,7 @@ export function validateBotEnv(env: NodeJS.ProcessEnv = process.env): EnvValidat
         config: {
             DISCORD_TOKEN: values.DISCORD_TOKEN as string,
             DISCORD_CLIENT_ID: values.DISCORD_CLIENT_ID as string,
+            DISCORD_DEV_GUILD_ID: env.DISCORD_DEV_GUILD_ID?.trim() || undefined,
         },
         errors: [],
     };

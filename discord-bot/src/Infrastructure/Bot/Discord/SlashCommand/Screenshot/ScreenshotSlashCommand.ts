@@ -2,6 +2,8 @@ import { inject, injectable } from 'inversify';
 import type { SlashCommandHandler } from '../../../../../Domain/Bot/SlashCommandHandler.ts';
 import type { SlashCommandContext } from '../../../../../Domain/Bot/SlashCommandContext.ts';
 import {
+    ApplicationIntegrationType,
+    InteractionContextType,
     MessageFlags,
     SlashCommandBuilder,
     type SlashCommandSubcommandsOnlyBuilder,
@@ -34,6 +36,11 @@ export class ScreenshotSlashCommand implements SlashCommandHandler {
             new SlashCommandBuilder()
                 .setName('screenshot')
                 .setDescription('Manage screenshots for the contest')
+                .setContexts(InteractionContextType.Guild) // M1.10/M4.3 — not invokable in DMs.
+                .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
+                // Open to every member — no subcommand here is admin-only.
+                // Explicit `null` documents that on purpose.
+                .setDefaultMemberPermissions(null)
                 // Create subcommand
                 .addSubcommand((subcommand) =>
                     subcommand
