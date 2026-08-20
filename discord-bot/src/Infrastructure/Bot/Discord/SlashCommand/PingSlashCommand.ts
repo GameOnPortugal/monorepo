@@ -16,7 +16,7 @@ export class PingSlashCommand implements SlashCommandHandler {
         return 'ping';
     }
 
-    public builder(): any {
+    public builder(): SlashCommandBuilder {
         return new SlashCommandBuilder().setName('ping').setDescription('Replies with a pong!');
     }
 

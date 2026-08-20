@@ -113,6 +113,7 @@ export class DiscordBot implements Bot {
             if (!interaction.isChatInputCommand()) return;
 
             const slashCommandContext: SlashCommandContext = {
+                kind: 'chat-input',
                 channel_id: interaction.channelId,
                 command: interaction.commandName,
                 text: '',

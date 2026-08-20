@@ -4,7 +4,7 @@ import type Logger from '../../../../../Application/Logger/Logger.ts';
 import { TYPES } from '../../../../DependencyInjection/types.ts';
 import { ScreenshotId } from '../../../../../Domain/Screenshot/ScreenshotId.ts';
 import { DeleteScreenshot } from '../../../../../Application/Write/Screenshot/DeleteScreenshot/DeleteScreenshot.ts';
-import { MessageFlags } from 'discord.js';
+import { MessageFlags, type ChatInputCommandInteraction } from 'discord.js';
 import { InvalidId } from '../../../../../Domain/InvalidId.ts';
 import RecordNotFound from '../../../../../Domain/RecordNotFound.ts';
 import { NotAuthorized } from '../../../../../Application/Write/Screenshot/DeleteScreenshot/NotAuthorized.ts';
@@ -18,8 +18,8 @@ export class DeleteScreenshotSubcommand {
         @inject(TYPES.Logger) private readonly logger: Logger,
     ) {}
 
-    public async handle(interaction: any): Promise<void> {
-        const screenshotIdString = interaction.options.getString('id');
+    public async handle(interaction: ChatInputCommandInteraction): Promise<void> {
+        const screenshotIdString = interaction.options.getString('id', true);
         const cleanId = screenshotIdString.startsWith('#')
             ? screenshotIdString.substring(1)
             : screenshotIdString;

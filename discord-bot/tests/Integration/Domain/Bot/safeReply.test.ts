@@ -1,4 +1,5 @@
 import { describe, test, expect } from 'bun:test';
+import type { RepliableInteraction } from 'discord.js';
 import { safeReply } from '../../../../src/Domain/Bot/safeReply';
 
 /**
@@ -33,11 +34,21 @@ function createFakeInteraction(state: { replied: boolean; deferred: boolean }) {
     };
 }
 
+/**
+ * discord.js's interaction classes carry private fields (e.g.
+ * `BaseInteraction#_cacheType`), so no plain object can structurally satisfy
+ * `RepliableInteraction` — this cast is genuinely unavoidable to hand the
+ * hand-rolled fake above to code typed against the real interaction.
+ */
+function asRepliable(interaction: ReturnType<typeof createFakeInteraction>): RepliableInteraction {
+    return interaction as unknown as RepliableInteraction;
+}
+
 describe('safeReply', () => {
     test('calls reply() when the interaction has neither replied nor deferred', async () => {
         const interaction = createFakeInteraction({ replied: false, deferred: false });
 
-        await safeReply(interaction, { content: 'hello' });
+        await safeReply(asRepliable(interaction), { content: 'hello' });
 
         expect(interaction.calls).toEqual([{ method: 'reply', payload: { content: 'hello' } }]);
     });
@@ -48,7 +59,9 @@ describe('safeReply', () => {
         // This is the exact scenario that used to throw InteractionAlreadyReplied:
         // the try block (or a nested subcommand) already sent a reply, and a
         // catch block needs to report a second, separate error.
-        await expect(safeReply(interaction, { content: 'boom' })).resolves.toBeUndefined();
+        await expect(
+            safeReply(asRepliable(interaction), { content: 'boom' }),
+        ).resolves.toBeUndefined();
 
         expect(interaction.calls).toEqual([{ method: 'followUp', payload: { content: 'boom' } }]);
     });
@@ -56,7 +69,7 @@ describe('safeReply', () => {
     test('calls editReply() when the interaction is deferred but not yet replied', async () => {
         const interaction = createFakeInteraction({ replied: false, deferred: true });
 
-        await safeReply(interaction, { content: 'still working on it' });
+        await safeReply(asRepliable(interaction), { content: 'still working on it' });
 
         expect(interaction.calls).toEqual([
             { method: 'editReply', payload: { content: 'still working on it' } },
@@ -68,7 +81,7 @@ describe('safeReply', () => {
 
         let thrown: unknown = null;
         try {
-            await safeReply(interaction, { content: 'second error' });
+            await safeReply(asRepliable(interaction), { content: 'second error' });
         } catch (error) {
             thrown = error;
         }

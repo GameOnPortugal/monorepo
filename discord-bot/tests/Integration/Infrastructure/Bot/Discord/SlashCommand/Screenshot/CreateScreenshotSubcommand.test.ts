@@ -1,4 +1,5 @@
 import { describe, test, expect } from 'bun:test';
+import type { ChatInputCommandInteraction } from 'discord.js';
 import { CreateScreenshotSubcommand } from '../../../../../../../src/Infrastructure/Bot/Discord/SlashCommand/Screenshot/CreateScreenshotSubcommand';
 import Logger from '../../../../../../../src/Application/Logger/Logger';
 import InMemoryLogger from '../../../../../../Helper/InMemoryLogger';
@@ -86,7 +87,7 @@ describe('CreateScreenshotSubcommand', () => {
         );
         const interaction = createFakeInteraction();
 
-        await subcommand.handle(interaction);
+        await subcommand.handle(interaction as unknown as ChatInputCommandInteraction);
 
         expect(interaction.calls).toHaveLength(2);
         expect(interaction.calls[0]!.method).toBe('deferReply');
