@@ -63,11 +63,13 @@ import { DiscordJobReporter } from '../Job/DiscordJobReporter.ts';
 import { JobRunner } from '../Job/JobRunner.ts';
 import { RunJobConsoleCommand } from '../Job/RunJobConsoleCommand.ts';
 import { WeekScreenshotWinnerJob } from '../Job/Jobs/WeekScreenshotWinnerJob.ts';
+import { RelinkScreenshotsJob } from '../Job/Jobs/RelinkScreenshotsJob.ts';
 import { DiscordChannels } from '../Community/Discord/DiscordChannels.ts';
 import { InMemoryGuildClient } from '../Community/InMemory/InMemoryGuildClient.ts';
 import type { MediaStorage } from '../../Domain/Media/MediaStorage.ts';
 import { S3MediaStorage } from '../Media/S3MediaStorage.ts';
 import { InMemoryMediaStorage } from '../Media/InMemoryMediaStorage.ts';
+import { SafeImageFetcher } from '../Media/SafeImageFetcher.ts';
 import { requireEnv, validateBaseEnv, validateBotEnv } from '../Config/env.ts';
 
 const myContainer = new Container();
@@ -229,6 +231,13 @@ if (
     myContainer.bind<MediaStorage>(TYPES.MediaStorage).toConstantValue(new InMemoryMediaStorage());
 }
 
+// M6.2/M6.3 — shared ingest guard for anything that downloads a Discord CDN
+// attachment before re-hosting it (submit-time rehost, the relink job's
+// recovery download). One instance, default options (10MiB cap, 10s
+// timeout, cdn.discordapp.com/media.discordapp.net allowlist) — see
+// SafeImageFetcher.ts.
+myContainer.bind(TYPES.SafeImageFetcher).toConstantValue(new SafeImageFetcher());
+
 // Console Command
 myContainer.bind(WeekScreenshotWinner).toSelf();
 
@@ -254,9 +263,11 @@ myContainer.bind(WeekScreenshotWinnerJob).toSelf();
 // M6.5/M6.6 — see AdsLifecycleJob.ts / AdsReconcileJob.ts for behaviour.
 myContainer.bind(AdsLifecycleJob).toSelf();
 myContainer.bind(AdsReconcileJob).toSelf();
+myContainer.bind(RelinkScreenshotsJob).toSelf();
 myContainer.bind(RunJobConsoleCommand).toSelf();
 
 myContainer.get(JobRunner).register(myContainer.get(WeekScreenshotWinnerJob));
+myContainer.get(JobRunner).register(myContainer.get(RelinkScreenshotsJob));
 myContainer.get(JobRunner).register(myContainer.get(AdsLifecycleJob));
 myContainer.get(JobRunner).register(myContainer.get(AdsReconcileJob));
 

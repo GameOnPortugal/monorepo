@@ -42,7 +42,14 @@ export interface WeekScreenshotWinnerArgs {
  * parallel PR and is not touched here.
  */
 export function parseWeekScreenshotWinnerArgs(inputArgs: unknown): WeekScreenshotWinnerArgs {
-    const args = Array.isArray(inputArgs) ? inputArgs.map((arg) => String(arg)) : [];
+    // Drop nullish entries *before* stringifying. `String(undefined)` is
+    // the string "undefined", which then falls through to the positional-date
+    // branch below and throws — see WeekScreenshotWinnerJob.ts for the
+    // production failure this caused. A caller that omits an argument means
+    // "not supplied", never "the literal text undefined".
+    const args = Array.isArray(inputArgs)
+        ? inputArgs.filter((arg) => arg !== undefined && arg !== null).map((arg) => String(arg))
+        : [];
 
     let dateArg: string | undefined;
     let dryRun = false;

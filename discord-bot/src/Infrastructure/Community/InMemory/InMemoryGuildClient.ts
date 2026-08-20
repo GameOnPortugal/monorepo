@@ -1,5 +1,9 @@
 import { injectable } from 'inversify';
-import type { GuildClient } from '../../../Domain/Community/GuildClient.ts';
+import type {
+    CommunityMessage,
+    GuildClient,
+    ListMessagesOptions,
+} from '../../../Domain/Community/GuildClient.ts';
 import { CommunityChannels } from '../../../Domain/Community/CommunityChannels.ts';
 import { CustomEmoji } from '../../../Domain/Community/CustomEmoji.ts';
 import { ClientError } from '../../../Domain/Community/ClientError.ts';
@@ -7,6 +11,10 @@ import type { DirectMessagePayload } from '../../../Domain/Community/DirectMessa
 
 interface InMemoryMessage {
     reactions: Partial<Record<CustomEmoji, number>>;
+    content: string;
+    createdAt: Date;
+    attachmentUrls: string[];
+    embedImageUrls: string[];
 }
 
 export interface SentMessage {
@@ -45,9 +53,30 @@ export class InMemoryGuildClient implements GuildClient {
     /** When set, the next call to sendMessage() throws this instead of posting. */
     public failNextSendWith: Error | undefined = undefined;
 
-    /** Registers a message so it can be "found" by the methods below. */
-    registerMessage(messageId: string, reactions: Partial<Record<CustomEmoji, number>> = {}): void {
-        this.messages.set(messageId, { reactions });
+    /**
+     * Registers a message so it can be "found" by the methods below.
+     * `reactions` keeps its original signature (a bare emoji->count record)
+     * since M6.4's winner-job tests already call it that way; `extra` is
+     * additive, backing `getMessage`/`listMessages` — M6.3's relink job is
+     * the first caller that needs more than reactions out of a fake message.
+     */
+    registerMessage(
+        messageId: string,
+        reactions: Partial<Record<CustomEmoji, number>> = {},
+        extra: {
+            content?: string;
+            createdAt?: Date;
+            attachmentUrls?: string[];
+            embedImageUrls?: string[];
+        } = {},
+    ): void {
+        this.messages.set(messageId, {
+            reactions,
+            content: extra.content ?? '',
+            createdAt: extra.createdAt ?? new Date(),
+            attachmentUrls: extra.attachmentUrls ?? [],
+            embedImageUrls: extra.embedImageUrls ?? [],
+        });
     }
 
     /** Simulates a message that used to exist but has since vanished. */
@@ -106,7 +135,13 @@ export class InMemoryGuildClient implements GuildClient {
 
         const messageId = `in-memory-${this.nextMessageId++}`;
         this.sentMessages.push({ channel, message });
-        this.messages.set(messageId, { reactions: {} });
+        this.messages.set(messageId, {
+            reactions: {},
+            content: message,
+            createdAt: new Date(),
+            attachmentUrls: [],
+            embedImageUrls: [],
+        });
 
         return messageId;
     }
@@ -136,12 +171,63 @@ export class InMemoryGuildClient implements GuildClient {
 
         const messageId = `in-memory-dm-${this.nextMessageId++}`;
         this.sentDirectMessages.push({ userId, message });
-        this.messages.set(messageId, { reactions: {} });
+        // Same shape sendMessage() records — main widened InMemoryMessage
+        // (content/createdAt/attachments/embeds) for M6.3's relink job while
+        // this DM path was being written, so a DM has to be a first-class
+        // message here too, not a reactions-only stub.
+        this.messages.set(messageId, {
+            reactions: {},
+            content: typeof message === 'string' ? message : (message.content ?? ''),
+            createdAt: new Date(),
+            attachmentUrls: [],
+            embedImageUrls: [],
+        });
 
         return messageId;
     }
 
     async messageExists(_channelId: string, messageId: string): Promise<boolean> {
         return this.messages.has(messageId);
+    }
+
+    async getMessage(_channel: CommunityChannels, messageId: string): Promise<CommunityMessage> {
+        const message = this.messages.get(messageId);
+        if (!message) {
+            throw new ClientError(`Message "${messageId}" not found`);
+        }
+
+        return {
+            id: messageId,
+            content: message.content,
+            createdAt: message.createdAt,
+            attachmentUrls: [...message.attachmentUrls],
+            embedImageUrls: [...message.embedImageUrls],
+        };
+    }
+
+    /**
+     * Newest-first, like the real Discord API, filtered by `before` on
+     * insertion order (registration order stands in for "channel order"
+     * since there is no real timeline here) — enough for a test to exercise
+     * pagination without needing genuine chronology.
+     */
+    async listMessages(
+        _channel: CommunityChannels,
+        options: ListMessagesOptions,
+    ): Promise<CommunityMessage[]> {
+        const ids = [...this.messages.keys()].reverse();
+        const startIndex = options.before ? ids.indexOf(options.before) + 1 : 0;
+        const page = ids.slice(startIndex, startIndex + Math.min(options.limit, 100));
+
+        return page.map((id) => {
+            const message = this.messages.get(id)!;
+            return {
+                id,
+                content: message.content,
+                createdAt: message.createdAt,
+                attachmentUrls: [...message.attachmentUrls],
+                embedImageUrls: [...message.embedImageUrls],
+            };
+        });
     }
 }
