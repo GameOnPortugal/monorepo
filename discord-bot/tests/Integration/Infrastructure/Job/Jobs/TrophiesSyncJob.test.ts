@@ -9,6 +9,7 @@ import { TrophyNotEarnedYet } from '../../../../../src/Domain/Trophy/TrophyNotEa
 import Logger from '../../../../../src/Application/Logger/Logger.ts';
 import type { JobContext } from '../../../../../src/Domain/Job/Job.ts';
 import { InMemoryGuildClient } from '../../../../../src/Infrastructure/Community/InMemory/InMemoryGuildClient.ts';
+import { CommunityChannels } from '../../../../../src/Domain/Community/CommunityChannels.ts';
 import InMemoryLogger from '../../../../Helper/InMemoryLogger.ts';
 import FakeTrophySource from '../../../../Helper/FakeTrophySource.ts';
 import DatabaseUtil from '../../../../Helper/DatabaseUtil.ts';
@@ -16,6 +17,17 @@ import { createTrophyProfile, createTrophy } from '../../../../Helper/StaticFixt
 
 function context(overrides: Partial<JobContext> = {}): JobContext {
     return { dryRun: false, workLimit: 200, ...overrides };
+}
+
+/** `TROPHIES_ANNOUNCE_ENABLED=true`, plus any other env overrides a test needs. */
+function announceEnv(overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
+    return { TROPHIES_ANNOUNCE_ENABLED: 'true', ...overrides } as NodeJS.ProcessEnv;
+}
+
+function trophyMessages(guildClient: InMemoryGuildClient): string[] {
+    return guildClient.sentMessages
+        .filter((sent) => sent.channel === CommunityChannels.TROPHIES)
+        .map((sent) => sent.message);
 }
 
 /**
@@ -30,6 +42,7 @@ describe('TrophiesSyncJob', () => {
     let trophyRepository: TrophyRepository;
     let trophySource: FakeTrophySource;
     let guildClient: InMemoryGuildClient;
+    let inMemoryLogger: InMemoryLogger;
     let job: TrophiesSyncJob;
     let ormClient: PrismaClient;
 
@@ -40,7 +53,8 @@ describe('TrophiesSyncJob', () => {
         trophyRepository = myContainer.get<TrophyRepository>(TYPES.TrophyRepository);
         trophySource = new FakeTrophySource();
         guildClient = new InMemoryGuildClient();
-        const logger = new Logger([new InMemoryLogger()]);
+        inMemoryLogger = new InMemoryLogger();
+        const logger = new Logger([inMemoryLogger]);
 
         job = new TrophiesSyncJob(
             trophyProfileRepository,
@@ -298,5 +312,154 @@ describe('TrophiesSyncJob', () => {
 
         expect(result.details?.moderationSafetyValveTripped).toBe(true);
         expect(result.details?.moderationSuppressedCount).toBe(11);
+    });
+
+    /**
+     * M7.8 — trophy announcements through GuildClient, replacing
+     * `TROPHY_WEBHOOK`. See TrophiesSyncJob's "Announcements, and their
+     * flood guard" doc comment for the three independent guards these tests
+     * cover: the master switch, per-profile batching, and the per-run cap.
+     */
+    describe('announcements (M7.8)', () => {
+        test('are off by default: a new trophy is still created, but nothing is posted', async () => {
+            await createTrophyProfile(undefined, 'user-announce-1', 'QuietUser');
+            trophySource.setTrophyPages('QuietUser', [['url-quiet']]);
+            trophySource.setTrophyData('url-quiet', {
+                percentage: 12.3,
+                completionDate: new Date(),
+            });
+
+            const result = await job.run(context());
+
+            expect(result.changed).toBeGreaterThan(0);
+            expect(trophyMessages(guildClient)).toEqual([]);
+        });
+
+        test('a --dry-run never announces, even with TROPHIES_ANNOUNCE_ENABLED=true', async () => {
+            await createTrophyProfile(undefined, 'user-announce-2', 'DryRunAnnounceUser');
+            trophySource.setTrophyPages('DryRunAnnounceUser', [['url-dry-announce']]);
+            trophySource.setTrophyData('url-dry-announce', {
+                percentage: 12.3,
+                completionDate: new Date(),
+            });
+
+            await job.run(context({ dryRun: true }), announceEnv());
+
+            expect(trophyMessages(guildClient)).toEqual([]);
+        });
+
+        test('a small batch (at or under the threshold) posts one message per trophy', async () => {
+            await createTrophyProfile(undefined, 'user-announce-3', 'SmallAnnounceUser');
+            trophySource.setTrophyPages('SmallAnnounceUser', [['url-s2', 'url-s1']]);
+            trophySource.setTrophyData('url-s1', { percentage: 12.3, completionDate: new Date() });
+            trophySource.setTrophyData('url-s2', { percentage: 50, completionDate: new Date() });
+
+            await job.run(context(), announceEnv());
+
+            const messages = trophyMessages(guildClient);
+            expect(messages).toHaveLength(2);
+            expect(messages).toContainEqual(
+                expect.stringContaining(
+                    'Parabéns <@user-announce-3>! Acabaste de receber 250 TP (Trophy Points) pelo teu troféu: url-s1',
+                ),
+            );
+            expect(messages).toContainEqual(
+                expect.stringContaining(
+                    'Parabéns <@user-announce-3>! Acabaste de receber 50 TP (Trophy Points) pelo teu troféu: url-s2',
+                ),
+            );
+        });
+
+        test('flood guard — a backlog above the batch threshold collapses into one summary message, not one per trophy', async () => {
+            const psnProfile = 'BacklogUser';
+            const profile = await createTrophyProfile(undefined, 'user-announce-4', psnProfile);
+            // 4 new trophies > TROPHIES_ANNOUNCE_BATCH_THRESHOLD (3) — the
+            // exact "first run against a fresh profile" scenario the guard
+            // exists for, just small enough to not also need the run-wide cap.
+            const urls = ['url-b1', 'url-b2', 'url-b3', 'url-b4'];
+            trophySource.setTrophyPages(psnProfile, [urls]);
+            for (const url of urls) {
+                trophySource.setTrophyData(url, { percentage: 12.3, completionDate: new Date() });
+            }
+
+            const result = await job.run(context(), announceEnv());
+
+            // All 4 trophies were still created...
+            const trophies = await trophyRepository.findByProfile(profile.id.toString());
+            expect(trophies).toHaveLength(4);
+
+            // ...but exactly one collapsed message was posted, not four.
+            const messages = trophyMessages(guildClient);
+            expect(messages).toHaveLength(1);
+            expect(messages[0]).toContain('Parabéns <@user-announce-4>!');
+            expect(messages[0]).toContain('4 troféus novos');
+            expect(messages[0]).toContain('1000 TP'); // 4 x 250
+            expect(result.details?.announcements).toMatchObject({
+                enabled: true,
+                sent: 1,
+                suppressed: 0,
+            });
+        });
+
+        test('flood guard — a per-run cap stops posting once spent, without failing the sync', async () => {
+            // 12 profiles, one new (non-batched) trophy each: 12 candidate
+            // messages against a cap of 10 — simulates re-enabling
+            // TROPHIES_ANNOUNCE_ENABLED after profiles had quietly
+            // accumulated unannounced trophies while it was off.
+            const profileCount = 12;
+            for (let i = 0; i < profileCount; i++) {
+                const psnProfile = `CapUser${i}`;
+                await createTrophyProfile(undefined, `user-cap-${i}`, psnProfile);
+                trophySource.setTrophyPages(psnProfile, [[`url-cap-${i}`]]);
+                trophySource.setTrophyData(`url-cap-${i}`, {
+                    percentage: 12.3,
+                    completionDate: new Date(),
+                });
+            }
+
+            const result = await job.run(context(), announceEnv());
+
+            // Every profile's trophy was still created — the cap only gates
+            // the announcement, never the sync itself.
+            expect(result.changed).toBeGreaterThanOrEqual(profileCount);
+            expect(result.failed).toBe(0);
+
+            const messages = trophyMessages(guildClient);
+            expect(messages).toHaveLength(10);
+            expect(result.details?.announcements).toMatchObject({
+                enabled: true,
+                sent: 10,
+                suppressed: 2,
+            });
+            expect(inMemoryLogger.hasLog('warn', 'trophies:sync.announce.suppressed')).toBe(true);
+        });
+
+        test('a failed post is logged, but never fails the sync or the profile it belongs to', async () => {
+            await createTrophyProfile(undefined, 'user-announce-5', 'FailingAnnounceUser');
+            await createTrophyProfile(undefined, 'user-announce-6', 'OtherAnnounceUser');
+            trophySource.setTrophyPages('FailingAnnounceUser', [['url-fail-announce']]);
+            trophySource.setTrophyPages('OtherAnnounceUser', [['url-ok-announce']]);
+            trophySource.setTrophyData('url-fail-announce', {
+                percentage: 12.3,
+                completionDate: new Date(),
+            });
+            trophySource.setTrophyData('url-ok-announce', {
+                percentage: 12.3,
+                completionDate: new Date(),
+            });
+            // Only the very next sendMessage() call throws — exactly one
+            // announcement is affected.
+            guildClient.failNextSendWith = new Error('Discord is unreachable');
+
+            const result = await job.run(context(), announceEnv());
+
+            // Neither profile's trophy creation is affected by the send failure.
+            expect(result.failed).toBe(0);
+            expect(result.changed).toBeGreaterThanOrEqual(2);
+
+            // Exactly one message got through (the other's send failed).
+            expect(trophyMessages(guildClient)).toHaveLength(1);
+            expect(inMemoryLogger.hasLog('error', 'trophies:sync.announce.failed')).toBe(true);
+        });
     });
 });
