@@ -66,6 +66,10 @@ import { AdsLifecycleJob } from '../Job/Jobs/AdsLifecycleJob.ts';
 import { AdsReconcileJob } from '../Job/Jobs/AdsReconcileJob.ts';
 import type { GuildClient } from '../../Domain/Community/GuildClient.ts';
 import { DiscordGuildClient } from '../Community/Discord/DiscordGuildClient.ts';
+import type { AutoModClient } from '../../Domain/Community/AutoModClient.ts';
+import { DiscordAutoModClient } from '../Community/Discord/DiscordAutoModClient.ts';
+import { InMemoryAutoModClient } from '../Community/InMemory/InMemoryAutoModClient.ts';
+import ApplyAutoModConfig from '../../Ui/Cli/ApplyAutoModConfig.ts';
 import WeekScreenshotWinner from '../../Ui/Cli/WeekScreenshotWinner.ts';
 import { InMemoryClient } from '../Bot/InMemory/InMemoryClient.ts';
 import type { JobStateRepository } from '../../Domain/Job/JobStateRepository.ts';
@@ -248,6 +252,21 @@ if (botEnv.config) {
 } else {
     myContainer.bind<GuildClient>(TYPES.GuildClient).to(InMemoryGuildClient).inSingletonScope();
 }
+// M9.1 — same no-token fallback shape as GuildClient just above.
+if (botEnv.config) {
+    const config = botEnv.config;
+    myContainer
+        .bind<AutoModClient>(TYPES.AutoModClient)
+        .toDynamicValue(
+            () => new DiscordAutoModClient(config.DISCORD_TOKEN, myContainer.get(TYPES.Logger)),
+        )
+        .inSingletonScope();
+} else {
+    myContainer
+        .bind<AutoModClient>(TYPES.AutoModClient)
+        .to(InMemoryAutoModClient)
+        .inSingletonScope();
+}
 myContainer.bind(BotExecutor).toSelf();
 if (botEnv.config) {
     const config = botEnv.config;
@@ -312,6 +331,9 @@ myContainer.bind(TYPES.SafeImageFetcher).toConstantValue(new SafeImageFetcher())
 // Console Command
 myContainer.bind(WeekScreenshotWinner).toSelf();
 myContainer.bind(FixOldTrophies).toSelf();
+// M9.1 — manual, operator-run reconciliation of the checked-in AutoMod
+// config; see ApplyAutoModConfig.ts for why this is not a scheduled Job.
+myContainer.bind(ApplyAutoModConfig).toSelf();
 
 // Jobs (M6.1, M6.8) — an in-process replacement for the deleted `scheduler/`
 // container. Register a new job here alongside its dependencies; it becomes

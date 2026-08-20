@@ -5,6 +5,7 @@ import type Logger from '../src/Application/Logger/Logger';
 import WeekScreenshotWinner from '../src/Ui/Cli/WeekScreenshotWinner.ts';
 import { RunJobConsoleCommand } from '../src/Infrastructure/Job/RunJobConsoleCommand.ts';
 import FixOldTrophies from '../src/Ui/Cli/FixOldTrophies.ts';
+import ApplyAutoModConfig from '../src/Ui/Cli/ApplyAutoModConfig.ts';
 
 const logger = myContainer.get<Logger>(TYPES.Logger);
 const consoleCommands: Record<string, ConsoleCommand> = {};
@@ -16,8 +17,11 @@ consoleCommands[RunJobConsoleCommand.commandName] =
     myContainer.get<RunJobConsoleCommand>(RunJobConsoleCommand);
 // M7.7 — one-off backfill, not a scheduled job (see FixOldTrophies.ts for why).
 consoleCommands[FixOldTrophies.commandName] = myContainer.get<FixOldTrophies>(FixOldTrophies);
+// M9.1 — manual AutoMod config reconciliation, dry-run by default (see ApplyAutoModConfig.ts).
+consoleCommands[ApplyAutoModConfig.commandName] =
+    myContainer.get<ApplyAutoModConfig>(ApplyAutoModConfig);
 
-async function run(): Promise<void> {
+async function run(): Promise<number> {
     const args = process.argv.slice(2);
     if (args.length === 0) {
         throw new Error('Missing command to run! Run "help" to see the available commands');
@@ -29,20 +33,20 @@ async function run(): Promise<void> {
     if (!action || action === 'help') {
         console.log('Available commands:');
         console.log(Object.keys(consoleCommands).join('\n'));
-        return;
+        return 0;
     }
 
     if (!(action in consoleCommands)) {
         throw new Error(`Unknown action: ${action}`);
     }
 
-    await consoleCommands[action]?.run(commandArgs);
+    return (await consoleCommands[action]?.run(commandArgs)) ?? 0;
 }
 
 run()
-    .then(() => {
+    .then((exitCode) => {
         logger.info('Done!');
-        process.exit(0);
+        process.exit(exitCode);
     })
     .catch((error: any) => {
         logger.error(`Error: ${error.message}`, { error });

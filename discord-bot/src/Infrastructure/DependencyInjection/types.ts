@@ -30,6 +30,9 @@ const TYPES = {
     TrophySource: Symbol.for('TrophySource'),
     OrmClient: Symbol.for('OrmClient'),
     GuildClient: Symbol.for('GuildClient'),
+    // M9.1 — AutoMod rules + channel permissions, deliberately a separate
+    // port from GuildClient (messages) since the two have no callers in common.
+    AutoModClient: Symbol.for('AutoModClient'),
 
     // Jobs
     JobReporter: Symbol.for('JobReporter'),
