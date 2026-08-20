@@ -21,7 +21,7 @@ consoleCommands[FixOldTrophies.commandName] = myContainer.get<FixOldTrophies>(Fi
 consoleCommands[ApplyAutoModConfig.commandName] =
     myContainer.get<ApplyAutoModConfig>(ApplyAutoModConfig);
 
-async function run(): Promise<void> {
+async function run(): Promise<number> {
     const args = process.argv.slice(2);
     if (args.length === 0) {
         throw new Error('Missing command to run! Run "help" to see the available commands');
@@ -33,20 +33,20 @@ async function run(): Promise<void> {
     if (!action || action === 'help') {
         console.log('Available commands:');
         console.log(Object.keys(consoleCommands).join('\n'));
-        return;
+        return 0;
     }
 
     if (!(action in consoleCommands)) {
         throw new Error(`Unknown action: ${action}`);
     }
 
-    await consoleCommands[action]?.run(commandArgs);
+    return (await consoleCommands[action]?.run(commandArgs)) ?? 0;
 }
 
 run()
-    .then(() => {
+    .then((exitCode) => {
         logger.info('Done!');
-        process.exit(0);
+        process.exit(exitCode);
     })
     .catch((error: any) => {
         logger.error(`Error: ${error.message}`, { error });
