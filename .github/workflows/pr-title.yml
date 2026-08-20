@@ -32,6 +32,7 @@ jobs:
             perf
             revert
           scopes: |
+            main
             bot
             marketplace
             screenshots
