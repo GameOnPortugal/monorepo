@@ -20,7 +20,7 @@
 game-on-portugal.pt, www.game-on-portugal.pt {
 	# The SPA container also proxies /api/ to the portal API, so the public
 	# origin stays single-origin (no CORS, no preflight).
-	reverse_proxy gop-portal-web:80
+	reverse_proxy gop-portal-web:8080
 }
 
 # Public media bucket — re-hosted screenshots and marketplace photos.
