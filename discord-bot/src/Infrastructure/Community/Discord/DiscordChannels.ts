@@ -12,12 +12,13 @@ import { CommunityChannels } from '../../../Domain/Community/CommunityChannels.t
  *   - GUILD_ID:    the Game On Portugal guild itself.
  *   - SCREENSHOTS: #screenshots — already wired, used by /screenshot and the
  *                  weekly winner job.
- *   - MARKETPLACE: #anuncios — the intended marketplace channel (62 of 70
- *                  production ads already live there). NOT yet wired to any
- *                  behaviour: today ads post to whichever channel the
- *                  command was invoked in (5 ended up in #chat, 3 in a DM).
- *                  Routing ads here is M5.1, a separate work item — this
- *                  only makes the ID available and configurable.
+ *   - MARKETPLACE: #anuncios — the marketplace channel. `SellSubcommand` posts
+ *                  every listing here via `GuildClient` (M5.1), regardless of
+ *                  which channel the command was invoked from. Before M5.1,
+ *                  62 of 70 production ads had already ended up here by
+ *                  accident (5 landed in #chat, 3 elsewhere) — those legacy
+ *                  rows' `channel_id` is left as-is; only new ads are
+ *                  affected.
  *   - ADMIN:       an ops/mod-only channel for supervised dry runs (M6.4).
  *                  **Not verified** — unlike GUILD_ID/SCREENSHOTS/MARKETPLACE
  *                  there is no confirmed production ID, so it defaults to
