@@ -35,9 +35,24 @@ export class WeekScreenshotWinnerJob implements Job {
     ) {}
 
     async run(context: JobContext): Promise<JobResult> {
-        // WeekScreenshotWinner reads its date/dry-run args as CLI-shaped
-        // strings — `undefined` means "today" in its own logic.
-        const exitCode = await this.command.run([undefined, context.dryRun ? 'true' : 'false']);
+        // Flag form, not the legacy positional shape. This used to pass
+        // `[undefined, 'true'|'false']`, which was correct against the arg
+        // handling that existed when this adapter was written: back then
+        // `inputArgs[0] === undefined` literally meant "today".
+        //
+        // M6.4 then replaced that with parseWeekScreenshotWinnerArgs(), which
+        // normalises via `String(arg)` — turning the positional `undefined`
+        // into the *string* `"undefined"`, which parses as a date, yields
+        // NaN, and throws. Both PRs were correct in isolation; the
+        // integration was not, and it only showed up at runtime because
+        // neither side's tests exercised the other's. Production caught it on
+        // the very first scheduled run:
+        //
+        //   week-screenshot-winner | status=failed
+        //   error=week-screenshot-winner: invalid date argument "undefined"
+        //
+        // Omitting the date entirely is unambiguous under either parser.
+        const exitCode = await this.command.run(context.dryRun ? ['--dry-run'] : []);
 
         if (exitCode === 0) {
             return { considered: 1, changed: 1, skipped: 0, failed: 0 };
