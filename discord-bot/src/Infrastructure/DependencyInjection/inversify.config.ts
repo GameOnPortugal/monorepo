@@ -273,12 +273,14 @@ myContainer.get(JobRunner).register(myContainer.get(RelinkScreenshotsJob));
 if (process.env.TROPHIES_SYNC_ENABLED === 'true') {
     myContainer.get(JobRunner).register(myContainer.get(TrophiesSyncJob));
 } else {
-    myContainer.get<Logger>(TYPES.Logger).warn(
-        'trophies:sync is bound but NOT scheduled (TROPHIES_SYNC_ENABLED is not "true"). ' +
-            'Dry-run it first — bun run:command jobs:run trophies:sync --dry-run — read the ' +
-            'report (especially any newly-flagged profiles), then set ' +
-            'TROPHIES_SYNC_ENABLED=true to schedule it every 10 minutes.',
-    );
+    myContainer
+        .get<Logger>(TYPES.Logger)
+        .warn(
+            'trophies:sync is bound but NOT scheduled (TROPHIES_SYNC_ENABLED is not "true"). ' +
+                'Dry-run it first — bun run:command jobs:run trophies:sync --dry-run — read the ' +
+                'report (especially any newly-flagged profiles), then set ' +
+                'TROPHIES_SYNC_ENABLED=true to schedule it every 10 minutes.',
+        );
 }
 
 export { myContainer };
