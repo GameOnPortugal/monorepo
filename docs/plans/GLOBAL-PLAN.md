@@ -414,23 +414,23 @@ Screenshots page (M8.8) is hard-blocked on M6.3.
 **Exit criteria**: `game-on-portugal.pt` serves the portal; an admin can moderate
 ads, screenshots and jobs from a browser; a shared link previews with the brand.
 
-| ID | Item |
-| -- | ---- |
-| **M8.1** | Vendor the brand — guild icon + banner into the repo, trace an SVG, define design tokens. **There is no logo file in this repo today**; `webpage/assets/img/logo.png` is referenced by `index.html` and does not exist. |
-| **M8.2** | Add `portal-api` / `portal-web` to release-please config **and** manifest, and uncomment their services in `infrastructure/game-on-portugal.yaml` — in the same PR that creates the directories (release-please errors on a package path that does not exist). |
-| **M8.3** | Scaffold `portal/api` (Bun + Hono) with read-only endpoints. **The bot owns the schema**; the portal reads it and never runs migrations. |
-| **M8.4** | **Shared normalisation module** — 21 platform strings → 4 platforms + Other; legacy Portuguese conditions → the enum; zone → district; `price_cents`. Used by **both** bot and portal so a listing renders identically in Discord and on the web. Map at display time; never rewrite history. |
-| **M8.5** | Scaffold `portal/web` (Vite + React + Tailwind), mobile-first at 375 px. |
-| **M8.6** | Home page — hero, live stats, latest screenshots, newest listings, Discord CTA. |
-| **M8.7** | Marketplace pages — grid, filters, detail. |
-| **M8.8** | Screenshots gallery + Hall of Fame. **Blocked on M6.3.** Thumbnails at ingest — a phone must not download a 4 MB PNG per grid tile. |
-| **M8.9** | Trophies leaderboard, with an honest "data frozen" notice until M7 lands. |
-| **M8.10** | Discord OAuth + admin shell, gated on guild membership **and `ManageMessages`** — the same definition of "admin" the bot uses. |
-| **M8.11** | Admin CRUD + audit log. |
-| **M8.12** | Admin jobs page, wired to M6.1's runner. |
-| **M8.13** | SEO, OG cards, sitemap. |
-| **M8.14** | Deploy + CI, documented in `operations.md`. |
-| **M8.15** | **Plan 04 phase 4** — point the `game-on-portugal.pt` apex and `www` at HTZ1 (and **refresh the OVH zone**, which applies the zone, not the record), add the apex Caddy block, archive `GameOnPortugal/gameonportugal.github.io`, and delete this repo's orphaned `webpage/`. Resolves [#9](../known-issues.md). |
+| ID | Item | Status |
+| -- | ---- | ------ |
+| **M8.1** | Vendor the brand — guild icon + banner into the repo, trace an SVG, define design tokens. **There is no logo file in this repo today**; `webpage/assets/img/logo.png` is referenced by `index.html` and does not exist. | **Design tokens done as part of M8.5 ([#48](https://github.com/GameOnPortugal/monorepo/pull/48)); the brand art itself is still not vendored.** `portal/web/src/index.css`'s `@theme` block defines the full palette/type-scale/chamfer/scanline tokens from plan 03 and 00-overview's hex values, and `portal/web/src/lib/platforms.ts` fixes the platform→colour assignment in one place (with the WCAG contrast numbers that justify it). What's still missing, and why: the guild icon (`https://cdn.discordapp.com/icons/818108848492773377/b5d2486a6181a2a5ecb3a4cfbc4b9a0d.png?size=512`) and banner (`https://cdn.discordapp.com/banners/818108848492773377/ffa308a0fad1a858794921dec051bad5.png?size=1024`) are binary image assets an agent restricted to text-editing/Bash tools cannot fetch and trace to SVG. `portal/web/public/favicon.svg` is a plain placeholder (documented as such in its own header comment) and the header wordmark is set text (`font-display`), not a traced logotype. **Next agent**: fetch the two URLs above, trace/vectorise the icon, vendor both into `portal/web/public/brand/`, and swap the text wordmark for the real mark in `portal/web/src/components/Layout.tsx`. |
+| **M8.2** | Add `portal-api` / `portal-web` to release-please config **and** manifest, and uncomment their services in `infrastructure/game-on-portugal.yaml` — in the same PR that creates the directories (release-please errors on a package path that does not exist). | ✅ **DONE ([#48](https://github.com/GameOnPortugal/monorepo/pull/48)).** Both components added to `.github/release-please-config.json` (`node` release-type, paths `portal/api`/`portal/web`) and `.github/.release-please-manifest.json` (seeded `0.1.0`), and both services uncommented in `infrastructure/game-on-portugal.yaml`. **One addition beyond the item's literal wording**: uncommenting the services with no image-build path wired up would have broken the *next* deploy — Portainer fails a stack whose image can't be pulled, and that failure isn't scoped to the new services, it takes the whole stack rollout down, including the bot. So `deploy.yml` gained `build-portal-api`/`build-portal-web` jobs (same shape as the existing `build-bot`), and `deploy`'s trigger paths gained `portal/**`. Trade-off recorded rather than hidden: `deploy.yml` has no per-job path filtering (unlike `ci.yml`'s `changes` job), so any push to `main` touching `discord-bot/**`, `portal/**` or `infrastructure/**` rebuilds and pushes **all three** images, not just the one that changed — matching the existing simplicity of that workflow rather than introducing new filtering machinery in a scaffold PR. `ci.yml` and `docker-build.yml` got their own `portal-api`/`portal-web` lanes gated on `dorny/paths-filter`, so PRs only run the jobs relevant to what changed. `.github/labeler.yml` and `.github/workflows/pr-title.yml` already had `portal`/`portal-api`/`portal-web` entries from an earlier session — verified, nothing to add there. |
+| **M8.3** | Scaffold `portal/api` (Bun + Hono) with read-only endpoints. **The bot owns the schema**; the portal reads it and never runs migrations. | ✅ **DONE ([#48](https://github.com/GameOnPortugal/monorepo/pull/48)).** Bun + Hono, endpoints for `/health`, `GET /api/marketplace/ads[/:id]`, `GET /api/screenshots`, `GET /api/trophies/leaderboard` (the leaderboard replicates `OrmTrophyRepository.queryRankedHunters`'s SQL shape — same `isExcluded` filter, same `points DESC, trophyCount DESC, psnProfile ASC` tie-break — as a separate implementation, since the portal never imports bot `Application`/`Domain` code). **Schema sharing, the interesting part**: `portal/api` does not copy `discord-bot/prisma/schema.prisma`. `bun run db:generate` runs `prisma generate --schema=../../discord-bot/prisma/schema.prisma`, and because Prisma's *un-overridden* client output path resolves relative to the schema file rather than the invoking package, the generated client lands in `discord-bot/node_modules/@prisma/client` — the literal artifact the bot uses, not a copy, reached via a relative import from `portal/api/src/db.ts`. Verified working end-to-end, including in Docker (repo-root build context, see `portal/api/docker/Dockerfile`'s header). The one operational cost of this approach: `discord-bot` and `portal/api`'s `prisma` devDependency versions must be pinned **exactly** equal (not `^`), or `generate` fails with a missing-runtime-file error — documented in `portal/README.md` and `portal/api/src/db.ts`. Every repository query is read-only by convention (`findMany`/`findUnique`/`$queryRaw*` only — no Prisma write method appears anywhere under `src/`); there is no database-level enforcement yet (the portal-api service currently reuses the bot's root DB user — see `portal/README.md` "Known limitation"). Public read paths are shaped for the still-unbuilt M9.7 `public_opt_out` flag: every query builds its `WHERE` through `src/repositories/visibility.ts`, so honouring the flag later is a one-line change to three functions, not a route-by-route rewrite. Tests: 9 cases across 4 files (`portal/api/tests/`), covering visibility filtering (soft-deleted ads absent, excluded trophy profiles absent, zero-trophy profiles absent per the `INNER JOIN` semantics) and that no response ever leaks `author_id`/`channel_id`/`message_id`/`userId`. **M8.4 (the shared normalisation module) is explicitly not done here** — `adType`/`state`/`plataform` are returned raw, with a comment pointing at M8.4 as the follow-up. |
+| **M8.4** | **Shared normalisation module** — 21 platform strings → 4 platforms + Other; legacy Portuguese conditions → the enum; zone → district; `price_cents`. Used by **both** bot and portal so a listing renders identically in Discord and on the web. Map at display time; never rewrite history. | — Not picked up. `portal/api`'s ads/screenshots repositories return raw stored values, and `portal/web/src/lib/platforms.ts` has a small local `guessPlatform()` explicitly marked as a stand-in, not this module. |
+| **M8.5** | Scaffold `portal/web` (Vite + React + Tailwind), mobile-first at 375 px. | ✅ **DONE ([#48](https://github.com/GameOnPortugal/monorepo/pull/48)).** Vite 8 + React 19 + Tailwind v4 (CSS-first `@theme` config, no `tailwind.config.js`), `react-router-dom` for the shell, `@fontsource`-self-hosted webfonts (Archivo Black for `font-display`, Inter Variable for `font-body` — no third-party font CDN). Dark-first with no light theme (per the settled decision), chamfered-corner and low-opacity scanline utilities, focus-glow instead of outlines, a global `prefers-reduced-motion` override. **The platform→colour mapping lives in exactly one file**, `src/lib/platforms.ts` — PlayStation→blue, Xbox→mint, Nintendo→red, PC→yellow (reasoning and a WCAG contrast table for all four accents against `#060302` are in that file's header). Contrast was verified, not assumed: white-on-accent fails AA for **every one** of the four colours (worst: yellow at 1.08:1), so `PlatformBadge` uses near-black text on the accent fill, and body copy never uses an accent as a text colour on black (`#EA3223` is 4.87:1 against black — technically AA-passing but marginal, per plan 03 — so even the one place that seemed safe, error-copy, uses a red left border with white text instead). One representative page (`src/pages/Home.tsx`) is built end-to-end against the real API — hero, ads/screenshots/leaderboard strips with loading/error/empty states — as the pattern for M8.6-M8.9 to copy; it is a skeleton of the eventual M8.6 Home page, not the finished thing. `bun run build` and `bun run typecheck` are both clean; production API calls default to same-origin `/api/...` (not a build-time-baked host) because the deploy topology already on disk (`infrastructure/caddy/game-on-portugal.pt.caddy`) has the SPA container's own nginx proxy `/api/` and `/health` to `portal-api` — `portal/web/docker/nginx.conf` implements that split, verified by running both containers together on a shared Docker network. |
+| **M8.6** | Home page — hero, live stats, latest screenshots, newest listings, Discord CTA. | — |
+| **M8.7** | Marketplace pages — grid, filters, detail. | — |
+| **M8.8** | Screenshots gallery + Hall of Fame. **Blocked on M6.3.** Thumbnails at ingest — a phone must not download a 4 MB PNG per grid tile. | — |
+| **M8.9** | Trophies leaderboard, with an honest "data frozen" notice until M7 lands. | — |
+| **M8.10** | Discord OAuth + admin shell, gated on guild membership **and `ManageMessages`** — the same definition of "admin" the bot uses. | — |
+| **M8.11** | Admin CRUD + audit log. | — |
+| **M8.12** | Admin jobs page, wired to M6.1's runner. | — |
+| **M8.13** | SEO, OG cards, sitemap. | — |
+| **M8.14** | Deploy + CI, documented in `operations.md`. | — |
+| **M8.15** | **Plan 04 phase 4** — point the `game-on-portugal.pt` apex and `www` at HTZ1 (and **refresh the OVH zone**, which applies the zone, not the record), add the apex Caddy block, archive `GameOnPortugal/gameonportugal.github.io`, and delete this repo's orphaned `webpage/`. Resolves [#9](../known-issues.md). | — |
 
 > **Settled**: dark-first (the brand is black); the four brand face-button colours
 > are the four platform colours, assigned once and never varied; pt-PT only for
@@ -522,9 +522,9 @@ Update this table as items land. `—` = not started.
 | M5 Marketplace overhaul | 11 | 6 | #29 (M5.3 lifecycle columns + migration), #35 (M5.1 route to `#anuncios`, M5.2 delete removes the message and soft-deletes the row), #49 (M5.4 pt-PT copy pass, M5.5 listing embed + buttons — first `ComponentHandler`, M5.6 shared sold/bump/edit handlers + edit modal). Remaining: **M5.7 `wanted`**, **M5.8 `list` pagination**, **M5.9 `search`**, **M5.10 limits + admin override on delete**, **M5.11 images to MinIO** |
 | M6 Jobs, lifecycle & media | 9 | 9 | **complete** — #19 (M6.7), #30 (M6.0 `MediaStorage` + S3/MinIO), #31 (M6.4 winner hardening), #32 (M6.1 runner + M6.8 reporting), #37 (M6.2 fix-at-source, M6.3 relink recovery), #40 (M6.5 `ads:lifecycle`, M6.6 `ads:reconcile`). Every scheduled job the plan asked for now exists and is registered against a working runner |
 | M7 Trophies | 8 | 8 | **complete** — #24 (M7.1 PSNProfiles source, M7.2 points ladder), #39 (M7.3 `trophies:sync` with scheduling opt-in via `TROPHIES_SYNC_ENABLED` and a moderation safety valve, M7.4 live rank on `/trophy check`, M7.5 both `/trophy create` URL shapes, M7.7 the `trophies:fix-old` backfill), #46 (M7.8 announcements through the bot, flood-guarded and off by default), #50 (M7.6 custom rank emojis with a unicode fallback, and pagination buttons on M4.7's component table) |
-| M8 Community portal | 15 | 0 | — |
+| M8 Community portal | 15 | 3 | **[#48](https://github.com/GameOnPortugal/monorepo/pull/48)** — M8.2 (release-please + `infrastructure/game-on-portugal.yaml` + CI wiring), M8.3 (`portal/api` scaffold, read-only over the bot's schema, 9 tests), M8.5 (`portal/web` scaffold: tokens, routing, one representative page). M8.1's design tokens landed as part of M8.5, but the brand art itself (guild icon/banner → SVG) is explicitly still open — see the M8.1 row for what the next agent needs. M8.4 (shared normalisation) and M8.6-M8.15 (the actual pages, OAuth admin, deploy) are untouched. |
 | M9 Feature gap & dead weight | 7 | 5 | #33 — M9.2/M9.3/M9.4 **done**, seven dead models and their tables dropped (migration `20260820102655_drop_dead_models`, guarded and verified against a production copy). M9.1 redesigned onto AutoMod. #44 — **M9.5 verified** (env vars were already clean; fixed the stale trap note in `AGENT.md` instead), **M9.6 done** (`old-discord-bot/` deleted, all references fixed). Remaining: **M9.7** (privacy flag) |
-| **Total** | **93** | **69** | |
+| **Total** | **93** | **72** | |
 
 ### What landed on 2026-08-20 (second session)
 Fourteen more PRs (#23–#37), taking the queue from 41/92 to **54/93** — the
@@ -578,6 +578,35 @@ this milestone.
 above and the PR description. **M7.6** (rank presentation parity — guild
 emojis, `trophies` component-handler pagination) landed separately once M4.7
 did; see its own row. Remaining in M7: **M7.8** (announcements).
+
+### What landed with M8.2/M8.3/M8.5 (portal scaffold)
+
+The first portal code in the repo: `portal/api` (Bun + Hono, read-only over
+the bot's schema) and `portal/web` (Vite + React + Tailwind, dark-first
+tokens, one representative page), plus the release-please/CI/deploy wiring
+that has to land in the same PR that creates the directories (release-please
+errors on a package path that doesn't exist yet). Full reasoning is in the
+M8.1/M8.2/M8.3/M8.5 rows above; the two things worth surfacing here:
+
+- **The schema-sharing mechanism turned out to be free.** Prisma's
+  un-overridden client output path resolves relative to the schema file, not
+  the invoking package — so pointing `portal/api` at
+  `discord-bot/prisma/schema.prisma` with `--schema` writes the generated
+  client straight into `discord-bot/node_modules/@prisma/client`, the same
+  artifact the bot uses. No shared workspace package, no copy, no drift. The
+  only cost is that the two packages' `prisma` versions have to be pinned
+  exactly equal.
+- **Uncommenting the Portainer services for M8.2 would have broken the next
+  deploy** if left there: Portainer fails an entire stack rollout — bot
+  included — if any one service's image can't be pulled, and nothing built
+  `portal-api`/`portal-web` images yet. `deploy.yml` gained build-and-push
+  jobs for both, mirroring the existing `build-bot` job, closing that gap in
+  the same PR rather than leaving a landmine for whoever merges next.
+
+Not done: M8.1's brand art (guild icon/banner → SVG — needs binary asset
+fetch/tracing this agent's tool loadout couldn't do), M8.4 (shared
+normalisation module), and M8.6-M8.15 (the actual pages, OAuth admin, jobs
+UI, SEO, and the plan 04 phase-4 domain cutover).
 
 ### What landed on 2026-08-19/20
 

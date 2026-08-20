@@ -1,0 +1,14 @@
+<!--
+  Placeholder favicon — M8.1 ("vendor the brand") is explicitly NOT part of
+  this scaffold PR. It needs the real guild icon
+  (https://cdn.discordapp.com/icons/818108848492773377/b5d2486a6181a2a5ecb3a4cfbc4b9a0d.png)
+  traced to SVG, which this agent cannot fetch/trace from a text-only tool
+  loadout. See docs/plans/GLOBAL-PLAN.md M8.1 row and portal/README.md for
+  what the next agent needs to do. This is a plain geometric placeholder —
+  not brand art, just something that isn't a 404.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" fill="#060302" />
+  <path d="M8 8 L24 8 L24 20 L18 26 L8 26 Z" fill="none" stroke="#FFFFFF" stroke-width="2" />
+  <circle cx="16" cy="16" r="3" fill="#EA3223" />
+</svg>

@@ -9,6 +9,16 @@
       "path": "discord-bot",
       "release-type": "node",
       "component": "discord-bot"
+    },
+    "portal/api": {
+      "path": "portal/api",
+      "release-type": "node",
+      "component": "portal-api"
+    },
+    "portal/web": {
+      "path": "portal/web",
+      "release-type": "node",
+      "component": "portal-web"
     }
   }
 }
