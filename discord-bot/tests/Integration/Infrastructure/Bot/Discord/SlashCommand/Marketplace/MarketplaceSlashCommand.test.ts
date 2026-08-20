@@ -16,7 +16,15 @@ import { MarketplaceSlashCommand } from '../../../../../../../src/Infrastructure
 describe('MarketplaceSlashCommand builder()', () => {
     test('is guild-only, guild-install, and explicitly open to every member', () => {
         const logger = new Logger([new InMemoryLogger()]);
-        const command = new MarketplaceSlashCommand(logger, {} as any, {} as any, {} as any);
+        const command = new MarketplaceSlashCommand(
+            logger,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+        );
 
         const json = command.builder().toJSON();
 

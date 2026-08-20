@@ -1,9 +1,11 @@
-import type { ButtonInteraction } from 'discord.js';
+import type { ButtonInteraction, ModalSubmitInteraction } from 'discord.js';
 
 /**
- * The subset of `ButtonInteraction` that `BotExecutor.executeComponent()` and
- * the component handlers it dispatches to actually touch (M4.7) — same
- * hand-rolled style as {@link FakeInteraction}.
+ * The subset of `ButtonInteraction`/`ModalSubmitInteraction` that
+ * `BotExecutor.executeComponent()` and the component handlers it dispatches
+ * to actually touch (M4.7, extended M5.5/M5.6 for `guild`/`member` —
+ * `isGuildAdmin()` reads those — and `fields.getTextInputValue` for modal
+ * submissions), same hand-rolled style as {@link FakeInteraction}.
  */
 export default class FakeComponentInteraction {
     public deferred = false;
@@ -20,6 +22,9 @@ export default class FakeComponentInteraction {
     public readonly customId: string;
     public readonly channelId: string;
     public readonly guildId: string;
+    public readonly guild: { id: string } | null;
+    public readonly member: { permissions: string } | null;
+    public readonly fields: { getTextInputValue: (customId: string) => string };
 
     private messageIdCounter = 0;
 
@@ -29,11 +34,21 @@ export default class FakeComponentInteraction {
         channelId = '222222222222222222',
         guildId = '333333333333333333',
         username = 'test-user',
+        // M5.5/M5.6 additions. `permissions` is the raw HTTP-interaction
+        // bitfield string `isGuildAdmin()` (Domain/Bot/AdminCheck.ts) knows
+        // how to read; '0' is "no permissions", matching a regular member.
+        permissions = '0',
+        modalFieldValues: Record<string, string> = {},
     ) {
         this.customId = customId;
         this.user = { id: userId, username };
         this.channelId = channelId;
         this.guildId = guildId;
+        this.guild = { id: guildId };
+        this.member = { permissions };
+        this.fields = {
+            getTextInputValue: (fieldCustomId: string) => modalFieldValues[fieldCustomId] ?? '',
+        };
     }
 
     async deferReply(options?: any): Promise<void> {
@@ -72,5 +87,9 @@ export default class FakeComponentInteraction {
 
     asButtonInteraction(): ButtonInteraction {
         return this as unknown as ButtonInteraction;
+    }
+
+    asModalSubmitInteraction(): ModalSubmitInteraction {
+        return this as unknown as ModalSubmitInteraction;
     }
 }
