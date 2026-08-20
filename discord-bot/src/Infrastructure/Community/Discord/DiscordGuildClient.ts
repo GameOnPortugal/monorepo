@@ -2,10 +2,22 @@ import type {
     CommunityMessage,
     GuildClient,
     ListMessagesOptions,
+    MessageButton,
+    RichMessageContent,
 } from '../../../Domain/Community/GuildClient.ts';
 import { injectable } from 'inversify';
 import type { APIChannel, APIMessage, InvalidRequestWarningData, RateLimitData } from 'discord.js';
-import { REST, Routes, RESTEvents, DiscordAPIError, RESTJSONErrorCodes } from 'discord.js';
+import {
+    REST,
+    Routes,
+    RESTEvents,
+    DiscordAPIError,
+    RESTJSONErrorCodes,
+    EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+} from 'discord.js';
 import { CommunityChannels } from '../../../Domain/Community/CommunityChannels.ts';
 import { CustomEmoji } from '../../../Domain/Community/CustomEmoji.ts';
 import { convertChannel, DISCORD_GUILD_ID } from './DiscordChannels.ts';
@@ -138,6 +150,51 @@ export class DiscordGuildClient implements GuildClient {
             return created.id;
         } catch (error) {
             throw new ClientError(`Failed to send message: ${(error as Error).message}`);
+        }
+    }
+
+    /** M5.5 — the rich-content counterpart to `sendMessage`; see the port's doc comment. */
+    async sendRichMessage(
+        channel: CommunityChannels,
+        content: RichMessageContent,
+    ): Promise<string> {
+        this.requireToken();
+        const channelId = convertChannel(channel);
+
+        try {
+            const created = (await this.rest.post(Routes.channelMessages(channelId), {
+                body: buildRichMessageBody(content),
+            })) as APIMessage;
+            return created.id;
+        } catch (error) {
+            throw new ClientError(`Failed to send rich message: ${(error as Error).message}`);
+        }
+    }
+
+    /** M5.6 — re-renders a listing in place; see the port's doc comment. */
+    async editRichMessage(
+        channelId: string,
+        messageId: string,
+        content: RichMessageContent,
+    ): Promise<void> {
+        this.requireToken();
+
+        try {
+            await this.rest.patch(Routes.channelMessage(channelId, messageId), {
+                body: buildRichMessageBody(content),
+            });
+        } catch (error) {
+            // Unknown Message (10008, HTTP 404): mirrors deleteMessage's
+            // tolerance (M5.2) — a message a moderator already removed by
+            // hand should not turn an otherwise-successful `EditAd` into a
+            // user-facing error, since the row itself was already saved.
+            if (
+                error instanceof DiscordAPIError &&
+                (error.code === RESTJSONErrorCodes.UnknownMessage || error.status === 404)
+            ) {
+                return;
+            }
+            throw new ClientError(`Failed to edit rich message: ${(error as Error).message}`);
         }
     }
 
@@ -316,4 +373,62 @@ function toCommunityMessage(message: APIMessage): CommunityMessage {
             .map((embed) => embed.image?.url)
             .filter((url): url is string => url !== undefined),
     };
+}
+
+function mapButtonStyle(style: MessageButton['style']): ButtonStyle {
+    switch (style) {
+        case 'primary':
+            return ButtonStyle.Primary;
+        case 'secondary':
+            return ButtonStyle.Secondary;
+        case 'success':
+            return ButtonStyle.Success;
+        case 'danger':
+            return ButtonStyle.Danger;
+    }
+}
+
+/**
+ * Converts a domain-shaped `RichMessageContent` (M5.5) into the raw
+ * `{ embeds, components }` body this REST-only client sends — built via
+ * discord.js's `EmbedBuilder`/`ActionRowBuilder`/`ButtonBuilder` and
+ * `.toJSON()`-ed, same as every other body this class hand-assembles,
+ * rather than constructing the raw API JSON shape by hand.
+ */
+function buildRichMessageBody(content: RichMessageContent): {
+    embeds: unknown[];
+    components: unknown[];
+} {
+    const embed = new EmbedBuilder().setColor(content.color).setTitle(content.title);
+    if (content.description) {
+        embed.setDescription(content.description);
+    }
+    if (content.imageUrl) {
+        embed.setImage(content.imageUrl);
+    }
+    if (content.authorName) {
+        embed.setAuthor({ name: content.authorName, iconURL: content.authorIconUrl });
+    }
+    if (content.footerText) {
+        embed.setFooter({ text: content.footerText });
+    }
+
+    const components: unknown[] = [];
+    if (content.buttons && content.buttons.length > 0) {
+        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            content.buttons.map((button) => {
+                const builder = new ButtonBuilder()
+                    .setCustomId(button.customId)
+                    .setLabel(button.label)
+                    .setStyle(mapButtonStyle(button.style));
+                if (button.emoji) {
+                    builder.setEmoji(button.emoji);
+                }
+                return builder;
+            }),
+        );
+        components.push(row.toJSON());
+    }
+
+    return { embeds: [embed.toJSON()], components };
 }

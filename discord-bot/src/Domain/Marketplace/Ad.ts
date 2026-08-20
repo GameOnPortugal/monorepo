@@ -115,19 +115,35 @@ export class Ad {
 
     /**
      * Returns a new `Ad` with the given fields replaced — everything else,
-     * including `id`, is carried over unchanged. `Ad` is otherwise immutable
-     * (every field is `readonly`), so a lifecycle transition (M6.5's
-     * active → pending_renewal → expired/active) would otherwise mean
-     * re-listing all twenty-one constructor arguments at every call site,
-     * which is exactly the kind of copy-paste that silently drops a field.
+     * including `id`, carried over unchanged. `Ad` has no other mutation
+     * surface (every field is `readonly`), so a lifecycle transition (M6.5's
+     * active → pending_renewal → expired/active) or a sold/bump/edit
+     * transition (M5.6) would otherwise mean re-listing all twenty-one
+     * constructor arguments at every call site — exactly the kind of
+     * copy-paste that silently drops a field on the next one added.
+     *
      * `updatedAt` defaults to "now" on every call, matching Prisma's
-     * `@updatedAt` semantics for the column it's mapped to.
+     * `@updatedAt` semantics for the column it maps to. Keys are tested with
+     * `in` rather than `??`/`?.` so a caller can deliberately set a field
+     * back to `null` (e.g. clearing `bumpedAt`) without that being
+     * indistinguishable from "leave it alone".
+     *
+     * The mutable-field list is the union of what M5.6 and M6.5 each need:
+     * the two landed in parallel as `withChanges` and `withChanges`, two
+     * near-identical methods differing only in which fields they let through.
+     * Merged into one at integration rather than kept as a pair — two
+     * spellings of "copy this entity with edits" is precisely how a field
+     * ends up updatable through one path and silently ignored through the
+     * other.
      */
     public withChanges(
         changes: Partial<{
             channelId: string | null;
             messageId: string | null;
             status: AdStatus;
+            price: string | null;
+            priceCents: number | null;
+            description: string | null;
             bumpedAt: Date | null;
             expiresAt: Date | null;
             soldAt: Date | null;
@@ -142,16 +158,16 @@ export class Ad {
             'channelId' in changes ? (changes.channelId ?? null) : this.channelId,
             'messageId' in changes ? (changes.messageId ?? null) : this.messageId,
             this.state,
-            this.price,
+            'price' in changes ? (changes.price ?? null) : this.price,
             this.zone,
             this.dispatch,
             this.warranty,
-            this.description,
+            'description' in changes ? (changes.description ?? null) : this.description,
             this.adType,
             this.createdAt,
             changes.updatedAt ?? new Date(),
             changes.status ?? this.status,
-            this.priceCents,
+            'priceCents' in changes ? (changes.priceCents ?? null) : this.priceCents,
             this.images,
             'bumpedAt' in changes ? (changes.bumpedAt ?? null) : this.bumpedAt,
             'expiresAt' in changes ? (changes.expiresAt ?? null) : this.expiresAt,

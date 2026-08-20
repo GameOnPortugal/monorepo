@@ -57,15 +57,15 @@ export class DeleteAdSubcommand {
 
         try {
             await this.commandHandlerManager.handle(new DeleteAd(adId, userId));
-            await interaction.editReply({ content: 'Ad deleted successfully' });
+            await interaction.editReply({ content: '🗑️ Anúncio apagado com sucesso.' });
         } catch (error) {
             if (error instanceof UnauthorizedAdDeletion) {
                 await interaction.editReply({
-                    content: 'You are not authorized to delete this ad',
+                    content: 'Não tens permissão para apagar este anúncio.',
                 });
             } else if (error instanceof RecordNotFound) {
                 await interaction.editReply({
-                    content: 'Ad not found',
+                    content: 'Anúncio não encontrado.',
                 });
             } else {
                 const correlationId = randomUUID();
@@ -76,7 +76,7 @@ export class DeleteAdSubcommand {
                     userId,
                 });
                 await interaction.editReply({
-                    content: `There was an error deleting your ad. Please try again. (ref: ${correlationId})`,
+                    content: `Ocorreu um erro ao apagar o anúncio. Tenta novamente. (ref: ${correlationId})`,
                 });
             }
         }

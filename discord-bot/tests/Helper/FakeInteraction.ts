@@ -31,8 +31,11 @@ export default class FakeInteraction {
 
     public readonly user: { id: string; username: string };
     public readonly guildId: string;
+    public readonly guild: { id: string } | null;
+    public readonly member: { permissions: string } | null;
     public readonly channelId: string;
     public readonly id: string;
+    public readonly showModalCalls: any[] = [];
     public readonly options: {
         getString: (name: string, required?: boolean) => string | null;
         getUser: (name: string) => { id: string; username: string } | null;
@@ -63,10 +66,16 @@ export default class FakeInteraction {
         private readonly subcommand: string = '',
         username = 'test-user',
         interactionId = 'fake-interaction-1',
+        // M5.6 addition — the raw HTTP-interaction bitfield string
+        // `isGuildAdmin()` (Domain/Bot/AdminCheck.ts) knows how to read;
+        // '0' is "no permissions", matching a regular member.
+        permissions = '0',
     ) {
         this.user = { id: userId, username };
         this.channelId = channelId;
         this.guildId = guildId;
+        this.guild = { id: guildId };
+        this.member = { permissions };
         this.id = interactionId;
         this.options = {
             getString: (name: string, required?: boolean) => {
@@ -124,6 +133,17 @@ export default class FakeInteraction {
 
     async deleteReply(message?: unknown): Promise<void> {
         this.deleteReplyCalls.push(message);
+    }
+
+    /**
+     * M5.6 — `EditAdSubcommand` opens a modal rather than deferring/replying
+     * normally. `showModal()` is itself the interaction's acknowledgement
+     * (Discord does not allow both), so this marks `replied` the same way
+     * `reply()` does.
+     */
+    async showModal(modal: any): Promise<void> {
+        this.showModalCalls.push(modal);
+        this.replied = true;
     }
 
     async reply(payload: any): Promise<{ id: string; content: any }> {

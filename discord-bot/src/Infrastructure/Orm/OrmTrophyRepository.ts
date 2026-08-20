@@ -131,22 +131,42 @@ export class OrmTrophyRepository implements TrophyRepository {
         return trophies.map((trophy) => Trophy.fromArray(trophy as TrophyArray));
     }
 
-    async getTopMonthlyHunters(limit: number, date: Date): Promise<TrophyRankData[]> {
-        const firstDayOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
-        const lastDayOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59);
-
-        return this.queryRankedHunters(limit, { start: firstDayOfMonth, end: lastDayOfMonth });
+    async getTopMonthlyHunters(
+        limit: number,
+        date: Date,
+        offset: number = 0,
+    ): Promise<TrophyRankData[]> {
+        return this.queryRankedHunters(limit, this.monthRange(date), offset);
     }
 
-    async getTopSinceCreationHunters(limit: number): Promise<TrophyRankData[]> {
-        return this.queryRankedHunters(limit);
+    async getTopSinceCreationHunters(limit: number, offset: number = 0): Promise<TrophyRankData[]> {
+        return this.queryRankedHunters(limit, undefined, offset);
     }
 
-    async getTopLifetimeHunters(limit: number): Promise<TrophyRankData[]> {
+    async getTopLifetimeHunters(limit: number, offset: number = 0): Promise<TrophyRankData[]> {
         // Same query as `getTopSinceCreationHunters`: there is no "since
         // creation" cutoff distinct from "lifetime" in the data we have, both
         // are simply "all trophies, no date filter".
-        return this.queryRankedHunters(limit);
+        return this.queryRankedHunters(limit, undefined, offset);
+    }
+
+    async countMonthlyHunters(date: Date): Promise<number> {
+        return this.countRankedHunters(this.monthRange(date));
+    }
+
+    async countSinceCreationHunters(): Promise<number> {
+        return this.countRankedHunters();
+    }
+
+    async countLifetimeHunters(): Promise<number> {
+        return this.countRankedHunters();
+    }
+
+    private monthRange(date: Date): DateRange {
+        return {
+            start: new Date(date.getFullYear(), date.getMonth(), 1),
+            end: new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59),
+        };
     }
 
     async findUserPosition(userId: string): Promise<UserPosition> {
@@ -235,8 +255,10 @@ export class OrmTrophyRepository implements TrophyRepository {
     private async queryRankedHunters(
         limit: number,
         dateRange?: DateRange,
+        offset: number = 0,
     ): Promise<TrophyRankData[]> {
         const safeLimit = Math.max(0, Math.trunc(limit));
+        const safeOffset = Math.max(0, Math.trunc(offset));
         const dateCondition = this.buildDateCondition(dateRange);
 
         const rows = await this.prismaClient.$queryRaw<RankedHunterRow[]>(Prisma.sql`
@@ -250,7 +272,7 @@ export class OrmTrophyRepository implements TrophyRepository {
             WHERE tp.isExcluded = false
             GROUP BY tp.id, tp.userId, tp.psnProfile
             ORDER BY points DESC, num_trophies DESC, tp.psnProfile ASC
-            LIMIT ${safeLimit}
+            LIMIT ${safeLimit} OFFSET ${safeOffset}
         `);
 
         return rows.map((row) => ({
@@ -259,6 +281,29 @@ export class OrmTrophyRepository implements TrophyRepository {
             points: Number(row.points ?? 0),
             num_trophies: Number(row.num_trophies ?? 0),
         }));
+    }
+
+    /**
+     * Counts the same grouped set `queryRankedHunters` paginates over — one
+     * row per non-excluded profile with at least one (optionally
+     * date-windowed) trophy — so `GetRankHandler` can compute `totalPages`
+     * without pulling every row into memory just to measure it.
+     */
+    private async countRankedHunters(dateRange?: DateRange): Promise<number> {
+        const dateCondition = this.buildDateCondition(dateRange);
+
+        const rows = await this.prismaClient.$queryRaw<{ total: bigint | number }[]>(Prisma.sql`
+            SELECT COUNT(*) AS total
+            FROM (
+                SELECT tp.id
+                FROM trophyprofiles tp
+                INNER JOIN trophies t ON t.trophyProfile = tp.id ${dateCondition}
+                WHERE tp.isExcluded = false
+                GROUP BY tp.id
+            ) ranked
+        `);
+
+        return Number(rows[0]?.total ?? 0);
     }
 
     /**
