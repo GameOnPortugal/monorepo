@@ -30,6 +30,14 @@ FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 
+# Redundant at runtime — the base image already runs as this uid — but stated
+# explicitly on purpose. Trivy's DS-0002 parses the Dockerfile as *text* and
+# cannot see a USER inherited from a base image, so without this line the scan
+# reports the image as root-running even though it is not. Saying it here also
+# means the file answers "what user does this run as?" on its own, rather than
+# by knowing which nginx variant the FROM line names.
+USER 101
+
 EXPOSE 8080
 
 # 127.0.0.1, not `localhost`. In this image `localhost` resolves to [::1]
