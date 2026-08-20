@@ -130,6 +130,83 @@ describe('OrmTrophyRepository Integration Test', () => {
         expect(secondCall.map((r) => r.userId)).toEqual(result.map((r) => r.userId));
     });
 
+    // M7.6: offset + count power `/trophy rank`'s pagination buttons.
+    describe('pagination support', () => {
+        test('getTopLifetimeHunters offset skips already-seen rows without re-shuffling order', async () => {
+            const profiles = [
+                ['user-a', 'A', 500],
+                ['user-b', 'B', 400],
+                ['user-c', 'C', 300],
+                ['user-d', 'D', 200],
+            ] as const;
+
+            for (const [userId, name, points] of profiles) {
+                const profile = await createTrophyProfile(undefined, userId, name);
+                await createTrophy(undefined, profile.id.toString(), undefined, points);
+            }
+
+            const page1 = await trophyRepository.getTopLifetimeHunters(2, 0);
+            const page2 = await trophyRepository.getTopLifetimeHunters(2, 2);
+
+            expect(page1.map((r) => r.userId)).toEqual(['user-a', 'user-b']);
+            expect(page2.map((r) => r.userId)).toEqual(['user-c', 'user-d']);
+        });
+
+        test('countLifetimeHunters / countSinceCreationHunters count ranked profiles, not trophy rows', async () => {
+            const profileA = await createTrophyProfile(undefined, 'user-count-a', 'CountA');
+            await createTrophy(undefined, profileA.id.toString(), undefined, 10);
+            await createTrophy(undefined, profileA.id.toString(), undefined, 20);
+
+            const profileB = await createTrophyProfile(undefined, 'user-count-b', 'CountB');
+            await createTrophy(undefined, profileB.id.toString(), undefined, 5);
+
+            expect(await trophyRepository.countLifetimeHunters()).toBe(2);
+            expect(await trophyRepository.countSinceCreationHunters()).toBe(2);
+        });
+
+        test('countMonthlyHunters only counts profiles with a trophy inside the requested month', async () => {
+            const now = new Date();
+            const lastMonth = new Date(now);
+            lastMonth.setMonth(lastMonth.getMonth() - 1);
+
+            const thisMonthProfile = await createTrophyProfile(
+                undefined,
+                'user-this-month',
+                'ThisMonth',
+            );
+            await createTrophy(undefined, thisMonthProfile.id.toString(), undefined, 100, now);
+
+            const lastMonthProfile = await createTrophyProfile(
+                undefined,
+                'user-last-month',
+                'LastMonth',
+            );
+            await createTrophy(
+                undefined,
+                lastMonthProfile.id.toString(),
+                undefined,
+                100,
+                lastMonth,
+            );
+
+            expect(await trophyRepository.countMonthlyHunters(now)).toBe(1);
+        });
+
+        test('a profile excluded from the ranking is not counted either', async () => {
+            const excluded = await createTrophyProfile(
+                undefined,
+                'user-excluded-count',
+                'ExcludedCount',
+                false,
+                false,
+                true,
+            );
+            await createTrophy(undefined, excluded.id.toString(), undefined, 999999);
+
+            expect(await trophyRepository.countLifetimeHunters()).toBe(0);
+        });
+    });
+
     test('findUserPosition returns the correct rank among more profiles than a naive top-N would show', async () => {
         // Six profiles with distinct points; the target user is 4th place —
         // outside a `limit: 3`-style truncation, proving the rank is computed

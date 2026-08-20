@@ -37,6 +37,8 @@ import { GetProfileHandler } from '../../Application/Query/Trophy/GetProfile/Get
 import { CheckTrophyProfileSubcommand } from '../Bot/Discord/SlashCommand/Trophy/CheckTrophyProfileSubcommand.ts';
 import { GetRankHandler } from '../../Application/Query/Trophy/GetRank/GetRankHandler.ts';
 import { RankSubcommand } from '../Bot/Discord/SlashCommand/Trophy/RankSubcommand.ts';
+import { RankPresenter } from '../Bot/Discord/SlashCommand/Trophy/RankPresenter.ts';
+import { TrophyComponentHandler } from '../Bot/Discord/Component/TrophyComponentHandler.ts';
 import { OrmAdRepository } from '../Orm/OrmAdRepository.ts';
 import type { AdRepository } from '../../Domain/Marketplace/AdRepository.ts';
 import { CreateAdHandler } from '../../Application/Write/Marketplace/CreateAd/CreateAdHandler.ts';
@@ -153,13 +155,20 @@ myContainer.bind(ScreenshotAutocompleteHandler).toSelf();
 myContainer.bind(TYPES.AutocompleteHandler).toService(MarketplaceAutocompleteHandler);
 myContainer.bind(TYPES.AutocompleteHandler).toService(ScreenshotAutocompleteHandler);
 
-// Component handlers (M4.7) — matched by custom ID namespace.
-// MarketplaceComponentHandler (M5.5/M5.6) is the first consumer, claiming
-// the `mkt` namespace for the listing buttons (contact/sold/bump) and the
-// edit modal submission. Bound to the symbol *and* toSelf, matching the
-// autocomplete handlers above, so a test can resolve it directly.
+// Component handlers (M4.7) — matched by custom ID namespace, one handler
+// per namespace. Both are bound to the symbol *and* toSelf, matching the
+// autocomplete handlers above, so a test can resolve either directly.
+//
+// `mkt`      — MarketplaceComponentHandler (M5.5/M5.6): listing buttons
+//              (contact/sold/bump) and the edit modal submission.
+// `trophies` — TrophyComponentHandler (M7.6): `/trophy rank` pagination.
+//
+// BotExecutor throws if two handlers ever claim the same namespace, so this
+// list cannot silently develop an ordering dependency.
 myContainer.bind(MarketplaceComponentHandler).toSelf();
 myContainer.bind(TYPES.ComponentHandler).toService(MarketplaceComponentHandler);
+myContainer.bind(TrophyComponentHandler).toSelf();
+myContainer.bind(TYPES.ComponentHandler).toService(TrophyComponentHandler);
 
 // Subcommands
 myContainer.bind(CreateScreenshotSubcommand).toSelf();
@@ -167,6 +176,7 @@ myContainer.bind(ListScreenshotSubcommand).toSelf();
 myContainer.bind(DeleteScreenshotSubcommand).toSelf();
 myContainer.bind(CreateTrophyProfileSubcommand).toSelf();
 myContainer.bind(CheckTrophyProfileSubcommand).toSelf();
+myContainer.bind(RankPresenter).toSelf();
 myContainer.bind(RankSubcommand).toSelf();
 myContainer.bind(SellSubcommand).toSelf();
 myContainer.bind(ListAdsSubcommand).toSelf();

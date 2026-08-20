@@ -49,6 +49,34 @@ describe('RankSubcommand Integration Test', () => {
         expect(interaction.replyCalls.length).toBe(0);
         expect(interaction.editReplyCalls.length).toBe(1);
         expect(interaction.editReplyCalls[0].embeds).toHaveLength(1);
+        // M7.6 — a list rank type always ships a pagination row, even with
+        // a single page (both buttons present, just disabled — see the
+        // dedicated pagination-row test below).
+        expect(interaction.editReplyCalls[0].components).toHaveLength(1);
+    });
+
+    it('does not attach a pagination row to a "user" ranking (it is not a list)', async () => {
+        const userId = '123456789012345678';
+        const interaction = new FakeInteraction({ type: 'user' }, userId);
+
+        await rankSubcommand.handle(buildContext(interaction));
+
+        expect(interaction.editReplyCalls[0].components ?? []).toHaveLength(0);
+    });
+
+    it('disables both pagination buttons when the ranking only has one page', async () => {
+        const userId = '123456789012345678';
+        const interaction = new FakeInteraction({ type: 'lifetime' }, userId);
+
+        await rankSubcommand.handle(buildContext(interaction));
+
+        const [row] = interaction.editReplyCalls[0].components;
+        const [previous, next] = row.components.map(
+            (button: { data: Record<string, unknown> }) => button.data,
+        );
+
+        expect(previous.disabled).toBe(true);
+        expect(next.disabled).toBe(true);
     });
 
     it('stays ephemeral on the error path too', async () => {
@@ -63,7 +91,7 @@ describe('RankSubcommand Integration Test', () => {
         expect(interaction.deferReplyCalls[0]).toEqual({ flags: MessageFlags.Ephemeral });
         expect(interaction.editReplyCalls.length).toBe(1);
         expect(interaction.editReplyCalls[0].content).toContain(
-            'error occurred while retrieving the trophy rankings',
+            'Ocorreu um erro ao obter o ranking de troféus',
         );
     });
 });

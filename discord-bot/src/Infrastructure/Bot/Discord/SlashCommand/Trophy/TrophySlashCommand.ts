@@ -98,7 +98,10 @@ export class TrophySlashCommand implements SlashCommandHandler {
                         .addIntegerOption((option) =>
                             option
                                 .setName('limit')
-                                .setDescription('Number of results to show (default: 10)')
+                                // M7.6: no longer a hard cap on the whole
+                                // ranking — pagination buttons on the
+                                // result page take you past it.
+                                .setDescription('Resultados por página (padrão: 10)')
                                 .setMinValue(1)
                                 .setMaxValue(10)
                                 .setRequired(false),
