@@ -1,7 +1,11 @@
 import { inject, injectable } from 'inversify';
 import type { SlashCommandHandler } from '../../../../../Domain/Bot/SlashCommandHandler';
 import type { SlashCommandContext } from '../../../../../Domain/Bot/SlashCommandContext';
-import { MessageFlags, SlashCommandBuilder } from 'discord.js';
+import {
+    MessageFlags,
+    SlashCommandBuilder,
+    type SlashCommandSubcommandsOnlyBuilder,
+} from 'discord.js';
 import { TYPES } from '../../../../DependencyInjection/types';
 import type Logger from '../../../../../Application/Logger/Logger';
 import { SellSubcommand } from './SellSubcommand';
@@ -21,7 +25,7 @@ export class MarketplaceSlashCommand implements SlashCommandHandler {
         return 'marketplace';
     }
 
-    public builder(): any {
+    public builder(): SlashCommandSubcommandsOnlyBuilder {
         return new SlashCommandBuilder()
             .setName('marketplace')
             .setDescription('Manage marketplace listings')

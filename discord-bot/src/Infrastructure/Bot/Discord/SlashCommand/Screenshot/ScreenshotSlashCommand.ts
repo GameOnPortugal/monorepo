@@ -1,7 +1,11 @@
 import { inject, injectable } from 'inversify';
 import type { SlashCommandHandler } from '../../../../../Domain/Bot/SlashCommandHandler.ts';
 import type { SlashCommandContext } from '../../../../../Domain/Bot/SlashCommandContext.ts';
-import { MessageFlags, SlashCommandBuilder } from 'discord.js';
+import {
+    MessageFlags,
+    SlashCommandBuilder,
+    type SlashCommandSubcommandsOnlyBuilder,
+} from 'discord.js';
 import { TYPES } from '../../../../DependencyInjection/types.ts';
 import type Logger from '../../../../../Application/Logger/Logger.ts';
 import { CreateScreenshotSubcommand } from './CreateScreenshotSubcommand.ts';
@@ -25,7 +29,7 @@ export class ScreenshotSlashCommand implements SlashCommandHandler {
         return 'screenshot';
     }
 
-    public builder(): any {
+    public builder(): SlashCommandSubcommandsOnlyBuilder {
         return (
             new SlashCommandBuilder()
                 .setName('screenshot')

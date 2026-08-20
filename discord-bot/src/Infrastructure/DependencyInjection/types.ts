@@ -28,6 +28,7 @@ const TYPES = {
 
     // Jobs
     JobReporter: Symbol.for('JobReporter'),
+    MediaStorage: Symbol.for('MediaStorage'),
 };
 
 export { TYPES };

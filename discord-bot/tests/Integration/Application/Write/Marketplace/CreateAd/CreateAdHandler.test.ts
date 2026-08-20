@@ -60,8 +60,19 @@ describe('CreateAdHandler Integration Test', () => {
         expect(ad.dispatch).toBe('Included');
         expect(ad.warranty).toBe('2 years');
         expect(ad.description).toBe('Test ad description');
-        expect(ad.adType).toBe('sale');
+        // 'sale' is normalised to 'sell' on the way in (Domain/Marketplace/AdType.ts) —
+        // see docs/known-issues.md #22. This is also what stops the write path from
+        // reintroducing the adType drift the M5.3 migration backfills away.
+        expect(ad.adType).toBe('sell');
         expect(ad.createdAt).toBeInstanceOf(Date);
         expect(ad.updatedAt).toBeInstanceOf(Date);
+        // New M5.3 columns default sanely for a freshly created ad.
+        expect(ad.status.toString()).toBe('active');
+        expect(ad.priceCents).toBeNull();
+        expect(ad.images).toEqual([]);
+        expect(ad.bumpedAt).toBeNull();
+        expect(ad.expiresAt).toBeNull();
+        expect(ad.soldAt).toBeNull();
+        expect(ad.deletedAt).toBeNull();
     });
 });

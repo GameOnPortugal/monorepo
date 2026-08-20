@@ -3,8 +3,13 @@ import CommandHandlerManager from '../../../../CommandHandler/CommandHandlerMana
 import type Logger from '../../../../../Application/Logger/Logger.ts';
 import { TYPES } from '../../../../DependencyInjection/types.ts';
 import { GetScreenshots } from '../../../../../Application/Query/Screenshot/GetScreenshots/GetScreenshots.ts';
-import { EmbedBuilder, MessageFlags } from 'discord.js';
+import { EmbedBuilder, MessageFlags, type ChatInputCommandInteraction } from 'discord.js';
 import { safeReply } from '../../../../../Domain/Bot/safeReply.ts';
+import { capFields } from '../../../../../Domain/Bot/embedLimits.ts';
+import type { Screenshot } from '../../../../../Domain/Screenshot/Screenshot.ts';
+
+/** `/screenshot list`'s own display limit — smaller than Discord's 25-field cap. */
+const SCREENSHOT_LIST_DISPLAY_LIMIT = 10;
 
 @injectable()
 export class ListScreenshotSubcommand {
@@ -14,7 +19,12 @@ export class ListScreenshotSubcommand {
         @inject(TYPES.Logger) private readonly logger: Logger,
     ) {}
 
-    public async handle(interaction: any): Promise<void> {
+    public async handle(interaction: ChatInputCommandInteraction): Promise<void> {
+        // Deferred first: GetScreenshots can load a user's full history, which
+        // can take longer than the 3s interaction-ack window. The reply here
+        // is ephemeral either way, so the flag is safe to fix at defer time.
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
         try {
             // Get the target user (if specified) or default to the command user
             const targetUser = interaction.options.getUser('user') || interaction.user;
@@ -30,10 +40,7 @@ export class ListScreenshotSubcommand {
                     ? `🔍 **Your Screenshots**\n\nYou haven't submitted any screenshots yet. Use \`/screenshot create\` to submit one!`
                     : `🔍 **${targetUser.username}'s Screenshots**\n\nThis user hasn't submitted any screenshots yet.`;
 
-                await interaction.reply({
-                    content: message,
-                    flags: MessageFlags.Ephemeral,
-                });
+                await interaction.editReply({ content: message });
                 return;
             }
 
@@ -51,31 +58,31 @@ export class ListScreenshotSubcommand {
                 .setDescription(description)
                 .setTimestamp();
 
-            // Add fields for each screenshot (up to 10)
-            const displayLimit = Math.min(screenshots.length, 10);
-            for (let i = 0; i < displayLimit; i++) {
-                const screenshot = screenshots[i];
-                const platform = screenshot.platform
-                    ? screenshot.platform.charAt(0).toUpperCase() + screenshot.platform.slice(1)
-                    : 'Unknown';
+            const { fields, omittedCount } = capFields(
+                screenshots,
+                (screenshot: Screenshot, index: number) => {
+                    const platform = screenshot.platform
+                        ? screenshot.platform.charAt(0).toUpperCase() + screenshot.platform.slice(1)
+                        : 'Unknown';
 
-                embed.addFields({
-                    name: `#${i + 1} - ${screenshot.name || 'Unnamed'}`,
-                    value: `ID: ${screenshot.id.toString()}\nPlatform: ${platform}\nSubmitted: ${screenshot.createdAt.toLocaleDateString()}`,
-                });
-            }
+                    return {
+                        name: `#${index + 1} - ${screenshot.name || 'Unnamed'}`,
+                        value: `ID: ${screenshot.id.toString()}\nPlatform: ${platform}\nSubmitted: ${screenshot.createdAt.toLocaleDateString()}`,
+                    };
+                },
+                title.length + description.length,
+                SCREENSHOT_LIST_DISPLAY_LIMIT,
+            );
+            embed.addFields(fields);
 
             // Add a note if there are more screenshots than shown
-            if (screenshots.length > displayLimit) {
+            if (omittedCount > 0) {
                 embed.setFooter({
-                    text: `Showing ${displayLimit} of ${screenshots.length} screenshots.`,
+                    text: `Showing ${fields.length} of ${screenshots.length} screenshots.`,
                 });
             }
 
-            await interaction.reply({
-                embeds: [embed],
-                flags: MessageFlags.Ephemeral,
-            });
+            await interaction.editReply({ embeds: [embed] });
 
             this.logger.info('Screenshot list requested', {
                 userId: userId,

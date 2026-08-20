@@ -1,7 +1,7 @@
 import { inject, injectable } from 'inversify';
 import { PrismaClient } from '@prisma/client';
 import { TYPES } from '../DependencyInjection/types';
-import { Ad, type AdArray } from '../../Domain/Marketplace/Ad';
+import { Ad, serializeImages, type AdArray } from '../../Domain/Marketplace/Ad';
 import { AdId } from '../../Domain/Marketplace/AdId';
 import type { AdRepository } from '../../Domain/Marketplace/AdRepository';
 import RecordNotFound from '../../Domain/RecordNotFound';
@@ -25,6 +25,13 @@ export class OrmAdRepository implements AdRepository {
                 warranty: ad.warranty,
                 description: ad.description,
                 adType: ad.adType,
+                status: ad.status.toString(),
+                price_cents: ad.priceCents,
+                images: serializeImages(ad.images),
+                bumped_at: ad.bumpedAt,
+                expires_at: ad.expiresAt,
+                sold_at: ad.soldAt,
+                deleted_at: ad.deletedAt,
                 updatedAt: ad.updatedAt,
             },
             create: {
@@ -40,6 +47,13 @@ export class OrmAdRepository implements AdRepository {
                 warranty: ad.warranty,
                 description: ad.description,
                 adType: ad.adType,
+                status: ad.status.toString(),
+                price_cents: ad.priceCents,
+                images: serializeImages(ad.images),
+                bumped_at: ad.bumpedAt,
+                expires_at: ad.expiresAt,
+                sold_at: ad.soldAt,
+                deleted_at: ad.deletedAt,
                 createdAt: ad.createdAt,
                 updatedAt: ad.updatedAt,
             },

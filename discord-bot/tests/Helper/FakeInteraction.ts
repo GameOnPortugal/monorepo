@@ -1,9 +1,17 @@
+import type { ChatInputCommandInteraction } from 'discord.js';
+
 /**
  * A hand-rolled fake of the subset of discord.js's ChatInputCommandInteraction
- * that the Marketplace subcommands touch. No mocking library is used in this
- * codebase and none should be introduced (see AGENT.md) — this fixture exists
- * so the discord.js adapter layer can finally be exercised by tests instead of
- * only by hand in production.
+ * that the Marketplace/Screenshot/Trophy subcommands touch. No mocking library
+ * is used in this codebase and none should be introduced (see AGENT.md) — this
+ * fixture exists so the discord.js adapter layer can finally be exercised by
+ * tests instead of only by hand in production.
+ *
+ * `SlashCommandContext.interaction` is typed as the real
+ * `ChatInputCommandInteraction` (M4.1), which this fake does not — and
+ * structurally cannot, since discord.js interaction classes carry private
+ * fields — implement. Call sites cast via `asChatInputCommandInteraction()`,
+ * the one deliberate, documented `as unknown as` in this fixture.
  */
 export default class FakeInteraction {
     public deferred = false;
@@ -13,6 +21,7 @@ export default class FakeInteraction {
     public readonly editReplyCalls: any[] = [];
     public readonly followUpCalls: any[] = [];
     public readonly replyCalls: any[] = [];
+    public readonly deleteReplyCalls: any[] = [];
 
     /** The payload passed to the last successful editReply/reply call. */
     public lastPostedContent: any = undefined;
@@ -20,12 +29,19 @@ export default class FakeInteraction {
     /** When set, the next call to editReply() throws this instead of posting. */
     public failNextEditReplyWith: Error | undefined = undefined;
 
-    public readonly user: { id: string };
+    public readonly user: { id: string; username: string };
     public readonly guildId: string;
     public readonly channelId: string;
+    public readonly id: string;
     public readonly options: {
         getString: (name: string, required?: boolean) => string | null;
         getUser: (name: string) => { id: string; username: string } | null;
+        getInteger: (name: string, required?: boolean) => number | null;
+        getAttachment: (
+            name: string,
+            required?: boolean,
+        ) => { contentType: string | null; url: string } | null;
+        getSubcommand: () => string;
     };
 
     private messageIdCounter = 0;
@@ -39,10 +55,19 @@ export default class FakeInteraction {
             string,
             { id: string; username: string } | undefined
         > = {},
+        private readonly integerOptionValues: Record<string, number | undefined> = {},
+        private readonly attachmentOptionValues: Record<
+            string,
+            { contentType: string | null; url: string } | undefined
+        > = {},
+        private readonly subcommand: string = '',
+        username = 'test-user',
+        interactionId = 'fake-interaction-1',
     ) {
-        this.user = { id: userId };
+        this.user = { id: userId, username };
         this.channelId = channelId;
         this.guildId = guildId;
+        this.id = interactionId;
         this.options = {
             getString: (name: string, required?: boolean) => {
                 const value = this.optionValues[name];
@@ -52,6 +77,21 @@ export default class FakeInteraction {
                 return value ?? null;
             },
             getUser: (name: string) => this.userOptionValues[name] ?? null,
+            getInteger: (name: string, required?: boolean) => {
+                const value = this.integerOptionValues[name];
+                if (required && value === undefined) {
+                    throw new Error(`FakeInteraction: missing required option "${name}"`);
+                }
+                return value ?? null;
+            },
+            getAttachment: (name: string, required?: boolean) => {
+                const value = this.attachmentOptionValues[name];
+                if (required && value === undefined) {
+                    throw new Error(`FakeInteraction: missing required option "${name}"`);
+                }
+                return value ?? null;
+            },
+            getSubcommand: () => this.subcommand,
         };
     }
 
@@ -76,7 +116,14 @@ export default class FakeInteraction {
 
     async followUp(payload: any): Promise<{ id: string; content: any }> {
         this.followUpCalls.push(payload);
+        // Real discord.js sets replied=true after followUp() too (it counts
+        // as "the interaction has been responded to"), not just after reply().
+        this.replied = true;
         return { id: `fake-followup-${++this.messageIdCounter}`, content: payload.content };
+    }
+
+    async deleteReply(message?: unknown): Promise<void> {
+        this.deleteReplyCalls.push(message);
     }
 
     async reply(payload: any): Promise<{ id: string; content: any }> {
@@ -84,5 +131,16 @@ export default class FakeInteraction {
         this.replied = true;
         this.lastPostedContent = payload;
         return { id: `fake-message-${++this.messageIdCounter}`, content: payload.content };
+    }
+
+    /**
+     * The one deliberate cast in this fixture: discord.js's interaction
+     * classes carry private fields (e.g. `BaseInteraction#_cacheType`), so no
+     * plain object can structurally satisfy `ChatInputCommandInteraction` —
+     * a cast is genuinely unavoidable to hand this fake to code typed
+     * against the real interaction.
+     */
+    asChatInputCommandInteraction(): ChatInputCommandInteraction {
+        return this as unknown as ChatInputCommandInteraction;
     }
 }

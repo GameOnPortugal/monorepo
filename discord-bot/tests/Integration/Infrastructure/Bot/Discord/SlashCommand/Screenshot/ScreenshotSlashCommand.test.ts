@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { MessageFlags } from 'discord.js';
+import { MessageFlags, type ChatInputCommandInteraction } from 'discord.js';
 import { ScreenshotSlashCommand } from '../../../../../../../src/Infrastructure/Bot/Discord/SlashCommand/Screenshot/ScreenshotSlashCommand';
 import Logger from '../../../../../../../src/Application/Logger/Logger';
 import InMemoryLogger from '../../../../../../Helper/InMemoryLogger';
@@ -59,10 +59,11 @@ describe('ScreenshotSlashCommand', () => {
         const interaction = createFakeInteraction('create');
 
         await command.handle({
+            kind: 'chat-input',
             channel_id: 'chan',
             command: 'screenshot',
             text: '',
-            interaction,
+            interaction: interaction as unknown as ChatInputCommandInteraction,
         });
 
         expect(interaction.calls).toHaveLength(1);
@@ -100,10 +101,11 @@ describe('ScreenshotSlashCommand', () => {
         let thrown: unknown = null;
         try {
             await command.handle({
+                kind: 'chat-input',
                 channel_id: 'chan',
                 command: 'screenshot',
                 text: '',
-                interaction,
+                interaction: interaction as unknown as ChatInputCommandInteraction,
             });
         } catch (error) {
             thrown = error;
