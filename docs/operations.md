@@ -9,8 +9,7 @@ Since the **2026-08-19** cutover ([`plans/04-infrastructure-migration.md`](plans
 phases 0–3), the bot runs as Portainer stack `game-on-portugal` (stack id
 `46`, endpoint `3`) on **HTZ1** (`195.201.192.35`), and **merging to `main`
 deploys it** — `deploy.yml`'s `push` trigger is enabled. `joshlopes/game-on-portugal-bot:latest`
-on Docker Hub is what HTZ1 pulls; the scheduler is retired (plan 02) and does
-not run anywhere anymore — see below.
+on Docker Hub is what HTZ1 pulls.
 
 TedRelayer (the old home-server deployment) is **not production anymore**. It
 is kept stopped-but-intact as the rollback path until **2026-09-02** — see
@@ -164,9 +163,6 @@ Do this **after** stopping `gop-bot` on HTZ1, not before.
 
 `.env.example` does **not** match this table — see [known-issues.md](known-issues.md).
 
-Scheduler needs `APP_CONTAINER_NAME` — a substring matching the running bot
-container.
-
 ## Container startup
 
 `discord-bot/docker/entrypoint.sh`:
@@ -273,11 +269,11 @@ this also means enabling `LOKI_HOST` would ship the password to Grafana.
 
 The old `scheduler/` container (Chadburn) never ran the weekly screenshot
 winner in production (its image predated the commit that enabled the job —
-known issue #3), and it was **retired, not migrated** — `infrastructure/game-on-portugal.yaml`
-has no scheduler service at all. So as of the HTZ1 cutover there is **no cron
-trigger for `week-screenshot-winner` anywhere**; it can only be run by hand
+known issue #3), and it was **retired and then deleted** — `infrastructure/game-on-portugal.yaml`
+has no scheduler service, and the `scheduler/` directory was removed from the
+repo. So there is **no cron trigger for `week-screenshot-winner` anywhere**; it can only be run by hand
 (below) until [`plans/02-scheduler-and-lifecycle.md`](plans/02-scheduler-and-lifecycle.md)'s
-in-process-cron replacement is built. Do not assume the job runs just because
+in-process-cron replacement is built (M6.1). Do not assume the job runs just because
 the migration happened — it is an independent, still-open piece of work.
 
 ## Verified 2026-08-19

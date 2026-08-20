@@ -35,7 +35,7 @@ Recommended sequencing: **Phase 0 (bugs+security, ship fast) → Phase 1 (API mo
 | Persistence | Prisma 6 → MariaDB 11.7 |
 | Logging | Custom `LoggerManager` → Console + Loki (winston) |
 | Commands | `/ping`, `/screenshot create\|list\|delete`, `/trophy create\|check\|rank`, `/marketplace sell\|list\|delete` |
-| Cron | `scheduler/` (chadburn) runs `bun run:command week-screenshot-winner` Sun 23:50 |
+| Cron | ~~`scheduler/`~~ (deleted M6.7) — `bun run:command week-screenshot-winner` has no trigger until M6.1 (in-process cron) |
 | Deploy | GH Actions → Docker Hub `joshlopes/game-on-portugal-bot` → CapRover |
 | Tests | Bun test, integration-only (Application handlers). No Discord-layer tests. Static analysis job is **commented out** in `.github/workflows/bot.yaml` |
 
@@ -124,7 +124,7 @@ Recommended sequencing: **Phase 0 (bugs+security, ship fast) → Phase 1 (API mo
 | Message validator (moderation: regex + commands-only channels) | ✅ | ❌ |
 | Telegram + Sentry notification | ✅ | ❌ (`SENTRY_DSN`/`TELEGRAM_ACCESS_TOKEN` still in `.env.example`, unused) |
 
-The scheduler config has `parse-psn-profiles`, `update-lfg-points` and `has-been-sold` jobs **commented out** — waiting on these ports.
+The `scheduler/` directory (containing the cron config) has been deleted as of M6.7 (2026-08-19). The `parse-psn-profiles`, `update-lfg-points` and `has-been-sold` jobs will be wired into the in-process cron runner (M6.1) once ported.
 
 ### E. Infra / CI
 
@@ -159,7 +159,7 @@ The scheduler config has `parse-psn-profiles`, `update-lfg-points` and `has-been
 6. **Components** (C4) — start with autocomplete on the two delete commands (removes the UUID-paste UX and the positional-index hack), then the sell modal, then rank pagination.
 
 ### Phase 2 — Capability lift (largest chunk)
-1. **Port the PSN crawler** — this is the single highest-value item; without it `/trophy` is decorative. New `Infrastructure/Trophy/PsnProfilesCrawler` behind a `TrophySource` domain port, driven by a new console command (`parse-psn-profiles`) so `scheduler/config.ini` can re-enable its job. Respect robots/rate-limits; cache; backoff. Fix B1 (ranking SQL) as part of this.
+1. **Port the PSN crawler** — this is the single highest-value item; without it `/trophy` is decorative. New `Infrastructure/Trophy/PsnProfilesCrawler` behind a `TrophySource` domain port, driven by a new console command (`parse-psn-profiles`) so the in-process job runner (M6.1) can schedule it. Respect robots/rate-limits; cache; backoff. Fix B1 (ranking SQL) as part of this.
 2. **Marketplace completeness** — `wanted` ads (`adType` already in the schema), `has-been-sold` reaper as a console command, "Mark as sold"/"Bump" buttons, embed-limit-safe pagination (B6), `AttachMessageToAd` command replacing the double-write (B7).
 3. **Screenshot durability** (B8) — re-host images to object storage on submit, or store `message_id` and refetch; decide before the archive matters.
 4. **LFG** — the biggest single feature (12 subcommands + 4 Prisma models already present). Worth its own spec; probably a follow-up plan file rather than part of this one.
@@ -195,5 +195,5 @@ The scheduler config has `parse-psn-profiles`, `update-lfg-points` and `has-been
 - Legacy reference implementation: `old-discord-bot/src/` (discord.js v12)
 - CI: `.github/workflows/bot.yaml` → `shared.tests.yaml` → `shared.build-image.yaml` → `shared.deploy.yaml`
 - Image: Docker Hub `joshlopes/game-on-portugal-bot`; deploy target CapRover (`CAPROVER_DISCORD_BOT_APP`)
-- Cron: `scheduler/config.ini` (chadburn), container `game-on-portugal-app-placeholder`
+- Cron: ~~`scheduler/config.ini` (chadburn)~~ — deleted M6.7; in-process cron pending M6.1
 - Console commands: `bun run:command <name>` → `discord-bot/bin/console.ts`

@@ -13,7 +13,6 @@ a copy of the community website.
 | ------------------ | ------------------------------------------------------------- | ------------------------------- |
 | `discord-bot/`     | Current bot. TypeScript + Bun + discord.js v14 + Prisma/MySQL | **Yes** — the only active code  |
 | `old-discord-bot/` | Predecessor bot. Node 15 + discord.js v12 + Sequelize         | No — reference only, not built  |
-| `scheduler/`       | Chadburn cron container that `docker exec`s bot CLI commands  | Deployed but runs **zero** jobs — to be deleted |
 | `webpage/`         | Bootstrap static site for game-on-portugal.pt                 | No — the live site is elsewhere |
 
 Details and the reasoning behind "alive?" are in
@@ -22,7 +21,7 @@ Details and the reasoning behind "alive?" are in
 ## Where it lives
 
 - **Repo**: `github.com/GameOnPortugal/monorepo` (public), default branch `main`.
-- **Images**: Docker Hub `joshlopes/game-on-portugal-bot`, `joshlopes/game-on-portugal-scheduler`.
+- **Images**: Docker Hub `joshlopes/game-on-portugal-bot`.
 - **Runtime**: **HTZ1** — `ssh -p 2224 ezweb@195.201.192.35`, Portainer stack
   `game-on-portugal` (id `46`, endpoint `3`). The bot is **live**
   (`GameOnPortugalBot#9387`). Moved off TedRelayer, the home media server, on
@@ -111,9 +110,6 @@ there**. Full walkthrough: [`docs/architecture.md`](docs/architecture.md).
 - `.env.example` is stale: it advertises `REDIS_DSN`, `SENTRY_DSN`,
   `TROPHY_WEBHOOK`, `TELEGRAM_ACCESS_TOKEN` (none used) and omits `LOKI_HOST` /
   `LOKI_AUTH` (both used).
-- The `scheduler/` directory is **not** what is deployed — the running image
-  predates it and has every job commented out. Verify inside the container, not
-  in the repo. It is slated for deletion (plan 02).
 
 ## Before you claim done
 
@@ -130,18 +126,16 @@ or your change will never be released.
 
 The repo has been dormant since **2025-06-30**, but the bot is **still serving
 the community** and its data is intact (4,971 trophies, 624 screenshots, 70 ads).
-Three things are actually broken in production right now:
+Two things are actually broken in production right now:
 
 1. **`/marketplace sell` half-fails on every use** — the ad saves, but the
    message-ID write-back throws. 28 of the 33 ads created since the rewrite have
    an empty `message_id`.
-2. **The scheduler runs zero jobs** — the deployed image predates the commit that
-   enabled the weekly screenshot winner, so that feature has never once run.
-3. **`schema.prisma` has drifted from its own migrations**, so the test database
+2. **`schema.prisma` has drifted from its own migrations**, so the test database
    and production have different shapes.
 
 Plus the accumulated rot: 6 type errors, no linter, no release ever cut. See
-[`docs/known-issues.md`](docs/known-issues.md) for the itemised list (25 items)
+[`docs/known-issues.md`](docs/known-issues.md) for the itemised list (24 items)
 and [`docs/revival-plan.md`](docs/revival-plan.md) for the order to attack it in.
 
 **If you are an agent picking up work**, start at
