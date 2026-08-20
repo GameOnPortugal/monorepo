@@ -46,7 +46,7 @@ The scope is **validated by CI** (`.github/workflows/pr-title.yml`) against a
 closed list, so a plausible-looking scope that is not on it fails the PR:
 
 ```
-bot  marketplace  screenshots  trophies  media  scheduler
+bot  marketplace  screenshots  trophies  media  scheduler  plans
 portal  portal-api  portal-web  db  ci  docker  infra  deps  deps-dev
 ```
 
