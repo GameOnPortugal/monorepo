@@ -58,6 +58,7 @@ import { MarketplaceComponentHandler } from '../Bot/Discord/Component/Marketplac
 import { SearchCriteriaStore } from '../Bot/Discord/Component/Marketplace/SearchCriteriaStore.ts';
 import { AdListPresenter } from '../Bot/Discord/SlashCommand/Marketplace/AdListPresenter.ts';
 import { ListUserAdsHandler } from '../../Application/Query/Marketplace/ListUserAds/ListUserAdsHandler';
+import { CountActiveAdsHandler } from '../../Application/Query/Marketplace/CountActiveAds/CountActiveAdsHandler.ts';
 import { ListUserAdsPageHandler } from '../../Application/Query/Marketplace/ListUserAdsPage/ListUserAdsPageHandler.ts';
 import { SearchAdsHandler } from '../../Application/Query/Marketplace/SearchAds/SearchAdsHandler.ts';
 import { ListAdsSubcommand } from '../Bot/Discord/SlashCommand/Marketplace/ListAdsSubcommand';
@@ -94,6 +95,7 @@ import type { MediaStorage } from '../../Domain/Media/MediaStorage.ts';
 import { S3MediaStorage } from '../Media/S3MediaStorage.ts';
 import { InMemoryMediaStorage } from '../Media/InMemoryMediaStorage.ts';
 import { SafeImageFetcher } from '../Media/SafeImageFetcher.ts';
+import { AdImageUploader } from '../Media/AdImageUploader.ts';
 import { requireEnv, validateBaseEnv, validateBotEnv } from '../Config/env.ts';
 
 const myContainer = new Container();
@@ -134,6 +136,7 @@ myContainer.bind(TYPES.CommandHandler).to(GetProfileHandler);
 myContainer.bind(TYPES.CommandHandler).to(GetRankHandler);
 myContainer.bind(TYPES.CommandHandler).to(CreateAdHandler);
 myContainer.bind(TYPES.CommandHandler).to(ListUserAdsHandler);
+myContainer.bind(TYPES.CommandHandler).to(CountActiveAdsHandler);
 myContainer.bind(TYPES.CommandHandler).to(ListUserAdsPageHandler);
 myContainer.bind(TYPES.CommandHandler).to(SearchAdsHandler);
 myContainer.bind(TYPES.CommandHandler).to(DeleteAdHandler);
@@ -344,6 +347,11 @@ if (
 // timeout, cdn.discordapp.com/media.discordapp.net allowlist) — see
 // SafeImageFetcher.ts.
 myContainer.bind(TYPES.SafeImageFetcher).toConstantValue(new SafeImageFetcher());
+
+// M5.11 — re-hosts a marketplace photo through MediaStorage at submit time,
+// on top of the bindings just above. `toSelf()`, unlike SafeImageFetcher:
+// its constructor params are both `@inject`ed, not plain defaults.
+myContainer.bind(AdImageUploader).toSelf();
 
 // Console Command
 myContainer.bind(WeekScreenshotWinner).toSelf();

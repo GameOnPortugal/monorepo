@@ -23,6 +23,10 @@ export class CreateAdHandler implements CommandHandler<CreateAd> {
         // one, not only after its owner happens to edit it. Same rule
         // `EditAdHandler` already uses (AdPrice.ts), so a listing's
         // searchability never depends on which path last touched its price.
+        //
+        // `command.images` (M5.11) is already durable by the time it gets
+        // here — see CreateAd.ts's doc comment for why the re-host has to
+        // happen before this handler runs, not inside it.
         const ad = new Ad(
             command.id,
             command.name,
@@ -40,6 +44,7 @@ export class CreateAdHandler implements CommandHandler<CreateAd> {
             new Date(),
             AdStatus.active(),
             parsePriceCents(command.price),
+            command.images,
         );
 
         // Save the ad using the repository
@@ -49,6 +54,7 @@ export class CreateAdHandler implements CommandHandler<CreateAd> {
             id: ad.id.toString(),
             name: command.name,
             authorId: command.authorId,
+            hasImage: command.images.length > 0,
         });
     }
 }

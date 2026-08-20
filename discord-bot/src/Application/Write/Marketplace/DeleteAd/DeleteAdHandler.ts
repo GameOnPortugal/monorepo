@@ -18,8 +18,13 @@ export class DeleteAdHandler implements CommandHandler<DeleteAd> {
     async handle(command: DeleteAd): Promise<void> {
         const ad = await this.adRepository.get(command.id);
 
-        // Verify that the user owns the ad
-        if (ad.authorId !== command.userId) {
+        // Owner OR admin (M5.10) — re-checked here, server-side, off the row
+        // itself, same shape as MarkAdSoldHandler's equivalent check:
+        // `command.isAdmin` reflects the *caller's* permission bits as read
+        // by the caller (never trusted from a customId), but `command.userId`
+        // still has to be compared against the row's own `authorId` for the
+        // non-admin case.
+        if (ad.authorId !== command.userId && !command.isAdmin) {
             throw new UnauthorizedAdDeletion(
                 `User ${command.userId} is not authorized to delete ad ${command.id.toString()}`,
             );
@@ -44,6 +49,7 @@ export class DeleteAdHandler implements CommandHandler<DeleteAd> {
         this.logger.info('Ad deleted successfully', {
             id: command.id.toString(),
             userId: command.userId,
+            asAdmin: command.isAdmin && ad.authorId !== command.userId,
         });
     }
 }

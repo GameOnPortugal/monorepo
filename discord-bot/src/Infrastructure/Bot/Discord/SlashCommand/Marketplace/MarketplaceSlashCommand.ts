@@ -167,6 +167,16 @@ export class MarketplaceSlashCommand implements SlashCommandHandler {
                                 .setDescription('Description of the item')
                                 .setDescriptionLocalizations({ [PT_LOCALE]: 'Descrição do artigo' })
                                 .setRequired(false),
+                        )
+                        // M5.11 — re-hosted to MinIO before the listing is
+                        // even posted (AdImageUploader.ts); a marketplace
+                        // without photos was defect #10 in plan 01.
+                        .addAttachmentOption((option) =>
+                            option
+                                .setName('image')
+                                .setDescription('Photo of the item')
+                                .setDescriptionLocalizations({ [PT_LOCALE]: 'Foto do artigo' })
+                                .setRequired(false),
                         ),
                 )
                 .addSubcommand((subcommand) =>
@@ -279,6 +289,17 @@ export class MarketplaceSlashCommand implements SlashCommandHandler {
                                 .setDescription('Description of what you are looking for')
                                 .setDescriptionLocalizations({
                                     [PT_LOCALE]: 'Descrição do que procuras',
+                                })
+                                .setRequired(false),
+                        )
+                        // M5.11 — same reference-photo option as `sell`
+                        // (e.g. "looking for exactly this model").
+                        .addAttachmentOption((option) =>
+                            option
+                                .setName('image')
+                                .setDescription('Reference photo of what you are looking for')
+                                .setDescriptionLocalizations({
+                                    [PT_LOCALE]: 'Foto de referência do que procuras',
                                 })
                                 .setRequired(false),
                         ),

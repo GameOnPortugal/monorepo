@@ -6,12 +6,15 @@ import { TYPES } from '../../../../DependencyInjection/types';
 import type Logger from '../../../../../Application/Logger/Logger';
 import CommandHandlerManager from '../../../../CommandHandler/CommandHandlerManager';
 import { CreateAd } from '../../../../../Application/Write/Marketplace/CreateAd/CreateAd';
+import { CountActiveAds } from '../../../../../Application/Query/Marketplace/CountActiveAds/CountActiveAds';
 import { AdId } from '../../../../../Domain/Marketplace/AdId';
 import { Ad } from '../../../../../Domain/Marketplace/Ad';
+import { MAX_ACTIVE_ADS_PER_USER } from '../../../../../Domain/Marketplace/AdLimits';
 import { renderAdListing } from '../../../../../Domain/Marketplace/AdListingRenderer';
 import type { GuildClient } from '../../../../../Domain/Community/GuildClient';
 import { CommunityChannels } from '../../../../../Domain/Community/CommunityChannels';
 import { DiscordChannels, DISCORD_GUILD_ID } from '../../../../Community/Discord/DiscordChannels';
+import { AdImageUploader } from '../../../../Media/AdImageUploader';
 
 /**
  * `/marketplace wanted` (M5.7) — restores an old-bot feature (feature-gap
@@ -32,6 +35,7 @@ export class WantedSubcommand {
         @inject(CommandHandlerManager)
         private readonly commandHandlerManager: CommandHandlerManager,
         @inject(TYPES.GuildClient) private readonly guildClient: GuildClient,
+        @inject(AdImageUploader) private readonly adImageUploader: AdImageUploader,
     ) {}
 
     public async handle(context: SlashCommandContext): Promise<void> {
@@ -43,10 +47,51 @@ export class WantedSubcommand {
         const dispatch = interaction.options.getString('dispatch', true);
         const warranty = interaction.options.getString('warranty') ?? '';
         const description = interaction.options.getString('description') ?? '';
+        const image = interaction.options.getAttachment('image');
 
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
+        // M5.10 — same limit, same rationale (checked before posting, not
+        // inside CreateAdHandler) as SellSubcommand; `wanted` and `sell` ads
+        // share one pool of "active ads for this member", not separate caps.
+        const activeCount = await this.commandHandlerManager.handle(
+            new CountActiveAds(interaction.user.id),
+        );
+        if (activeCount >= MAX_ACTIVE_ADS_PER_USER) {
+            await interaction.editReply({
+                content: `Já tens ${MAX_ACTIVE_ADS_PER_USER} anúncios activos — o limite por membro. Apaga (\`/marketplace delete\`) ou marca um como vendido (\`/marketplace sold\`) antes de criar um novo.`,
+            });
+            return;
+        }
+
+        if (image && !image.contentType?.startsWith('image/')) {
+            await interaction.editReply({ content: 'O ficheiro tem de ser uma imagem.' });
+            return;
+        }
+
         const adId = AdId.generate();
+
+        // M5.11 — see SellSubcommand.ts's identical block for why this has
+        // to happen before the listing is posted.
+        let images: string[] = [];
+        if (image) {
+            try {
+                const durableUrl = await this.adImageUploader.upload(adId.toString(), image.url);
+                images = [durableUrl];
+            } catch (error) {
+                const correlationId = randomUUID();
+                this.logger.error('Failed to re-host the wanted listing photo', {
+                    error,
+                    correlationId,
+                    authorId: interaction.user.id,
+                });
+                await interaction.editReply({
+                    content: `Não foi possível processar a imagem. Tenta novamente sem imagem ou com outro ficheiro. (ref: ${correlationId})`,
+                });
+                return;
+            }
+        }
+
         const draft = new Ad(
             adId,
             name,
@@ -62,6 +107,9 @@ export class WantedSubcommand {
             'wanted',
             new Date(),
             new Date(),
+            undefined,
+            undefined,
+            images,
         );
 
         let messageId: string;
@@ -97,6 +145,7 @@ export class WantedSubcommand {
                 warranty,
                 description,
                 'wanted',
+                images,
             );
 
             await this.commandHandlerManager.handle(command);

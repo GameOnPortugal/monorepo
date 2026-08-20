@@ -10,6 +10,7 @@ import { AdId } from '../../../../../Domain/Marketplace/AdId';
 import { UnauthorizedAdDeletion } from '../../../../../Domain/Marketplace/UnauthorizedAdDeletion';
 import RecordNotFound from '../../../../../Domain/RecordNotFound';
 import { InvalidId } from '../../../../../Domain/InvalidId';
+import { isGuildAdmin } from '../../../../../Domain/Bot/AdminCheck';
 
 @injectable()
 export class DeleteAdSubcommand {
@@ -23,6 +24,12 @@ export class DeleteAdSubcommand {
         const interaction = context.interaction;
         const identifier = interaction.options.getString('id', true);
         const userId = interaction.user.id;
+        // M5.10 — read off the interaction's live permission bits, never
+        // trusted from anything the member typed. `DeleteAdHandler` still
+        // re-derives *ownership* itself off the row (`ad.authorId`); this
+        // only carries "is the clicker currently a guild admin" across the
+        // Application-layer boundary, same shape as `MarkAdSold.isAdmin`.
+        const isAdmin = isGuildAdmin(interaction);
 
         // Still deferred: the delete itself does a read, a Discord message
         // delete and a write, which is not reliably inside the 3s
@@ -56,7 +63,7 @@ export class DeleteAdSubcommand {
         }
 
         try {
-            await this.commandHandlerManager.handle(new DeleteAd(adId, userId));
+            await this.commandHandlerManager.handle(new DeleteAd(adId, userId, isAdmin));
             await interaction.editReply({ content: '🗑️ Anúncio apagado com sucesso.' });
         } catch (error) {
             if (error instanceof UnauthorizedAdDeletion) {

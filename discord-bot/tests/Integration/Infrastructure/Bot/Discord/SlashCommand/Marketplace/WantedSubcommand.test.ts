@@ -10,6 +10,11 @@ import type { SlashCommandContext } from '../../../../../../../src/Domain/Bot/Sl
 import type { GuildClient } from '../../../../../../../src/Domain/Community/GuildClient';
 import { InMemoryGuildClient } from '../../../../../../../src/Infrastructure/Community/InMemory/InMemoryGuildClient';
 import { CommunityChannels } from '../../../../../../../src/Domain/Community/CommunityChannels';
+import { createAd } from '../../../../../../Helper/StaticFixtures';
+import { MAX_ACTIVE_ADS_PER_USER } from '../../../../../../../src/Domain/Marketplace/AdLimits';
+import type { SafeImageFetcher } from '../../../../../../../src/Infrastructure/Media/SafeImageFetcher';
+import type { MediaStorage } from '../../../../../../../src/Domain/Media/MediaStorage';
+import { adPhotoMediaKey } from '../../../../../../../src/Domain/Media/MediaKey';
 
 /**
  * M5.7 — `/marketplace wanted` restores an old-bot feature (feature-gap G3).
@@ -101,5 +106,67 @@ describe('WantedSubcommand Integration Test', () => {
 
         expect(interaction.editReplyCalls.length).toBe(1);
         expect(interaction.editReplyCalls[0].content).toContain('anúncio de procura');
+    });
+
+    it('M5.10 — shares the 10-active-ads limit pool with sell (not a separate cap)', async () => {
+        const userId = '333344445555666677';
+        for (let i = 0; i < MAX_ACTIVE_ADS_PER_USER; i++) {
+            // adType 'sell', but counted against the same member.
+            await createAd(undefined, `Existing ${i + 1}`, userId);
+        }
+
+        const interaction = new FakeInteraction(wantedOptions, userId, '999999999999999999');
+        await wantedSubcommand.handle(buildContext(interaction));
+
+        expect(interaction.editReplyCalls[0].content).toContain(
+            `${MAX_ACTIVE_ADS_PER_USER} anúncios activos`,
+        );
+        expect(guildClient.sentRichMessages.length).toBe(0);
+    });
+
+    describe('with an image attachment', () => {
+        let safeImageFetcher: SafeImageFetcher;
+        let mediaStorage: MediaStorage;
+        let originalFetch: SafeImageFetcher['fetch'];
+
+        const ATTACHMENT_URL = 'https://cdn.discordapp.com/attachments/1/2/reference.png';
+
+        beforeEach(() => {
+            safeImageFetcher = myContainer.get<SafeImageFetcher>(TYPES.SafeImageFetcher);
+            mediaStorage = myContainer.get<MediaStorage>(TYPES.MediaStorage);
+            originalFetch = safeImageFetcher.fetch.bind(safeImageFetcher);
+            safeImageFetcher.fetch = async () => ({
+                bytes: new TextEncoder().encode('fake-image-bytes'),
+                contentType: 'image/png',
+            });
+        });
+
+        afterEach(() => {
+            safeImageFetcher.fetch = originalFetch;
+        });
+
+        it('re-hosts the reference photo through MediaStorage — never a cdn.discordapp.com URL on the posted embed', async () => {
+            const userId = '333344445555666688';
+            const interaction = new FakeInteraction(
+                wantedOptions,
+                userId,
+                '999999999999999999',
+                undefined,
+                {},
+                {},
+                { image: { contentType: 'image/png', url: ATTACHMENT_URL } },
+            );
+
+            await wantedSubcommand.handle(buildContext(interaction));
+
+            const [sent] = guildClient.sentRichMessages;
+            const imageUrl = sent?.content.imageUrl;
+            expect(imageUrl).toBeTruthy();
+            expect(imageUrl).not.toContain('discordapp.com');
+
+            const [ad] = await adRepository.findByUserId(userId);
+            const key = adPhotoMediaKey(ad!.id.toString(), 0, 'png');
+            expect(await mediaStorage.exists(key)).toBe(true);
+        });
     });
 });
