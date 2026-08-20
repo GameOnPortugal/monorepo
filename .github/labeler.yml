@@ -28,5 +28,4 @@ Documentation:
 Legacy:
   - changed-files:
       - any-glob-to-any-file:
-          - 'old-discord-bot/**'
           - 'webpage/**'
