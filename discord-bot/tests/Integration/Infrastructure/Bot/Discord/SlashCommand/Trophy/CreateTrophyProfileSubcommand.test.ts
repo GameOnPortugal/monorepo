@@ -5,6 +5,7 @@ import { CreateTrophyProfileSubcommand } from '../../../../../../../src/Infrastr
 import DatabaseUtil from '../../../../../../Helper/DatabaseUtil';
 import FakeInteraction from '../../../../../../Helper/FakeInteraction';
 import { PrismaClient } from '@prisma/client';
+import { MessageFlags } from 'discord.js';
 import type { SlashCommandContext } from '../../../../../../../src/Domain/Bot/SlashCommandContext';
 
 /**
@@ -55,6 +56,7 @@ describe('CreateTrophyProfileSubcommand Integration Test', () => {
         await createTrophyProfileSubcommand.handle(buildContext(interaction));
 
         expect(interaction.deferReplyCalls.length).toBe(1);
+        expect(interaction.deferReplyCalls[0]).toEqual({ flags: MessageFlags.Ephemeral });
         expect(interaction.replyCalls.length).toBe(0);
         expect(interaction.editReplyCalls.length).toBe(1);
         expect(interaction.editReplyCalls[0].content).toContain('SomePsnUser');
@@ -69,5 +71,6 @@ describe('CreateTrophyProfileSubcommand Integration Test', () => {
         expect(interaction.deferReplyCalls.length).toBe(0);
         expect(interaction.replyCalls.length).toBe(1);
         expect(interaction.replyCalls[0].content).toContain('Invalid PSNProfiles URL');
+        expect(interaction.replyCalls[0].flags).toBe(MessageFlags.Ephemeral);
     });
 });

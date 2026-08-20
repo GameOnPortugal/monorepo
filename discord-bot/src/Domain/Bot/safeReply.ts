@@ -1,7 +1,8 @@
-import type {
-    InteractionEditReplyOptions,
-    InteractionReplyOptions,
-    RepliableInteraction,
+import {
+    MessageFlags,
+    type InteractionEditReplyOptions,
+    type InteractionReplyOptions,
+    type RepliableInteraction,
 } from 'discord.js';
 
 /**
@@ -46,4 +47,47 @@ export async function safeReply(
     }
 
     return interaction.reply(payload);
+}
+
+/**
+ * Replies to an interaction ephemerally, regardless of how it has already
+ * been acknowledged -- including the case where it was deferred *publicly*
+ * (a command whose happy path is meant to be visible, e.g. `/trophy check`
+ * shows off a profile) but this particular outcome -- an error, a
+ * "not found" -- is not for the whole channel.
+ *
+ * This exists because of M0.3: "ephemeral" error messages were being posted
+ * publicly, one of the five live production defects fixed and verified
+ * before this file existed. The trap it guards against is calling
+ * `editReply()` after a public defer: that edits the public "thinking..."
+ * placeholder into a message everyone in the channel can see, because
+ * ephemeral-ness is fixed at `deferReply()` time and cannot change
+ * afterwards. The fix is to delete that placeholder and post a fresh,
+ * genuinely ephemeral message via `followUp()` instead -- the supported
+ * discord.js v14 pattern for "public defer, private outcome".
+ *
+ * Any subcommand that defers non-ephemerally but has a failure/not-found
+ * path only the invoker should see needs this, not `safeReply()` -- reach
+ * for this one first before re-deriving the same delete-then-followUp
+ * dance from scratch.
+ */
+export async function replyPrivately(
+    interaction: RepliableInteraction,
+    payload: SafeReplyPayload,
+): Promise<unknown> {
+    const ephemeralPayload: InteractionReplyOptions = {
+        ...(typeof payload === 'string' ? { content: payload } : payload),
+        flags: MessageFlags.Ephemeral,
+    };
+
+    if (interaction.deferred && !interaction.replied) {
+        await interaction.deleteReply();
+        return interaction.followUp(ephemeralPayload);
+    }
+
+    if (interaction.replied) {
+        return interaction.followUp(ephemeralPayload);
+    }
+
+    return interaction.reply(ephemeralPayload);
 }

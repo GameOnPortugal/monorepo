@@ -5,6 +5,7 @@ import { CheckTrophyProfileSubcommand } from '../../../../../../../src/Infrastru
 import DatabaseUtil from '../../../../../../Helper/DatabaseUtil';
 import FakeInteraction from '../../../../../../Helper/FakeInteraction';
 import { createTrophyProfile } from '../../../../../../Helper/StaticFixtures';
+import { MessageFlags } from 'discord.js';
 import { PrismaClient } from '@prisma/client';
 import type { SlashCommandContext } from '../../../../../../../src/Domain/Bot/SlashCommandContext';
 
@@ -54,16 +55,28 @@ describe('CheckTrophyProfileSubcommand Integration Test', () => {
         expect(interaction.editReplyCalls[0].embeds).toHaveLength(1);
     });
 
-    it('defers, then edits with a not-found message rather than leaving the interaction hanging', async () => {
+    it('defers publicly, but the not-found path deletes the public placeholder and follows up ephemerally (M0.3)', async () => {
         const userId = '987654321098765432';
         const interaction = new FakeInteraction({}, userId);
 
         await checkTrophyProfileSubcommand.handle(buildContext(interaction));
 
+        // The defer itself is public (no flags) — the success path is meant
+        // to be visible.
         expect(interaction.deferReplyCalls.length).toBe(1);
-        expect(interaction.editReplyCalls.length).toBe(1);
-        expect(interaction.editReplyCalls[0].content).toContain(
+        expect(interaction.deferReplyCalls[0]).toBeUndefined();
+
+        // But the not-found outcome must not leave that public "thinking..."
+        // placeholder standing: it is deleted, and a fresh ephemeral
+        // followUp carries the message instead. This is the exact pattern
+        // M0.3 required — regressing to a bare editReply() here would post
+        // the not-found message publicly again.
+        expect(interaction.deleteReplyCalls.length).toBe(1);
+        expect(interaction.editReplyCalls.length).toBe(0);
+        expect(interaction.followUpCalls.length).toBe(1);
+        expect(interaction.followUpCalls[0].content).toContain(
             'have not registered your PSN profile',
         );
+        expect(interaction.followUpCalls[0].flags).toBe(MessageFlags.Ephemeral);
     });
 });

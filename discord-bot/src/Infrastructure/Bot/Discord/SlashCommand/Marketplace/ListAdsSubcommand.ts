@@ -54,12 +54,12 @@ export class ListAdsSubcommand {
     public async handle(context: SlashCommandContext): Promise<void> {
         const targetUser = context.interaction.options.getUser('user') ?? context.interaction.user;
 
-        // The successful reply is public (no `flags`), so the defer is public
-        // too — ephemeral-ness is fixed at defer time and cannot change later.
-        // The error/no-ads paths below used to be ephemeral; they now post
-        // publicly like the rest of this command, which is the intentional
-        // trade-off for being able to defer at all (see PR description).
-        await context.interaction.deferReply();
+        // Ephemeral for the whole command (M5.8 already settles `/marketplace
+        // list` as ephemeral going forward, so this moves toward the settled
+        // design rather than away from it). This also keeps every path below
+        // ephemeral without exception, so there is no ephemeral-to-public
+        // leak on the error/no-ads paths (M0.3).
+        await context.interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         try {
             const ads = await this.commandHandlerManager.handle(new ListUserAds(targetUser.id));

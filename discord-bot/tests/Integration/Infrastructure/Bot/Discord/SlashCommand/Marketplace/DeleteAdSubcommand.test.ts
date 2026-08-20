@@ -8,6 +8,7 @@ import { createAd } from '../../../../../../Helper/StaticFixtures';
 import { PrismaClient } from '@prisma/client';
 import type { AdRepository } from '../../../../../../../src/Domain/Marketplace/AdRepository';
 import type { SlashCommandContext } from '../../../../../../../src/Domain/Bot/SlashCommandContext';
+import { MessageFlags } from 'discord.js';
 
 describe('DeleteAdSubcommand Integration Test', () => {
     let deleteAdSubcommand: DeleteAdSubcommand;
@@ -48,6 +49,7 @@ describe('DeleteAdSubcommand Integration Test', () => {
         // than the 3s ack window. No bare `.reply()` should be used once the
         // command has deferred.
         expect(interaction.deferReplyCalls.length).toBe(1);
+        expect(interaction.deferReplyCalls[0]).toEqual({ flags: MessageFlags.Ephemeral });
         expect(interaction.replyCalls.length).toBe(0);
         expect(interaction.editReplyCalls.length).toBe(1);
         expect(interaction.editReplyCalls[0].content).toBe('Ad deleted successfully');

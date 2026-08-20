@@ -6,6 +6,7 @@ import DatabaseUtil from '../../../../../../Helper/DatabaseUtil';
 import FakeInteraction from '../../../../../../Helper/FakeInteraction';
 import { createScreenshot } from '../../../../../../Helper/StaticFixtures';
 import { PrismaClient } from '@prisma/client';
+import { MessageFlags } from 'discord.js';
 
 /**
  * M4.2 (defer) + M4.10 (output-size safety) coverage for `/screenshot list`.
@@ -38,6 +39,7 @@ describe('ListScreenshotSubcommand Integration Test', () => {
         await listScreenshotSubcommand.handle(interaction.asChatInputCommandInteraction());
 
         expect(interaction.deferReplyCalls.length).toBe(1);
+        expect(interaction.deferReplyCalls[0]).toEqual({ flags: MessageFlags.Ephemeral });
         expect(interaction.replyCalls.length).toBe(0);
         expect(interaction.editReplyCalls.length).toBe(1);
         expect(interaction.editReplyCalls[0].embeds).toHaveLength(1);

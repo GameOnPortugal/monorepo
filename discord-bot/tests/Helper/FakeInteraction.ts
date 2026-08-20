@@ -21,6 +21,7 @@ export default class FakeInteraction {
     public readonly editReplyCalls: any[] = [];
     public readonly followUpCalls: any[] = [];
     public readonly replyCalls: any[] = [];
+    public readonly deleteReplyCalls: any[] = [];
 
     /** The payload passed to the last successful editReply/reply call. */
     public lastPostedContent: any = undefined;
@@ -115,7 +116,14 @@ export default class FakeInteraction {
 
     async followUp(payload: any): Promise<{ id: string; content: any }> {
         this.followUpCalls.push(payload);
+        // Real discord.js sets replied=true after followUp() too (it counts
+        // as "the interaction has been responded to"), not just after reply().
+        this.replied = true;
         return { id: `fake-followup-${++this.messageIdCounter}`, content: payload.content };
+    }
+
+    async deleteReply(message?: unknown): Promise<void> {
+        this.deleteReplyCalls.push(message);
     }
 
     async reply(payload: any): Promise<{ id: string; content: any }> {

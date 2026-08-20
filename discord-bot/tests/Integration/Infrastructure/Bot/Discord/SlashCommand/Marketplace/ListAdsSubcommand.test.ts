@@ -7,6 +7,7 @@ import DatabaseUtil from '../../../../../../Helper/DatabaseUtil';
 import FakeInteraction from '../../../../../../Helper/FakeInteraction';
 import { createAd } from '../../../../../../Helper/StaticFixtures';
 import { PrismaClient } from '@prisma/client';
+import { MessageFlags } from 'discord.js';
 import type { SlashCommandContext } from '../../../../../../../src/Domain/Bot/SlashCommandContext';
 
 /**
@@ -66,6 +67,10 @@ describe('ListAdsSubcommand Integration Test', () => {
         await listAdsSubcommand.handle(buildContext(interaction));
 
         expect(interaction.deferReplyCalls.length).toBe(1);
+        // The whole command is ephemeral now (M5.8 settles `/marketplace list`
+        // as ephemeral going forward), so the defer itself carries the flag —
+        // not just the error paths.
+        expect(interaction.deferReplyCalls[0]).toEqual({ flags: MessageFlags.Ephemeral });
         expect(interaction.replyCalls.length).toBe(0);
         expect(interaction.editReplyCalls.length).toBe(1);
 
@@ -112,5 +117,20 @@ describe('ListAdsSubcommand Integration Test', () => {
 
         expect(field.value.length).toBeLessThanOrEqual(EMBED_FIELD_VALUE_MAX_LENGTH);
         expect(field.value.endsWith('…')).toBe(true);
+    });
+
+    it('stays ephemeral on the "no listings" path too (M0.3) — nothing here should broadcast into the channel', async () => {
+        const userId = '111111111111111111';
+        const interaction = new FakeInteraction({}, userId, undefined, undefined, {});
+
+        await listAdsSubcommand.handle(buildContext(interaction));
+
+        expect(interaction.deferReplyCalls[0]).toEqual({ flags: MessageFlags.Ephemeral });
+        expect(interaction.editReplyCalls.length).toBe(1);
+        expect(interaction.editReplyCalls[0].content).toContain("don't have any active listings");
+        // No public reply/followUp anywhere — the whole command stayed on
+        // the single ephemeral deferred reply.
+        expect(interaction.replyCalls.length).toBe(0);
+        expect(interaction.followUpCalls.length).toBe(0);
     });
 });
