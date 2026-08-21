@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet } from "react-router-dom";
 
 const DISCORD_INVITE = "https://discord.gg/mBJKUhwE23";
 
@@ -79,6 +79,11 @@ export function Layout() {
             <a href="/admin" className="hover:text-white">
               Admin
             </a>
+            {/* M9.7 — the privacy page: what's shown publicly, how to opt
+                out, and the GDPR erasure path. */}
+            <Link to="/privacy" className="hover:text-white">
+              Privacidade
+            </Link>
           </nav>
         </div>
       </footer>

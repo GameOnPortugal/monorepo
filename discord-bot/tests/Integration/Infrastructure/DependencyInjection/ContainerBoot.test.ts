@@ -102,7 +102,7 @@ describe('Container boot with a Discord token (the production branch)', () => {
 
         expect(`${stdout}${stderr}`).not.toContain('No bindings found');
         expect(exitCode).toBe(0);
-        expect(stdout).toContain('COMMANDS=marketplace,ping,screenshot,trophy');
+        expect(stdout).toContain('COMMANDS=marketplace,ping,privacy,screenshot,trophy');
         // Loose assertion on purpose: adding an autocomplete handler should
         // not fail this test, but removing all of them should.
         expect(stdout).not.toContain('AUTOCOMPLETE=0');

@@ -183,17 +183,27 @@ specifically, which is not quite Safari or Chrome.
 
 ## Privacy
 
-The portal would publish, at minimum, Discord usernames against marketplace ads
-and screenshots. Before launch, decide:
+✅ **Built — GLOBAL-PLAN.md M9.7.** The portal publishes, at minimum, Discord
+usernames against marketplace ads and screenshots:
 
-- Show **display names**, never raw user IDs, in public views.
-- Offer an opt-out, and honour it in both the portal and the bot.
-- Do not publish anything from DMs or private channels.
-- Add a short privacy page; the community is EU-based, so GDPR applies —
-  a deletion request must remove portal content too.
-
-Raise this with Luis before the marketplace page ships; it is easier to design in
-than to retrofit.
+- Show **display names**, never raw user IDs, in public views. — already true
+  (`repositories/ads.ts`/`screenshots.ts`/`trophies.ts` never select
+  `author_id`/`userId` into a public response shape).
+- Offer an opt-out, and honour it in both the portal and the bot. — a new
+  `PrivacySetting` table (one row per Discord member, not a flag duplicated
+  onto `ads`/`screenshots`/`trophyprofiles` — see the M9.7 row for why),
+  honoured by `portal/api/src/repositories/visibility.ts` (fails closed: a
+  broken check hides content, never shows it) and by the bot's `/privacy
+  opt-out`/`opt-in` commands.
+- Do not publish anything from DMs or private channels. — unaffected; the
+  portal only ever reads `ads`/`screenshots`/`trophyprofiles`, none of which
+  can hold DM content.
+- Add a short privacy page; the community is EU-based, so GDPR applies — a
+  deletion request must remove portal content too. — `portal/web/src/pages/
+  Privacy.tsx` (pt-PT, static) plus `/privacy delete-data` on the bot, which
+  hard-deletes (not soft-deletes) a member's ads, screenshots and trophy
+  profile. Erasure is immediate, no grace period — see the M9.7 row for why
+  that is the conservative default and the question left open for Luis.
 
 ## Task breakdown
 

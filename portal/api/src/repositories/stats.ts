@@ -18,9 +18,11 @@ export interface PortalStats {
 }
 
 export async function getStats(): Promise<PortalStats> {
+  const [adsWhere, screenshotsWhere] = await Promise.all([publicAdsWhere(), publicScreenshotsWhere()]);
+
   const [activeAds, screenshots, trophies, huntersRows] = await Promise.all([
-    prisma.ad.count({ where: publicAdsWhere() }),
-    prisma.screenshot.count({ where: publicScreenshotsWhere() }),
+    prisma.ad.count({ where: adsWhere }),
+    prisma.screenshot.count({ where: screenshotsWhere }),
     prisma.trophies.count(),
     prisma.$queryRawUnsafe<{ hunters: bigint | number }[]>(
       `

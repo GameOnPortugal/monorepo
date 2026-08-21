@@ -27,4 +27,11 @@ export interface ScreenshotRepository {
      * unfinished rows instead of re-fetching already-done ones.
      */
     findRequiringRelink(limit: number): Promise<Screenshot[]>;
+
+    /**
+     * GDPR erasure (M9.7's `/privacidade apagar` command) — hard delete of
+     * every screenshot row for this author. Returns the number of rows
+     * removed, for the confirmation the member sees.
+     */
+    deleteAllByAuthor(authorId: string): Promise<number>;
 }

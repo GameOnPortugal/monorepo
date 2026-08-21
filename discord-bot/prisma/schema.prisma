@@ -144,3 +144,35 @@ model JobRun {
 
   @@map("job_runs")
 }
+
+// M9.7 — a member's public-visibility opt-out, honoured by both the bot
+// (the /privacidade command) and the portal (portal/api/src/repositories/
+// visibility.ts). One row per Discord member, keyed by their Discord id —
+// deliberately NOT a `public_opt_out` column duplicated onto `ads`,
+// `screenshots` and `trophyprofiles` (which is what
+// portal/api/src/repositories/visibility.ts's scaffolding comments
+// anticipated before this migration existed). Two reasons:
+//
+//   1. None of those three tables carries a real foreign key to a canonical
+//      "user" today — `author_id`/`author_id`/`userId` are un-enforced free
+//      -text Discord snowflakes, so there is no single place a member's
+//      decision already lives.
+//   2. A member's opt-out is a decision about *themselves*, not about any
+//      one piece of content — it should cover everything they have ever
+//      posted and everything they post after opting out, from one row,
+//      without the bot needing to remember to copy a flag onto every new
+//      ad/screenshot/profile at write time.
+//
+// Rows are created lazily by the opt-out/opt-in command — a member who has
+// never touched either is simply absent from this table, which the read
+// side treats as "opted in" (the default for the ~13k+ historical rows
+// this migration does not and must not touch). See docs/plans/GLOBAL-PLAN.md
+// M9.7 and docs/plans/03-portal.md decision 5.
+model PrivacySetting {
+  discordId    String   @id
+  publicOptOut Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("privacy_settings")
+}

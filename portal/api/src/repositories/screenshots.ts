@@ -43,7 +43,7 @@ export interface ListScreenshotsFilters {
 }
 
 export async function listScreenshots(filters: ListScreenshotsFilters): Promise<PublicScreenshot[]> {
-  const where = publicScreenshotsWhere(filters.platform ? { plataform: filters.platform } : {});
+  const where = await publicScreenshotsWhere(filters.platform ? { plataform: filters.platform } : {});
 
   const rows = await prisma.screenshot.findMany({
     where,
@@ -56,6 +56,6 @@ export async function listScreenshots(filters: ListScreenshotsFilters): Promise<
 }
 
 export async function countScreenshots(filters: Pick<ListScreenshotsFilters, "platform">): Promise<number> {
-  const where = publicScreenshotsWhere(filters.platform ? { plataform: filters.platform } : {});
+  const where = await publicScreenshotsWhere(filters.platform ? { plataform: filters.platform } : {});
   return prisma.screenshot.count({ where });
 }
