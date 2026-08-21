@@ -123,6 +123,18 @@ zone, not the individual record. The zone was snapshotted first to
 `~/ovh-zone-backups/2026-08-21/game-on-portugal.pt.json`. MX, SRV, `autoconfig`,
 `discord`, `media` and `www` were untouched.
 
+> **Gotcha worth not relearning: OVH's nameservers front a cache, and a delete
+> waits out the record's own TTL.** The API showed the record gone and the zone
+> `isDeployed: true` within seconds, and `/domain/zone/…/export` no longer
+> listed it — but `dig` against both authoritative IPs (`5.135.112.57`,
+> `5.39.116.25`) kept returning the old value for **~60 minutes**, which is
+> exactly the zone's default TTL of 3600s. The served SOA serial had already
+> advanced to the new zone by then, so the serial is *not* a reliable signal
+> that a specific record has cleared — the answer for that one name outlives it.
+> Nothing was wrong and no second refresh was needed; the first one worked.
+> Check `/domain/zone/…/export` for the truth and wait out the TTL rather than
+> re-refreshing and wondering.
+
 **The stated ordering rule was consciously overridden here.** This plan said to
 keep the TXT record "until you are certain you will not roll back to Pages,
 because re-verifying a domain there is slower than leaving one stale TXT record
