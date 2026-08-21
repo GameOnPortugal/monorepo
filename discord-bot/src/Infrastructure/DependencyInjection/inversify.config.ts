@@ -3,6 +3,7 @@ import { Container } from 'inversify';
 import CommandHandlerManager from '../CommandHandler/CommandHandlerManager';
 import { TYPES } from './types';
 import { PrismaClient } from '@prisma/client';
+import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import ConsoleLogProvider from '../Logger/ConsoleLogProvider';
 import LoggerManager from '../../Application/Logger/LoggerManager';
 import { isEmpty } from '../../Application/Shared/StringTools.ts';
@@ -120,7 +121,15 @@ if (!isEmpty(baseEnv.LOKI_HOST)) {
 myContainer.bind<Logger>(TYPES.Logger).toConstantValue(loggerManager.createLogger({}));
 
 // Repositories
-myContainer.bind<PrismaClient>(TYPES.OrmClient).toConstantValue(new PrismaClient());
+// Prisma 7 dropped the implicit `datasources.db.url` client construction —
+// every generated client now requires a driver adapter (M3.6). MariaDB's
+// wire protocol client (`mariadb` on npm, wrapped by `@prisma/adapter-mariadb`)
+// is pure JS with no native/musl binary of its own, unlike the old
+// binaryTargets-pinned query engine this replaces.
+const ormAdapter = new PrismaMariaDb(baseEnv.DATABASE_URL);
+myContainer
+    .bind<PrismaClient>(TYPES.OrmClient)
+    .toConstantValue(new PrismaClient({ adapter: ormAdapter }));
 myContainer.bind(TYPES.ScreenshotRepository).to(OrmScreenshotRepository).inSingletonScope();
 myContainer.bind(TYPES.TrophyRepository).to(OrmTrophyRepository).inSingletonScope();
 myContainer.bind(TYPES.TrophyProfileRepository).to(OrmTrophyProfileRepository).inSingletonScope();

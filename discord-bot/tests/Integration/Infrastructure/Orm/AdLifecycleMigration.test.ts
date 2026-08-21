@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { PrismaClient } from '@prisma/client';
+import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
@@ -69,11 +70,13 @@ describe('M5.3 ad lifecycle migration', () => {
     beforeAll(async () => {
         // A client on the ordinary test database, used only to create/drop the
         // scratch database — DDL Prisma's own client can't target itself with.
-        adminClient = new PrismaClient({ datasourceUrl: baseUrl().toString() });
+        adminClient = new PrismaClient({ adapter: new PrismaMariaDb(baseUrl().toString()) });
         await adminClient.$executeRawUnsafe(`DROP DATABASE IF EXISTS \`${scratchDatabaseName}\``);
         await adminClient.$executeRawUnsafe(`CREATE DATABASE \`${scratchDatabaseName}\``);
 
-        scratchClient = new PrismaClient({ datasourceUrl: urlForDatabase(scratchDatabaseName) });
+        scratchClient = new PrismaClient({
+            adapter: new PrismaMariaDb(urlForDatabase(scratchDatabaseName)),
+        });
 
         // Replay history: the pre-M5.3 shape, then the migration under test.
         await runMigrationFile(scratchClient, '20250416170150_init');

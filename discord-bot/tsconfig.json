@@ -15,6 +15,16 @@
         "noEmit": true,
         "experimentalDecorators": true,
 
+        // Prisma 7's generator now writes plain TS source into
+        // prisma/generated/ instead of node_modules/@prisma/client (see
+        // prisma/schema.prisma's generator block). This alias keeps every
+        // existing `from '@prisma/client'` import working unchanged, rather
+        // than rewriting ~50 call sites to a relative path into prisma/.
+        "baseUrl": ".",
+        "paths": {
+            "@prisma/client": ["./prisma/generated/client.ts"]
+        },
+
         // Best practices
         "strict": true,
         "skipLibCheck": true,

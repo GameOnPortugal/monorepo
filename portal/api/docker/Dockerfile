@@ -13,7 +13,7 @@
 # (../../../discord-bot/node_modules/@prisma/client from src/db.ts) that
 # local development uses.
 
-FROM oven/bun:1.2.10-alpine AS bot-prisma
+FROM oven/bun:1.3.14-alpine AS bot-prisma
 
 RUN apk --no-cache add openssl
 WORKDIR /repo/discord-bot
@@ -23,11 +23,13 @@ WORKDIR /repo/discord-bot
 COPY discord-bot/package.json discord-bot/bun.lock ./
 RUN bun install --frozen-lockfile
 COPY discord-bot/prisma ./prisma
+# Prisma 7 reads the datasource/migrations config from here, not the schema.
+COPY discord-bot/prisma.config.ts ./prisma.config.ts
 # No DATABASE_URL is set or needed: `generate` reads the schema, it does not
 # connect to a database and never runs a migration.
 RUN bunx prisma generate
 
-FROM oven/bun:1.2.10-alpine AS api-build
+FROM oven/bun:1.3.14-alpine AS api-build
 
 WORKDIR /repo/portal/api
 COPY portal/api/package.json portal/api/bun.lock ./
@@ -37,7 +39,7 @@ COPY portal/api/package.json portal/api/bun.lock ./
 RUN bun install --frozen-lockfile --production
 COPY portal/api/src ./src
 
-FROM oven/bun:1.2.10-alpine AS runtime
+FROM oven/bun:1.3.14-alpine AS runtime
 
 RUN apk --no-cache add openssl \
     && addgroup -S app \
@@ -49,8 +51,15 @@ COPY --from=api-build --chown=app:app /repo/portal/api/node_modules ./portal/api
 COPY --from=api-build --chown=app:app /repo/portal/api/src ./portal/api/src
 COPY --from=api-build --chown=app:app /repo/portal/api/package.json ./portal/api/package.json
 # The generated client, not the bot's schema/source — see file header.
+#
+# Prisma 7 writes the client to `prisma/generated/` as plain TypeScript rather
+# than into `node_modules/@prisma/client`, so both paths are needed: the
+# generated code itself, and the bot's `@prisma/client` package, which is what
+# the `@prisma/client/runtime/client` import *inside* that generated code
+# resolves against. `.prisma/` no longer exists — Prisma 7 has no query-engine
+# binary to stash there.
+COPY --from=bot-prisma --chown=app:app /repo/discord-bot/prisma/generated ./discord-bot/prisma/generated
 COPY --from=bot-prisma --chown=app:app /repo/discord-bot/node_modules/@prisma ./discord-bot/node_modules/@prisma
-COPY --from=bot-prisma --chown=app:app /repo/discord-bot/node_modules/.prisma ./discord-bot/node_modules/.prisma
 
 # M8.11's audit log (src/audit/db.ts) — a SQLite file at AUDIT_DB_PATH — and
 # M8.8's thumbnail cache (src/lib/thumbnails.ts) both live under /data
