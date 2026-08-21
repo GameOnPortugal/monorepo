@@ -4,6 +4,7 @@ import { admin } from "./routes/admin";
 import { auth } from "./routes/auth";
 import { health } from "./routes/health";
 import { marketplace } from "./routes/marketplace";
+import { media } from "./routes/media";
 import { screenshots } from "./routes/screenshots";
 import { seo } from "./routes/seo";
 import { stats } from "./routes/stats";
@@ -39,6 +40,7 @@ export function buildApp(): Hono {
   app.route("/", seo);
   app.route("/api", marketplace);
   app.route("/api", screenshots);
+  app.route("/api", media);
   app.route("/api", trophies);
   app.route("/api", stats);
   app.route("/api", auth);

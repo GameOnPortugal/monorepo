@@ -172,6 +172,14 @@ services:
       # MySQL table — the bot owns that schema, see portal/README.md), kept
       # on the volume below so it survives redeploys.
       AUDIT_DB_PATH: /data/audit.db
+      # --- M8.8 thumbnail cache: resized/re-encoded WebP copies of origin
+      # screenshot/ad images (portal/api/src/lib/thumbnails.ts). Shares this
+      # same volume with the audit log rather than a new one — both are
+      # small (thumbnails: ~624 images x 3 fixed widths x a few tens of KB;
+      # see that file's MAX_CACHE_ENTRIES bound), and losing this directory
+      # is harmless (it's a cache, not a system of record) unlike the audit
+      # log, so it doesn't need its own backup consideration either.
+      THUMBNAIL_CACHE_DIR: /data/thumbnails
     volumes:
       - portal_audit_data:/data
     restart: unless-stopped

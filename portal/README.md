@@ -131,7 +131,12 @@ never production.
 Public endpoints: `GET /health`, `GET /sitemap.xml`,
 `GET /api/marketplace/ads[?adType=&status=&limit=&offset=]`,
 `GET /api/marketplace/ads/:id`, `GET /api/screenshots[?platform=&limit=&offset=]`,
-`GET /api/trophies/leaderboard[?limit=]`, `GET /api/stats`.
+`GET /api/trophies/leaderboard[?limit=]`, `GET /api/stats`,
+`GET /api/media/thumbnail?src=<origin media URL>&w=<160|320|480>` (M8.8 — see
+`src/lib/thumbnails.ts` and `src/lib/mediaAllowlist.ts`: resizes+re-encodes
+an origin screenshot/ad photo to WebP and caches it on disk; `src` must be
+under the `media.game-on-portugal.pt` / `gop-media` bucket allowlist and `w`
+must be one of the three fixed widths, or the request is refused with 400).
 
 Auth: `GET /api/auth/config`, `GET /api/auth/login`, `GET /api/auth/callback`,
 `GET /api/auth/me`, `POST /api/auth/logout` — all 503 when OAuth env vars are

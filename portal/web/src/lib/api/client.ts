@@ -62,6 +62,30 @@ async function get<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// M8.8 — the fixed set of widths portal-api's thumbnail endpoint will
+// actually resize to (src/lib/thumbnails.ts's ALLOWED_WIDTHS). Kept as a
+// small, explicit union rather than `number` so a typo here is a compile
+// error instead of a silent 400 from the API at runtime.
+export type ThumbnailWidth = 160 | 320 | 480;
+
+/**
+ * Build a URL for a resized, cached WebP version of an origin media image —
+ * GLOBAL-PLAN M8.8's fix for "a phone downloads a full-size image per grid
+ * tile". `src` is the raw `imageUrl` the public API already returns (e.g.
+ * `Screenshot.imageUrl`); this only ever points at portal-api's own
+ * same-origin endpoint, which itself enforces the media host/path allowlist
+ * (`portal/api/src/lib/mediaAllowlist.ts`) — a bad or foreign `src` here
+ * fails there, not silently.
+ *
+ * Returns `null` when `src` is null/empty so callers can pass it straight
+ * through to `LazyImage`, which already renders a placeholder for a null
+ * `src` (the two known-dead 2022 Discord CDN links, plus any future ones).
+ */
+export function thumbnailUrl(src: string | null | undefined, width: ThumbnailWidth = 320): string | null {
+  if (!src) return null;
+  return `${API_URL}/api/media/thumbnail?src=${encodeURIComponent(src)}&w=${width}`;
+}
+
 export const api = {
   health: () => get<{ status: string }>("/health"),
   listAds: (limit = 6) => get<{ ads: Ad[]; total: number }>(`/api/marketplace/ads?limit=${limit}`),

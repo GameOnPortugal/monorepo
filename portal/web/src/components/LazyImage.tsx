@@ -1,25 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 
 /**
- * M8.8's answer to "a phone must not download a 4 MB PNG per grid tile"
- * within what a portal-only (no infra/bot access) agent can actually build.
+ * M8.8's request-count half of "a phone must not download a 4 MB PNG per
+ * grid tile": never mount an `<img>` until it is about to enter the
+ * viewport, so a 600-tile gallery does not fire 600 simultaneous requests —
+ * only tiles near the visible area ever download at all.
  *
- * True thumbnails (WebP generated at ingest, or an image-proxy resize on the
- * fly — plan 03 decision 2 / GLOBAL-PLAN M8.8) need either bot-side ingest
- * work or a new infra service (e.g. imgproxy in front of MinIO); both are
- * out of this agent's scope (no `discord-bot/`, no `infrastructure/`
- * changes — see the task brief). What IS in scope and implemented here:
- * never mount an `<img>` until it is about to enter the viewport, so a
- * 600-tile gallery does not fire 600 simultaneous requests — only tiles
- * near the visible area ever download at all. This does not shrink any
- * individual image's bytes; it is a request-count mitigation, not a
- * bytes-per-image one. Recorded as a real gap (not "done") in the M8.8 row
- * of docs/plans/GLOBAL-PLAN.md.
+ * This is complementary to, not a replacement for, the bytes-per-image half:
+ * `portal/api/src/routes/media.ts`'s resize-and-cache endpoint (see that
+ * file and `lib/thumbnails.ts`), which `Screenshots.tsx`'s grid tiles now
+ * request via `thumbnailUrl()` instead of the full-size origin image. This
+ * component doesn't know or care whether `src` points at a thumbnail or a
+ * full image — it stays a plain, reusable "don't mount until near the
+ * viewport" wrapper, used for full-size images too (`AdCard`'s listing
+ * photo, the marketplace detail gallery).
  *
  * Also handles the two known-dead 2022 Discord CDN links (docs say 622/624
  * screenshots were re-hosted to MinIO, 2 are dead) — and any future broken
- * URL — by swapping to a placeholder on `onError` instead of leaving a
- * broken-image icon in the grid.
+ * URL, including a thumbnail request the API had to refuse — by swapping to
+ * a placeholder on `onError` instead of leaving a broken-image icon in the
+ * grid.
  */
 export function LazyImage({
   src,
