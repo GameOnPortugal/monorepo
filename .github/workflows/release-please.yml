@@ -1,8 +1,8 @@
 name: Release Please
 
 # Maintains per-component release PRs + tags + CHANGELOGs from Conventional
-# Commits on main. Deploys are driven separately by deploy.yml on merge — this
-# only tracks versions.
+# Commits on main, and merges those release PRs itself so a release needs no
+# manual click. Deploys are driven separately by deploy.yml on merge.
 #
 # Why a PAT and not the default GITHUB_TOKEN: PRs opened with GITHUB_TOKEN do not
 # trigger downstream workflows (GitHub's recursion guard), so the release PR
@@ -13,10 +13,16 @@ name: Release Please
 on:
   push:
     branches: [main]
+  # Lets a stalled release chain be re-kicked without an empty commit.
+  workflow_dispatch: ~
 
 permissions:
   contents: write
   pull-requests: write
+
+concurrency:
+  group: release-please
+  cancel-in-progress: false
 
 jobs:
   release-please:
@@ -27,3 +33,66 @@ jobs:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
           config-file: .github/release-please-config.json
           manifest-file: .github/.release-please-manifest.json
+
+      # Hand the release PR off to GitHub's auto-merge so it lands (and deploys)
+      # on its own once CI is green. Two things this deliberately does NOT do:
+      #
+      #  - It does not merge more than one release PR per run. All three
+      #    components share `.github/.release-please-manifest.json` and each
+      #    release PR rewrites its own line of it — adjacent lines, so git
+      #    cannot 3-way merge them and the second PR to land would conflict.
+      #    One per run is enough: the merge pushes main, which re-runs this
+      #    workflow, which rebases the remaining release PRs onto the new
+      #    manifest and queues the next one. Three pending releases drain in
+      #    three cycles.
+      #  - It does not force the merge. Auto-merge waits for the required `CI`
+      #    check (branch protection on main), so a red release PR just sits
+      #    there. `--auto` is only refusable when there is nothing left to wait
+      #    for, which is the one case where merging immediately is also correct.
+      - name: Queue the next release PR for auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          prs=$(gh pr list --state open --json number,headRefName,createdAt \
+            --jq '[.[] | select(.headRefName | startswith("release-please--branches--main--"))]
+                  | sort_by(.createdAt, .number) | .[].number')
+
+          if [ -z "$prs" ]; then
+            echo "No open release PRs."
+            exit 0
+          fi
+          echo "Open release PRs: $(echo $prs)"
+
+          for pr in $prs; do
+            # `mergeable` is computed lazily by GitHub and is UNKNOWN for the
+            # first moments after a branch is pushed — poll rather than read a
+            # not-yet-computed answer as "conflicted".
+            mergeable=UNKNOWN
+            for _ in 1 2 3 4 5 6; do
+              mergeable=$(gh pr view "$pr" --json mergeable --jq .mergeable)
+              [ "$mergeable" = "UNKNOWN" ] || break
+              sleep 5
+            done
+
+            if [ "$mergeable" != "MERGEABLE" ]; then
+              echo "::warning::Release PR #$pr is $mergeable — skipping it this run."
+              continue
+            fi
+
+            if gh pr merge "$pr" --squash --auto; then
+              echo "Auto-merge enabled on #$pr; it lands when CI goes green."
+            else
+              # Only reachable when the PR is already fully green, so there is
+              # nothing for auto-merge to wait on. Merge it now instead.
+              echo "Auto-merge refused on #$pr (already clean) — merging now."
+              gh pr merge "$pr" --squash
+            fi
+
+            echo "Queued #$pr. Any other release PR is picked up on the next run."
+            exit 0
+          done
+
+          echo "::warning::No release PR was in a mergeable state this run."

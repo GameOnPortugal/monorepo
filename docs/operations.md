@@ -98,9 +98,10 @@ pull request
 
 merge to main
       ├─ ci.yml + security.yml
-      ├─ release-please.yml  release PR / tag / CHANGELOG per component
-      │                      (falls back to GITHUB_TOKEN — RELEASE_PLEASE_TOKEN
-      │                       not yet created, so the release PR itself gets no CI)
+      ├─ release-please.yml  release PR / tag / CHANGELOG per component, then
+      │                      enables auto-merge on ONE open release PR (see
+      │                      "Releases merge themselves" below) — so a release
+      │                      lands, tags, and deploys with no manual click
       └─ deploy.yml          build + push joshlopes/game-on-portugal-{bot,portal-api,portal-web}:{latest,<sha>}
                              → Portainer stack `game-on-portugal` (id 46) on HTZ1
                                 (SSH tunnel → PUT /api/stacks/46)
@@ -113,6 +114,35 @@ any failure → workflow-failed.yml → Telegram
 
 Full wiring reference — secrets, variables, Portainer stack, DNS, Caddy — is in
 [`../infrastructure/SETUP.md`](../infrastructure/SETUP.md).
+
+## Releases merge themselves
+
+Nothing about a release is manual. Merge a `feat:`/`fix:` PR and the chain runs
+to production on its own:
+
+1. `release-please.yml` opens (or updates) the release PR for each affected
+   component — `discord-bot`, `portal-api`, `portal-web`.
+2. The same run enables GitHub auto-merge on **one** open release PR. It lands
+   as soon as the required `CI` check is green.
+3. That merge pushes `main`, which re-runs `release-please.yml` — cutting the
+   tag + GitHub Release for what just merged, and queueing the next release PR
+   — and runs `deploy.yml`, which rebuilds the images and rolls the Portainer
+   stack.
+
+Two consequences worth knowing:
+
+- **One release per cycle, by design.** All three components share
+  `.github/.release-please-manifest.json` and each release PR rewrites its own
+  line of it. Those lines are adjacent, so git cannot 3-way merge two of them —
+  the second PR to land would conflict. Three pending releases therefore drain
+  over three cycles, a few minutes apart, each one rebased by release-please
+  onto the manifest the previous one wrote.
+- **A red release PR just sits there.** Auto-merge waits for `CI`; it is not a
+  bypass. Fix the PR (or main) and it lands by itself.
+
+If the chain ever stalls — say a release PR was left conflicted — re-kick it
+with `gh workflow run release-please.yml` rather than merging by hand, so the
+next PR in line gets queued too.
 
 ## Portal (M8)
 

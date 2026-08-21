@@ -27,7 +27,7 @@ external `proxy` network.
 | `ci.yml` | PR, push to main | Bot typecheck + integration tests. Single aggregate `CI` status |
 | `docker-build.yml` | PR | Validates the production image builds (no push) |
 | `deploy.yml` | push to main, manual | Builds + pushes `joshlopes/game-on-portugal-bot`, rolls the Portainer stack |
-| `release-please.yml` | push to main | Maintains release PRs, tags, CHANGELOGs |
+| `release-please.yml` | push to main, manual | Maintains release PRs, tags, CHANGELOGs; auto-merges one release PR per run |
 | `pr-title.yml` | PR | Enforces Conventional Commits on the PR title |
 | `labeler.yml` | PR | Path-based labels |
 | `security.yml` | PR, push, weekly | CodeQL + Trivy + Gitleaks |
@@ -42,7 +42,12 @@ evidence the GameOnPortugal org has access to them).
 
 - Default branch `main`; **allow squash merging only**. PR titles are linted as
   Conventional Commits and become the squash commit that release-please reads.
-- Branch protection on `main`: require the `CI` status check.
+- Branch protection on `main`: require the `CI` status check. Applied
+  2026-08-21, with `enforce_admins: false` so an admin is never locked out.
+- **Allow auto-merge: on** (applied 2026-08-21). Both of these exist for
+  `release-please.yml`'s auto-merge step: GitHub only lets auto-merge be
+  enabled on a PR that is *not* already mergeable, so without a required check
+  there is nothing for it to wait on and the API refuses.
 - The repo's history is ~30 consecutive `chore:` commits, which is exactly why
   release-please has never cut a release. `pr-title.yml` prevents a recurrence.
 
@@ -71,11 +76,11 @@ rather than deleted, and is safe to remove whenever `RELEASE_PLEASE_TOKEN` is
 finally created.
 
 `RELEASE_PLEASE_TOKEN` (a fine-grained PAT, `contents:write` +
-`pull-requests:write`) is **still outstanding** — it cannot be minted
-non-interactively, so `release-please.yml` currently falls back to
-`GITHUB_TOKEN`. That works, but PRs opened with the default token do not
-trigger CI or the downstream deploy on the release PR itself. Mint it and set
-it when someone has interactive GitHub access.
+`pull-requests:write`) was minted on **2026-08-20** and is live. It matters
+twice over: PRs opened with the default `GITHUB_TOKEN` get no CI, and — since
+2026-08-21 — the same token is what merges the release PR, so the merge commit
+is attributed to a real user and does trigger `deploy.yml`. Merging with
+`GITHUB_TOKEN` would land the release on main and deploy nothing.
 
 Also still outstanding: copying the real bot token into 1Password (it exists
 only in the Portainer stack env and in `~/game-on-portugal/.env` on the

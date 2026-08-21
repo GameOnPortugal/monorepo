@@ -195,7 +195,7 @@ no configured linter enforces. Style is visibly inconsistent — 4-space and
 2-space indentation, semicolons and no semicolons, sometimes within one
 directory.
 
-### 6. release-please has never produced a release — 🔸 repo side fixed, PAT still outstanding
+### 6. release-please has never produced a release — ✅ fixed
 
 Configured since April 2025, running on every `main` push. Result: **zero tags,
 zero GitHub releases**, both manifest entries still `0.0.0`. Two candidate
@@ -211,16 +211,14 @@ that actually exists (`discord-bot`), `version` added to its `package.json` (the
 Commits on the PR title — which is the actual root cause, since PRs are
 squash-merged and `chore:` never triggers a release. That part is fixed.
 
-**Still open**: the `RELEASE_PLEASE_TOKEN` PAT was **not created** during the
-2026-08-19 infrastructure migration — it cannot be minted non-interactively.
-`release-please.yml` falls back to `secrets.GITHUB_TOKEN`, which lets it open
-and update release PRs, but PRs opened with the default token do not trigger
-downstream workflows (CI, and therefore the deploy that would run on merging
-the release PR). `MY_RELEASE_PLEASE_TOKEN` still exists as a secret but is not
-read by the current workflow — safe to delete once `RELEASE_PLEASE_TOKEN` is
-minted. Until then, expect a release PR to open on the next `feat:`/`fix:`
-merge, but treat its own merge as needing a manual deploy trigger
-(`workflow_dispatch`) if CI did not visibly run on it.
+**Closed 2026-08-21.** `RELEASE_PLEASE_TOKEN` was minted on 2026-08-20, and
+seven releases have been cut since (`discord-bot-v1.0.0` … `portal-web-v0.3.0`).
+The last manual step — someone having to click Merge on the release PR, which
+is why three release PRs sat open on 2026-08-21 — is gone too:
+`release-please.yml` now enables auto-merge on one open release PR per run, so
+a release lands, tags and deploys unattended. See "Releases merge themselves"
+in [`operations.md`](operations.md). `MY_RELEASE_PLEASE_TOKEN` is still an
+unread leftover secret and is safe to delete.
 
 ### 7. Dependencies are ~14 months stale
 
