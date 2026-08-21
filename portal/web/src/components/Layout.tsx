@@ -72,6 +72,13 @@ export function Layout() {
             >
               Facebook
             </a>
+            {/* M8.10 — discreet, not hidden: /admin is protected by Discord
+                OAuth + ManageMessages either way (see pages/admin/AdminLayout.tsx),
+                so linking it plainly is no less safe than a moderator having
+                to know the URL, and it's one fewer thing to remember. */}
+            <a href="/admin" className="hover:text-white">
+              Admin
+            </a>
           </nav>
         </div>
       </footer>

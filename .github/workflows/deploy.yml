@@ -138,10 +138,13 @@ jobs:
           endpoint-id: ${{ vars.PORTAINER_ENDPOINT_ID }}
           stack-file: infrastructure/game-on-portugal.yaml
           version: ${{ github.sha }}
-          # Fail the deploy if the bot does not actually stay up. Portainer
-          # accepting the stack is not evidence the container survives boot,
-          # and `restart: unless-stopped` hides a crash loop indefinitely.
-          health-check-container: gop-bot
+          # Fail the deploy if any of the three don't actually stay up.
+          # Portainer accepting the stack is not evidence a container
+          # survives boot, and `restart: unless-stopped` hides a crash loop
+          # indefinitely — M8.14 added portal-api/portal-web here (see
+          # .github/actions/portainer-deploy's own header for why gop-bot
+          # alone was already not enough reasoning to skip them).
+          health-check-container: gop-bot gop-portal-api gop-portal-web
 
       - name: Notify Telegram
         if: always()

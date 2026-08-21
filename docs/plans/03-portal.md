@@ -247,3 +247,32 @@ recovered images.
    scaffolded — release-please errors on a package path that does not exist, so
    add them in the same PR that creates the directories, and uncomment the two
    services in `infrastructure/game-on-portugal.yaml` in the same change.
+8. **Admin sessions are a signed, stateless cookie, not a session table**
+   (M8.10). `src/lib/session.ts`: an HMAC-SHA256-signed payload the server
+   verifies on every request and never looks up — no new MySQL table, which
+   both keeps the admin's own footnote (schema ownership is the bot's) and
+   sidesteps the same constraint the audit log below hit. Rotating the
+   signing secret logs out every admin at once.
+9. **The admin audit log is a private SQLite file the portal owns, not a
+   MySQL table** (M8.11). `discord-bot/prisma` is off-limits to the portal
+   (decision above, and the schema-ownership section up top) — a new table
+   there is a bot-side migration this work cannot make. Bun's built-in
+   `bun:sqlite` gives durable, queryable storage with zero new dependency and
+   zero touch to the bot's schema; persisted on its own Docker volume
+   (`portal_audit_data`) so it survives redeploys. Trade-off recorded, not
+   hidden: it is **not** covered by the existing nightly MySQL backup — a
+   follow-up, not done as part of M8.11.
+10. **The admin jobs page (M8.12) is read-only — no "run this job now"
+    button**, contrary to this plan's own original acceptance line ("An admin
+    can dry-run the winner job and see the result"). `job_runs` is written by
+    the bot's in-process scheduler; nothing outside that process can trigger
+    a run without a new, admin-authenticated HTTP surface on the bot itself —
+    `discord-bot/src` work, and arguably its own security-reviewed item
+    rather than a UI afterthought. Recorded as an open follow-up in the
+    M8.12 row of `GLOBAL-PLAN.md`, not silently descoped.
+11. **No analytics were added in M8.13**, despite this plan's task table
+    row #13 listing it alongside SEO/OG/sitemap. `GLOBAL-PLAN.md`'s own
+    M8.13 item wording dropped it, and — separately — "which tool, and does
+    it need a cookie-consent banner" is a product/legal call for an
+    EU-based community (see the Privacy section above) that this work isn't
+    positioned to make unilaterally. Left as an open decision for Luis.

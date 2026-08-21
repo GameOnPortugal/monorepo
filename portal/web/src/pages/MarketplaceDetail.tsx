@@ -11,6 +11,7 @@ import {
   normalizePlatform,
   normalizeZone,
 } from "../lib/normalize";
+import { useDocumentHead } from "../lib/seo";
 import { useApi } from "../lib/useApi";
 
 const DISCORD_INVITE = "https://discord.gg/mBJKUhwE23";
@@ -44,6 +45,17 @@ export function MarketplaceDetail() {
     () => false,
   );
   const [activeImage, setActiveImage] = useState(0);
+
+  // Called unconditionally (Rules of Hooks) — before the loading/error early
+  // returns below, so it runs on every render regardless of fetch state.
+  // Falls back to the site defaults (index.html) while data isn't loaded
+  // yet, then swaps in the ad's own name/first image once it is.
+  useDocumentHead({
+    title: data?.ad?.name ?? "Anúncio",
+    description: data?.ad?.description ?? undefined,
+    image: data?.ad?.images[0],
+    path: id ? `/marketplace/${id}` : undefined,
+  });
 
   if (state === "loading") {
     return (
