@@ -25,9 +25,18 @@ ENV PORT=8791 \
 # clearance cookie, which is what keeps most requests from being challenged
 # at all. Losing it is survivable but makes the first requests after a
 # restart much slower.
+RUN mkdir -p /data && chown -R pwuser:pwuser /app /data
 VOLUME ["/data"]
 
+# pwuser is the non-root user baked into the Playwright base image. Chromium
+# runs with --no-sandbox already (server.js), so dropping root here costs
+# nothing — the setuid sandbox that would otherwise want root was never in use.
+USER pwuser
+
 EXPOSE 8791
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||8791)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 # tini reaps the Chromium children xvfb-run leaves behind; without it a
 # long-lived container accumulates zombies.
