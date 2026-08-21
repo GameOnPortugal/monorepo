@@ -63,6 +63,8 @@ workflow in the same PR rather than picking the nearest existing scope.
 | [`06-discord-api-modernisation.md`](06-discord-api-modernisation.md) | Deprecations **P1–P5**, interaction lifecycle, components |
 | [`07-dependency-upgrades.md`](07-dependency-upgrades.md) | Locked inventory, hygiene defects **D1–D5**, Prisma 6→7 |
 | [`01`](01-marketplace-overhaul.md) [`02`](02-scheduler-and-lifecycle.md) [`03`](03-portal.md) [`04`](04-infrastructure-migration.md) | Per-area designs and task tables, all open questions already decided |
+| [`08-decommission-and-cleanup.md`](08-decommission-and-cleanup.md) | What is left to retire (TedRelayer, `webpage/`, the Pages repo) and in what order |
+| [`../test-plan.md`](../test-plan.md) | Manual end-to-end verification checklist for a release |
 | [`../session-log-2026-08-19.md`](../session-log-2026-08-19.md) | How we found all of this, and the decision log |
 
 ---
