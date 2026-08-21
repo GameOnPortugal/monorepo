@@ -77,7 +77,7 @@ export interface ListAdsFilters {
 }
 
 export async function listAds(filters: ListAdsFilters): Promise<PublicAd[]> {
-  const where = publicAdsWhere({
+  const where = await publicAdsWhere({
     ...(filters.status ? { status: filters.status } : {}),
     ...(filters.adType ? { adType: filters.adType } : {}),
   });
@@ -93,7 +93,7 @@ export async function listAds(filters: ListAdsFilters): Promise<PublicAd[]> {
 }
 
 export async function countAds(filters: Pick<ListAdsFilters, "adType" | "status">): Promise<number> {
-  const where = publicAdsWhere({
+  const where = await publicAdsWhere({
     ...(filters.status ? { status: filters.status } : {}),
     ...(filters.adType ? { adType: filters.adType } : {}),
   });
@@ -101,6 +101,6 @@ export async function countAds(filters: Pick<ListAdsFilters, "adType" | "status"
 }
 
 export async function getAdById(id: string): Promise<PublicAd | null> {
-  const row = await prisma.ad.findFirst({ where: publicAdsWhere({ id }) });
+  const row = await prisma.ad.findFirst({ where: await publicAdsWhere({ id }) });
   return row ? toPublicAd(row) : null;
 }

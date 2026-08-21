@@ -231,4 +231,14 @@ export class OrmAdRepository implements AdRepository {
 
         return ads.map((ad) => Ad.fromArray(ad as AdArray));
     }
+
+    async deleteAllByAuthor(authorId: string): Promise<number> {
+        // No `deleted_at: null` filter here, unlike every read above —
+        // erasure has to reach sold/expired/already-soft-deleted rows too.
+        const { count } = await this.prismaClient.ad.deleteMany({
+            where: { author_id: authorId },
+        });
+
+        return count;
+    }
 }

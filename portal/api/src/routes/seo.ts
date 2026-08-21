@@ -31,7 +31,7 @@ seo.get("/sitemap.xml", async (c) => {
   // listings are what is worth a search engine's attention, not all of
   // history. 500 mirrors repositories/pagination.ts's MAX_LIMIT reasoning.
   const activeAds = await prisma.ad.findMany({
-    where: publicAdsWhere(),
+    where: await publicAdsWhere(),
     select: { id: true, updatedAt: true },
     orderBy: { updatedAt: "desc" },
     take: 500,

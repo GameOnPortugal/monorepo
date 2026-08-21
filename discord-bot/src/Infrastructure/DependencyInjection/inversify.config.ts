@@ -98,6 +98,15 @@ import { InMemoryMediaStorage } from '../Media/InMemoryMediaStorage.ts';
 import { SafeImageFetcher } from '../Media/SafeImageFetcher.ts';
 import { AdImageUploader } from '../Media/AdImageUploader.ts';
 import { requireEnv, validateBaseEnv, validateBotEnv } from '../Config/env.ts';
+// M9.7 — privacy: the opt-out flag and GDPR erasure.
+import type { PrivacyRepository } from '../../Domain/Privacy/PrivacyRepository.ts';
+import { OrmPrivacyRepository } from '../Orm/OrmPrivacyRepository.ts';
+import { SetPrivacyOptOutHandler } from '../../Application/Write/Privacy/SetPrivacyOptOut/SetPrivacyOptOutHandler.ts';
+import { DeleteMemberDataHandler } from '../../Application/Write/Privacy/DeleteMemberData/DeleteMemberDataHandler.ts';
+import { PrivacySlashCommand } from '../Bot/Discord/SlashCommand/Privacy/PrivacySlashCommand.ts';
+import { OptOutSubcommand } from '../Bot/Discord/SlashCommand/Privacy/OptOutSubcommand.ts';
+import { OptInSubcommand } from '../Bot/Discord/SlashCommand/Privacy/OptInSubcommand.ts';
+import { DeleteDataSubcommand } from '../Bot/Discord/SlashCommand/Privacy/DeleteDataSubcommand.ts';
 
 const myContainer = new Container();
 
@@ -134,6 +143,10 @@ myContainer.bind(TYPES.ScreenshotRepository).to(OrmScreenshotRepository).inSingl
 myContainer.bind(TYPES.TrophyRepository).to(OrmTrophyRepository).inSingletonScope();
 myContainer.bind(TYPES.TrophyProfileRepository).to(OrmTrophyProfileRepository).inSingletonScope();
 myContainer.bind<AdRepository>(TYPES.AdRepository).to(OrmAdRepository).inSingletonScope();
+myContainer
+    .bind<PrivacyRepository>(TYPES.PrivacyRepository)
+    .to(OrmPrivacyRepository)
+    .inSingletonScope();
 
 // Command Handlers
 myContainer.bind(TYPES.CommandHandler).to(PingHandler);
@@ -160,12 +173,16 @@ myContainer.bind(TYPES.CommandHandler).to(MarkAdPendingRenewalHandler);
 myContainer.bind(TYPES.CommandHandler).to(RenewAdHandler);
 myContainer.bind(TYPES.CommandHandler).to(FindAdsDueForLifecycleActionHandler);
 myContainer.bind(TYPES.CommandHandler).to(FindActiveAdsForReconcileHandler);
+// M9.7 — privacy.
+myContainer.bind(TYPES.CommandHandler).to(SetPrivacyOptOutHandler);
+myContainer.bind(TYPES.CommandHandler).to(DeleteMemberDataHandler);
 
 // Slash Commands
 myContainer.bind(TYPES.SlashCommandHandler).to(PingSlashCommand);
 myContainer.bind(TYPES.SlashCommandHandler).to(ScreenshotSlashCommand);
 myContainer.bind(TYPES.SlashCommandHandler).to(TrophySlashCommand);
 myContainer.bind(TYPES.SlashCommandHandler).to(MarketplaceSlashCommand);
+myContainer.bind(TYPES.SlashCommandHandler).to(PrivacySlashCommand);
 
 // Autocomplete handlers (M4.8) — matched to a slash command by getName().
 // Bound to the symbol (which is what BotExecutor multi-injects) *and* toSelf,
@@ -213,6 +230,9 @@ myContainer.bind(DeleteAdSubcommand).toSelf();
 myContainer.bind(SoldAdSubcommand).toSelf();
 myContainer.bind(BumpAdSubcommand).toSelf();
 myContainer.bind(EditAdSubcommand).toSelf();
+myContainer.bind(OptOutSubcommand).toSelf();
+myContainer.bind(OptInSubcommand).toSelf();
+myContainer.bind(DeleteDataSubcommand).toSelf();
 
 // Writes
 myContainer.bind<CommandHandlerManager>(CommandHandlerManager).toSelf();

@@ -68,6 +68,14 @@ export default class OrmScreenshotRepository implements ScreenshotRepository {
         return objects.map((object) => Screenshot.fromArray(object as ScreenshotArray));
     }
 
+    async deleteAllByAuthor(authorId: string): Promise<number> {
+        const { count } = await this.prismaClient.screenshot.deleteMany({
+            where: { author_id: authorId },
+        });
+
+        return count;
+    }
+
     async findByWeek(week: Date): Promise<Screenshot[]> {
         // Previously used dayjs's locale-default `startOf('week')` /
         // `endOf('week')`, which (with no locale configured) is a

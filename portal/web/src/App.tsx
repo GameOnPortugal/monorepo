@@ -5,6 +5,7 @@ import { HallOfFame } from "./pages/HallOfFame";
 import { Home } from "./pages/Home";
 import { Marketplace } from "./pages/Marketplace";
 import { MarketplaceDetail } from "./pages/MarketplaceDetail";
+import { Privacy } from "./pages/Privacy";
 import { Screenshots } from "./pages/Screenshots";
 import { Trophies } from "./pages/Trophies";
 import { AdminAds } from "./pages/admin/AdminAds";
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="screenshots" element={<Screenshots />} />
         <Route path="screenshots/hall-of-fame" element={<HallOfFame />} />
         <Route path="trophies" element={<Trophies />} />
+        <Route path="privacy" element={<Privacy />} />
         <Route path="*" element={<NotFound />} />
       </Route>
 

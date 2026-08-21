@@ -24,6 +24,8 @@ const TYPES = {
     TrophyRepository: Symbol.for('TrophyRepository'),
     AdRepository: Symbol.for('AdRepository'),
     JobStateRepository: Symbol.for('JobStateRepository'),
+    // M9.7 — the member public-visibility opt-out flag.
+    PrivacyRepository: Symbol.for('PrivacyRepository'),
 
     // Clients
     HttpClient: Symbol.for('HttpClient'),

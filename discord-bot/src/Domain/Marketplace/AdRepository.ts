@@ -83,4 +83,14 @@ export interface AdRepository {
      * this intentionally does not filter on `message_id`.
      */
     findAllActive(limit: number): Promise<Ad[]>;
+
+    /**
+     * GDPR erasure (M9.7's `/privacidade apagar` command) — a real, hard
+     * delete of every row for this author regardless of status, unlike
+     * `delete()` above, which only ever soft-deletes one row. A soft-deleted
+     * ad still has its `description`/`price`/etc. sitting in the table, and
+     * an erasure request needs those gone, not just hidden. Returns the
+     * number of rows removed, for the confirmation the member sees.
+     */
+    deleteAllByAuthor(authorId: string): Promise<number>;
 }
