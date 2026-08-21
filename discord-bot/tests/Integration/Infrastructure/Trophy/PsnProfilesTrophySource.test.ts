@@ -49,7 +49,7 @@ describe('PsnProfilesTrophySource', () => {
     describe('getPlatinumTrophyData', () => {
         test('extracts rarity percentage and completion date from a completed row', async () => {
             const trophyUrl =
-                'https://psnprofiles.com/trophies/11783-assassins-creed-valhalla/Josh_Lopes';
+                'https://psnprofiles.com/trophies/12-grand-theft-auto-iv/Zephyr-pt';
             const httpClient = new FakeHttpClient({
                 [trophyUrl]: fixture('trophy-completed.html'),
             });
@@ -57,8 +57,12 @@ describe('PsnProfilesTrophySource', () => {
 
             const data = await source.getPlatinumTrophyData(trophyUrl);
 
-            expect(data.percentage).toBe(52.03);
-            expect(data.completionDate.toISOString().slice(0, 10)).toBe('2021-06-29');
+            // The captured row carries both rarity figures; 0.97% is the
+            // site rarity PSNProfiles shows by default and the one the TP
+            // ladder is calibrated against. Reading the hover value (0.3%)
+            // instead would price this trophy at 2000 TP rather than 1250.
+            expect(data.percentage).toBe(0.97);
+            expect(data.completionDate.toISOString().slice(0, 10)).toBe('2021-09-02');
         });
 
         test('applies the blank-first-row workaround and reads the second row', async () => {
@@ -91,14 +95,14 @@ describe('PsnProfilesTrophySource', () => {
     describe('getProfileRank', () => {
         test('extracts world rank and country rank, stripping thousands separators', async () => {
             const httpClient = new FakeHttpClient({
-                'https://psnprofiles.com/Josh_Lopes': fixture('profile-rank.html'),
+                'https://psnprofiles.com/Zephyr-pt': fixture('profile-rank.html'),
             });
             const source = new PsnProfilesTrophySource(httpClient);
 
-            const rank = await source.getProfileRank('Josh_Lopes');
+            const rank = await source.getProfileRank('Zephyr-pt');
 
-            expect(rank.worldRank).toBe(712304);
-            expect(rank.countryRank).toBe(84512);
+            expect(rank.worldRank).toBe(26475);
+            expect(rank.countryRank).toBe(331);
         });
 
         test('returns nulls for both ranks when the profile has no visible rank (banned)', async () => {

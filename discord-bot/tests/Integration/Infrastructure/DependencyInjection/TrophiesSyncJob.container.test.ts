@@ -36,6 +36,18 @@ describe('DI container — TrophiesSyncJob / FixOldTrophies', () => {
 
         const jobRunner = myContainer.get(JobRunner);
 
-        expect(jobRunner.listJobs()).not.toContain('trophies:sync');
+        expect(jobRunner.listScheduledJobs()).not.toContain('trophies:sync');
+    });
+
+    test('trophies:sync is still registered, so it can be dry-run by hand', () => {
+        // The whole point of the opt-in gate is that an operator previews a
+        // run before scheduling it. That preview goes through
+        // `jobs:run trophies:sync --dry-run`, which resolves the job out of
+        // the JobRunner — so being unscheduled must not make it unreachable.
+        expect(process.env.TROPHIES_SYNC_ENABLED).not.toBe('true');
+
+        const jobRunner = myContainer.get(JobRunner);
+
+        expect(jobRunner.listJobs()).toContain('trophies:sync');
     });
 });

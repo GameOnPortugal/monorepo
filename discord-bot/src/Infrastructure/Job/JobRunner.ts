@@ -10,6 +10,17 @@ import type Logger from '../../Application/Logger/Logger.ts';
 interface RegisteredJob {
     job: Job;
     cron: Cron;
+    /**
+     * Whether the scheduler may start this job on a tick. A job registered
+     * with `scheduled: false` is still fully addressable by hand
+     * (`listJobs`, `runNow`) — see `register`.
+     */
+    scheduled: boolean;
+}
+
+export interface RegisterOptions {
+    /** Defaults to true. `false` registers the job for manual runs only. */
+    scheduled?: boolean;
 }
 
 const DEFAULT_TICK_INTERVAL_MS = 60_000;
@@ -63,17 +74,35 @@ export class JobRunner {
     }
 
     /**
-     * Adds a job to the schedule. Call this during wiring (inversify.config.ts)
+     * Adds a job to the runner. Call this during wiring (inversify.config.ts)
      * before `start()` — a job registered after `start()` will simply not be
      * picked up until the process restarts, since jobs are also warmed from
      * persisted state once, at start.
+     *
+     * `scheduled: false` registers a job the ticker will never start on its
+     * own, while leaving it runnable by hand. That distinction exists because
+     * conflating the two made the documented enable-a-job runbook impossible:
+     * a job gated behind an env flag was not in this map at all, so
+     * `jobs:run <name> --dry-run` — the very command the operator is told to
+     * preview with before flipping the flag — failed with `Unknown job`. The
+     * only way to dry-run was to enable the schedule first, which is exactly
+     * what the gate exists to prevent.
      */
-    register(job: Job): void {
+    register(job: Job, options: RegisterOptions = {}): void {
         if (this.jobs.has(job.name)) {
             throw new Error(`Job "${job.name}" is already registered`);
         }
 
-        this.jobs.set(job.name, { job, cron: new Cron(job.schedule) });
+        this.jobs.set(job.name, {
+            job,
+            cron: new Cron(job.schedule),
+            scheduled: options.scheduled ?? true,
+        });
+    }
+
+    /** Names the ticker may start on its own — `listJobs()` minus the manual-only ones. */
+    listScheduledJobs(): string[] {
+        return [...this.jobs.values()].filter((r) => r.scheduled).map((r) => r.job.name);
     }
 
     listJobs(): string[] {
@@ -159,6 +188,9 @@ export class JobRunner {
 
         for (const registered of this.jobs.values()) {
             if (this.stopped) break;
+            // Manual-only: registered so it can be run by hand, but never
+            // started by the ticker. See `register`.
+            if (!registered.scheduled) continue;
             if (this.running.has(registered.job.name)) continue;
             if (!this.isDue(registered, now)) continue;
 

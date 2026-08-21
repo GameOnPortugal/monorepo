@@ -106,17 +106,34 @@ export class PsnProfilesTrophySource implements TrophySource {
 
     // -- Parsing ----------------------------------------------------------
 
-    private parseProfileRank(html: string): TrophyProfileRank {
-        const worldRankText = this.findTagByClass(html, 'span', 'rank')?.inner.trim();
-        const countryRankText = this.findTagByClass(html, 'span', 'country-rank')?.inner.trim();
+    /**
+     * The two stat boxes at the top of a profile. Real markup nests the
+     * number inside an `<a>` *and* a label span:
+     *
+     *     <span class="rank stat grow red">
+     *       <a href="/leaderboard/..."> 26,475<span>World Rank</span> </a>
+     *     </span>
+     *
+     * so the inner content has to be read with a nesting-aware scan and then
+     * flattened to text — a non-greedy `</span>` match stops at the *label's*
+     * closing tag and yields `<a href=...` , which parses as NaN. That is not
+     * a cosmetic bug: `TrophiesSyncJob` reads "both ranks null" as "this
+     * profile is banned/private" and auto-excludes the member, so a parser
+     * that always returns null would auto-exclude everyone it looked at.
+     */
+    private parseProfileRank(rawHtml: string): TrophyProfileRank {
+        const html = this.stripComments(rawHtml);
 
         return {
-            worldRank: this.parseCommaSeparatedInt(worldRankText),
-            countryRank: this.parseCommaSeparatedInt(countryRankText),
+            worldRank: this.parseCommaSeparatedInt(this.findTextByClass(html, 'span', 'rank')),
+            countryRank: this.parseCommaSeparatedInt(
+                this.findTextByClass(html, 'span', 'country-rank'),
+            ),
         };
     }
 
-    private parseProfileTrophies(html: string): string[] {
+    private parseProfileTrophies(rawHtml: string): string[] {
+        const html = this.stripComments(rawHtml);
         const urls: string[] = [];
 
         for (const row of this.findRowsByClass(html, 'platinum')) {
@@ -129,38 +146,40 @@ export class PsnProfilesTrophySource implements TrophySource {
         return urls;
     }
 
-    private parsePlatinumTrophyData(html: string, trophyUrl: string): PlatinumTrophyData {
-        // Scope to the <tbody> so a <thead> row never gets mistaken for the
-        // (possibly blank) first data row below.
-        const tbodyHtml = this.extractFirstTagInner(html, 'tbody') ?? html;
-        const rows = this.extractRows(tbodyHtml);
-        if (rows.length === 0) {
+    /**
+     * A trophy page's platinum row, located by what it *is* rather than by
+     * where it sits. The old "first row of the first `<tbody>`" rule was
+     * written against a hand-made fixture; a real page has 13 `<tbody>`
+     * elements, and the first two are the profile summary and the
+     * base-game/DLC breakdown — neither of which carries a completion date.
+     *
+     * The platinum row is the one holding both the platinum icon and a
+     * completion date, which is stable regardless of how many summary
+     * tables PSNProfiles adds above the trophy list.
+     */
+    private parsePlatinumTrophyData(rawHtml: string, trophyUrl: string): PlatinumTrophyData {
+        const row = this.findPlatinumRow(this.stripComments(rawHtml));
+        if (row === null) {
             throw new Error("Couldn't find trophy table body!");
         }
 
-        // HACK, ported verbatim from the old bot: some trophy pages have a
-        // blank row in the first position. Jump to the second one if so.
-        let row = rows[0];
-        if (row !== undefined && row.inner.trim() === '') {
-            row = rows[1] as HtmlTag;
-        }
-
-        if (row === undefined) {
-            throw new Error("Couldn't find trophy table body!");
-        }
-
-        const rowClass = this.extractAttr(row.attrs, 'class') ?? '';
-        if (!this.hasClassToken(rowClass, 'completed')) {
+        if (!this.hasClassToken(this.extractAttr(row.attrs, 'class') ?? '', 'completed')) {
             throw new TrophyNotEarnedYet(trophyUrl);
         }
 
-        const percentageText = this.findTagByClass(row.inner, 'span', 'typo-top')?.inner.trim();
+        const percentageText = this.findRarityPercentage(row.inner);
         if (!percentageText) {
             throw new Error("Couldn't find trophy percentage!");
         }
         const percentage = parseFloat(percentageText);
+        if (isNaN(percentage)) {
+            throw new Error(`Trophy percentage "${percentageText}" is invalid!`);
+        }
 
-        const dateText = this.findTagByClass(row.inner, 'span', 'typo-top-date')?.inner.trim();
+        // Flattened to text first: the real markup is
+        // `<nobr>2<sup>nd</sup> Sep 2021</nobr>`, and dayjs cannot parse that
+        // with the tags still in it.
+        const dateText = this.findTextByClass(row.inner, 'span', 'typo-top-date');
         if (!dateText) {
             throw new Error("Couldn't find completion date!");
         }
@@ -171,6 +190,70 @@ export class PsnProfilesTrophySource implements TrophySource {
         }
 
         return { percentage, completionDate: completionDate.toDate() };
+    }
+
+    /**
+     * The platinum trophy's `<tr>`.
+     *
+     * Identified by `title="Platinum"`, which on a real page appears exactly
+     * once — unlike `platinum-icon.png`, which also appears in the profile
+     * summary and base-game/DLC tables above. Deliberately *not* keyed on
+     * having a completion date: an unearned platinum has no date, and must
+     * still be found so the caller can raise `TrophyNotEarnedYet` (which the
+     * sync job skips) rather than a generic parse error (which it counts as
+     * a failure).
+     */
+    private findPlatinumRow(html: string): HtmlTag | null {
+        return (
+            this.findRowWhere(html, (inner) => /title="Platinum"/.test(inner)) ??
+            // Simpler markup with no per-trophy icon: fall back to the first
+            // row carrying rarity/date cells at all.
+            this.findRowWhere(html, (inner) => /typo-top(-date)?"/.test(inner))
+        );
+    }
+
+    private findRowWhere(html: string, predicate: (inner: string) => boolean): HtmlTag | null {
+        const openTag = /<tr\b([^>]*)>/g;
+        let match: RegExpExecArray | null;
+
+        while ((match = openTag.exec(html)) !== null) {
+            const inner = this.balancedInner(html, 'tr', match.index);
+            if (predicate(inner)) {
+                return { attrs: match[1] ?? '', inner };
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * PSNProfiles renders *two* rarity figures per row: its own site rarity
+     * (shown by default, in the `hover-hide` cell) and Sony's global figure
+     * (revealed on hover, in `hover-show`). The TP ladder in
+     * `calculateTrophyPoints` was calibrated against the site rarity — the
+     * one the old jQuery scraper picked up because it was the only one
+     * rendered at the time — so this deliberately reads `hover-hide` rather
+     * than simply taking the first `typo-top` in the row, which is now the
+     * hover value and would misprice every trophy.
+     *
+     * Verified against six trophies whose stored TP predates this change:
+     * the four whose rarity has been stable since (50/100/250/500 TP) all
+     * reproduce exactly. The two that do not are both 2021 releases whose
+     * platinum has genuinely become more common since it was recorded —
+     * rarity drift in the source data, not a parse error.
+     */
+    private findRarityPercentage(rowInner: string): string | null {
+        const hoverHideCell = rowInner.search(/<td[^>]*\bclass="[^"]*\bhover-hide\b[^"]*"/);
+        if (hoverHideCell >= 0) {
+            const cell = this.balancedInner(rowInner, 'td', hoverHideCell);
+            const text = this.findTextByClass(cell, 'span', 'typo-top');
+            if (text) {
+                return text;
+            }
+        }
+
+        // Older/simpler markup renders a single rarity figure per row.
+        return this.findTextByClass(rowInner, 'span', 'typo-top');
     }
 
     // -- Tiny regex HTML helpers ------------------------------------------
@@ -192,6 +275,89 @@ export class PsnProfilesTrophySource implements TrophySource {
                 this.hasClassToken(this.extractAttr(match.attrs, 'class') ?? '', classToken),
             ) ?? null
         );
+    }
+
+    /**
+     * Inner content of the tag opening at `openIndex`, honouring nesting of
+     * the same tag name. The non-greedy `matchTags` below cannot do this —
+     * it stops at the first closing tag, which is wrong for every block on a
+     * real PSNProfiles page that wraps a label span inside a stat span, or a
+     * `<td>` inside a `<tr>` inside a `<table>`.
+     */
+    private balancedInner(html: string, tag: string, openIndex: number): string {
+        const contentStart = html.indexOf('>', openIndex) + 1;
+        const opening = new RegExp(`<${tag}\\b`, 'g');
+        const closing = new RegExp(`</${tag}>`, 'g');
+        let depth = 1;
+        let cursor = contentStart;
+
+        while (depth > 0) {
+            opening.lastIndex = cursor;
+            closing.lastIndex = cursor;
+            const nextOpen = opening.exec(html);
+            const nextClose = closing.exec(html);
+
+            // Unbalanced markup: treat the rest of the document as content
+            // rather than throwing — the callers all pattern-match on what
+            // they find, so a too-long slice fails their checks safely.
+            if (nextClose === null) {
+                return html.slice(contentStart);
+            }
+
+            if (nextOpen !== null && nextOpen.index < nextClose.index) {
+                depth++;
+                cursor = nextOpen.index + 1;
+                continue;
+            }
+
+            depth--;
+            if (depth === 0) {
+                return html.slice(contentStart, nextClose.index);
+            }
+            cursor = nextClose.index + 1;
+        }
+
+        return html.slice(contentStart);
+    }
+
+    /**
+     * Flattened text of the first `<tag>` whose class list includes
+     * `classToken` — tags stripped, entities and whitespace normalised, so
+     * `<nobr>2<sup>nd</sup> Sep 2021</nobr>` reads as `2nd Sep 2021`.
+     */
+    private findTextByClass(html: string, tag: string, classToken: string): string | null {
+        const opening = new RegExp(`<${tag}\\b([^>]*)>`, 'g');
+        let match: RegExpExecArray | null;
+
+        while ((match = opening.exec(html)) !== null) {
+            if (this.hasClassToken(this.extractAttr(match[1] ?? '', 'class') ?? '', classToken)) {
+                return this.textOf(this.balancedInner(html, tag, match.index));
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Drops `<!-- ... -->` before anything is scanned. Commented-out markup
+     * is still markup to a regex, so a stale block left in the page source
+     * would otherwise be indistinguishable from the live one — and would win,
+     * since these helpers all take the *first* match.
+     */
+    private stripComments(html: string): string {
+        return html.replace(/<!--[\s\S]*?-->/g, '');
+    }
+
+    /** Markup → plain text: drop tags, decode the few entities PSNProfiles emits, collapse whitespace. */
+    private textOf(html: string): string {
+        return html
+            .replace(/<[^>]*>/g, '')
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&amp;/g, '&')
+            .replace(/&#39;/g, "'")
+            .replace(/&quot;/g, '"')
+            .replace(/\s+/g, ' ')
+            .trim();
     }
 
     /** Inner content of the first `<tag ...>...</tag>` (no nested same-name tags), or null if absent. */
@@ -219,11 +385,24 @@ export class PsnProfilesTrophySource implements TrophySource {
         return classAttr.split(/\s+/).includes(token);
     }
 
-    private parseCommaSeparatedInt(text: string | undefined): number | null {
+    /**
+     * Leading integer of a flattened stat, e.g. `26,475 World Rank` -> 26475.
+     * Anchored to the start and matched explicitly rather than relying on
+     * `parseInt` stopping at the first non-digit, so a stat box that ever
+     * renders its label *before* its number fails loudly (null) instead of
+     * silently returning a number parsed out of the wrong place.
+     */
+    private parseCommaSeparatedInt(text: string | null | undefined): number | null {
         if (!text) {
             return null;
         }
-        const value = parseInt(text.replace(/,/g, ''), 10);
+
+        const digits = text.trim().match(/^([\d,]+)/);
+        if (digits?.[1] === undefined) {
+            return null;
+        }
+
+        const value = parseInt(digits[1].replace(/,/g, ''), 10);
         return isNaN(value) ? null : value;
     }
 }

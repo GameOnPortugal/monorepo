@@ -1,0 +1,13 @@
+{
+  "name": "psn-fetch",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Browser-backed read-only fetch proxy for PSNProfiles (Cloudflare challenge)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "patchright": "^1.49.0"
+  }
+}
