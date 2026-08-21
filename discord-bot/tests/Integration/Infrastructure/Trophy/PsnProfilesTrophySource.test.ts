@@ -48,8 +48,7 @@ class FakeHttpClient implements HttpClient {
 describe('PsnProfilesTrophySource', () => {
     describe('getPlatinumTrophyData', () => {
         test('extracts rarity percentage and completion date from a completed row', async () => {
-            const trophyUrl =
-                'https://psnprofiles.com/trophies/12-grand-theft-auto-iv/Zephyr-pt';
+            const trophyUrl = 'https://psnprofiles.com/trophies/12-grand-theft-auto-iv/Zephyr-pt';
             const httpClient = new FakeHttpClient({
                 [trophyUrl]: fixture('trophy-completed.html'),
             });

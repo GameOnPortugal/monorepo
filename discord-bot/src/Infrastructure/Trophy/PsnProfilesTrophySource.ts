@@ -342,22 +342,37 @@ export class PsnProfilesTrophySource implements TrophySource {
      * Drops `<!-- ... -->` before anything is scanned. Commented-out markup
      * is still markup to a regex, so a stale block left in the page source
      * would otherwise be indistinguishable from the live one — and would win,
-     * since these helpers all take the *first* match.
+     * since these helpers all take the *first* match. Repeats to a fixed
+     * point so a crafted `<!--<!---->` can't leave a dangling `<!--` behind.
      */
     private stripComments(html: string): string {
-        return html.replace(/<!--[\s\S]*?-->/g, '');
+        return this.replaceToFixedPoint(html, /<!--[\s\S]*?-->/g, '');
     }
 
     /** Markup → plain text: drop tags, decode the few entities PSNProfiles emits, collapse whitespace. */
     private textOf(html: string): string {
-        return html
-            .replace(/<[^>]*>/g, '')
+        return this.stripTags(html)
             .replace(/&nbsp;/g, ' ')
-            .replace(/&amp;/g, '&')
             .replace(/&#39;/g, "'")
             .replace(/&quot;/g, '"')
+            .replace(/&amp;/g, '&')
             .replace(/\s+/g, ' ')
             .trim();
+    }
+
+    /** Strips tags to a fixed point so a crafted `<scr<script>ipt>` can't leave a reassembled tag behind. */
+    private stripTags(html: string): string {
+        return this.replaceToFixedPoint(html, /<[^>]*>/g, '');
+    }
+
+    private replaceToFixedPoint(input: string, pattern: RegExp, replacement: string): string {
+        let previous: string;
+        let result = input;
+        do {
+            previous = result;
+            result = result.replace(pattern, replacement);
+        } while (result !== previous);
+        return result;
     }
 
     /** Inner content of the first `<tag ...>...</tag>` (no nested same-name tags), or null if absent. */
