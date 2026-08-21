@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import { health } from "./routes/health";
 import { marketplace } from "./routes/marketplace";
 import { screenshots } from "./routes/screenshots";
+import { stats } from "./routes/stats";
 import { trophies } from "./routes/trophies";
 
 // Exported separately from index.ts so tests can drive it with `app.request(...)`
@@ -16,6 +17,7 @@ export function buildApp(): Hono {
   app.route("/api", marketplace);
   app.route("/api", screenshots);
   app.route("/api", trophies);
+  app.route("/api", stats);
 
   app.notFound((c) => c.json({ error: "not found" }, 404));
 
