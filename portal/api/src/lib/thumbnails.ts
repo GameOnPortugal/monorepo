@@ -12,7 +12,7 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, readdirSync, statSync, unlinkSync } from "node:fs";
 import { rename, readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import sharp from "sharp";
 import { validateMediaUrl } from "./mediaAllowlist";
 
@@ -244,9 +244,4 @@ export async function getOrCreateThumbnail(src: string, width: number): Promise<
   }
 
   return { bytes: resized, contentType: "image/webp" };
-}
-
-/** Test-only: point the cache at a fresh directory and unused between tests. */
-export function resolveThumbnailCacheDirForTests(): string {
-  return dirname(cachePathFor(new URL("https://media.game-on-portugal.pt/gop-media/x.jpg"), DEFAULT_WIDTH));
 }
