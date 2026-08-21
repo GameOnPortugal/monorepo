@@ -135,14 +135,27 @@ Two consequences worth knowing:
   `.github/.release-please-manifest.json` and each release PR rewrites its own
   line of it. Those lines are adjacent, so git cannot 3-way merge two of them —
   the second PR to land would conflict. Three pending releases therefore drain
-  over three cycles, a few minutes apart, each one rebased by release-please
-  onto the manifest the previous one wrote.
+  over three cycles, a few minutes apart.
+- **Stale release PRs are closed and rebuilt, not rebased.** This is the part
+  that is easy to get wrong: release-please does *not* refresh a release branch
+  just because main moved. It rewrites one only when that component's own
+  release content changes, so a sibling's release leaves the others behind as
+  conflicting branches. (Observed 2026-08-21: portal-api's release PR #68 was
+  stranded while discord-bot and portal-web released past it.) So the workflow's
+  first step closes any conflicting release PR and deletes its branch, and the
+  release-please step immediately rebuilds it from the current main. Expect
+  release PR *numbers* to change between cycles — that is this, working.
 - **A red release PR just sits there.** Auto-merge waits for `CI`; it is not a
   bypass. Fix the PR (or main) and it lands by itself.
+- **Intermediate deploys can be cancelled.** Three release merges in quick
+  succession queue three `deploy.yml` runs, and GitHub keeps only one run
+  pending per concurrency group — a third arrival cancels the queued second.
+  Harmless: every deploy builds all three images from whatever main is at, so
+  the last one to run carries the whole set. A cancelled deploy in that burst
+  is not something to re-run.
 
-If the chain ever stalls — say a release PR was left conflicted — re-kick it
-with `gh workflow run release-please.yml` rather than merging by hand, so the
-next PR in line gets queued too.
+If the chain ever stalls, re-kick it with `gh workflow run release-please.yml`
+rather than merging by hand, so the next PR in line gets queued too.
 
 ## Portal (M8)
 

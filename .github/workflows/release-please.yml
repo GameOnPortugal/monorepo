@@ -28,6 +28,45 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     steps:
+      # Drop stale release branches *before* the action runs, so it rebuilds
+      # them from the current main in this same run.
+      #
+      # Why they go stale: every component's release PR rewrites its own line
+      # of the shared `.github/.release-please-manifest.json`, and those lines
+      # are adjacent, so once one release lands the siblings no longer merge.
+      # release-please does not rebase them — it only rewrites a release branch
+      # when that component's *release content* changes, which a sibling's
+      # release does not do. Observed 2026-08-21: portal-api's release PR was
+      # left CONFLICTING and untouched while discord-bot and portal-web
+      # released past it, and it would have sat there forever.
+      - name: Drop stale (conflicting) release PRs
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          prs=$(gh pr list --state open --json number,headRefName \
+            --jq '[.[] | select(.headRefName | startswith("release-please--branches--main--"))] | .[].number')
+
+          for pr in ${prs:-}; do
+            # `mergeable` is computed lazily by GitHub and is UNKNOWN for the
+            # first moments after a branch is pushed — poll rather than read a
+            # not-yet-computed answer as "conflicted" and close a good PR.
+            mergeable=UNKNOWN
+            for _ in 1 2 3 4 5 6; do
+              mergeable=$(gh pr view "$pr" --json mergeable --jq .mergeable)
+              [ "$mergeable" = "UNKNOWN" ] || break
+              sleep 5
+            done
+
+            if [ "$mergeable" = "CONFLICTING" ]; then
+              echo "Release PR #$pr conflicts with main — closing it; release-please rebuilds it below."
+              gh pr close "$pr" --delete-branch \
+                --comment "Superseded: this release branch no longer merges into main (the release manifest moved under it). Closing so release-please rebuilds it from the current main — see .github/workflows/release-please.yml."
+            fi
+          done
+
       - uses: googleapis/release-please-action@v4
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
@@ -37,14 +76,12 @@ jobs:
       # Hand the release PR off to GitHub's auto-merge so it lands (and deploys)
       # on its own once CI is green. Two things this deliberately does NOT do:
       #
-      #  - It does not merge more than one release PR per run. All three
-      #    components share `.github/.release-please-manifest.json` and each
-      #    release PR rewrites its own line of it — adjacent lines, so git
-      #    cannot 3-way merge them and the second PR to land would conflict.
-      #    One per run is enough: the merge pushes main, which re-runs this
-      #    workflow, which rebases the remaining release PRs onto the new
-      #    manifest and queues the next one. Three pending releases drain in
-      #    three cycles.
+      #  - It does not merge more than one release PR per run. The release PRs
+      #    conflict with each other on the shared manifest (see the first step),
+      #    so they have to land one at a time. One per run is enough: the merge
+      #    pushes main, which re-runs this workflow, which drops the now-stale
+      #    siblings, has release-please rebuild them, and queues the next.
+      #    Three pending releases drain in three cycles.
       #  - It does not force the merge. Auto-merge waits for the required `CI`
       #    check (branch protection on main), so a red release PR just sits
       #    there. `--auto` is only refusable when there is nothing left to wait
@@ -78,6 +115,9 @@ jobs:
             done
 
             if [ "$mergeable" != "MERGEABLE" ]; then
+              # Conflicts are already handled by the first step, so reaching
+              # here means something else (a draft, a blocked base) — say so
+              # rather than silently doing nothing.
               echo "::warning::Release PR #$pr is $mergeable — skipping it this run."
               continue
             fi
