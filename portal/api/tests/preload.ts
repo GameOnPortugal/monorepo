@@ -13,3 +13,10 @@ process.env.DISCORD_CLIENT_ID ??= "test-client-id";
 process.env.DISCORD_CLIENT_SECRET ??= "test-client-secret";
 process.env.SESSION_SECRET ??= "test-session-secret-not-for-production-use";
 process.env.DISCORD_GUILD_ID ??= "818108848492773377";
+
+// M8.8 — the thumbnail cache (src/lib/thumbnails.ts) writes real files
+// (unlike the audit log's SQLite, there is no `:memory:` mode for it), so
+// tests get their own throwaway directory under the OS temp dir rather than
+// touching `./data` (which does not exist in CI unless something creates
+// it) or leaking cache files between runs.
+process.env.THUMBNAIL_CACHE_DIR ??= `${require("node:os").tmpdir()}/portal-api-test-thumbnails-${Date.now()}`;

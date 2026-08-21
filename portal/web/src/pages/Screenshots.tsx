@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { LazyImage } from "../components/LazyImage";
 import { Lightbox } from "../components/Lightbox";
 import { ApiError, EmptyState, SkeletonRow } from "../components/StateViews";
-import { api } from "../lib/api/client";
+import { api, thumbnailUrl } from "../lib/api/client";
 import { normalizePlatform, type PlatformTag } from "../lib/normalize";
 import { PLATFORM_ORDER } from "../lib/platforms";
 import { useDocumentHead } from "../lib/seo";
@@ -104,7 +104,11 @@ export function Screenshots() {
             {visible.map((shot, i) => (
               <LazyImage
                 key={shot.id}
-                src={shot.imageUrl}
+                // M8.8: grid tiles request the resized/cached thumbnail, not
+                // the full-size origin image (LazyImage's viewport gating is
+                // complementary, not a replacement — see that file's
+                // header). The Lightbox below still opens the full image.
+                src={thumbnailUrl(shot.imageUrl, 320)}
                 alt={shot.name ?? "Screenshot"}
                 className="chamfer aspect-square overflow-hidden border border-surface-border bg-surface"
                 onClick={() => setLightboxIndex(i)}
