@@ -6,6 +6,7 @@ import { ApiError, EmptyState, SkeletonRow } from "../components/StateViews";
 import { api } from "../lib/api/client";
 import { normalizePlatform, type PlatformTag } from "../lib/normalize";
 import { PLATFORM_ORDER } from "../lib/platforms";
+import { useDocumentHead } from "../lib/seo";
 import { useApi } from "../lib/useApi";
 
 const PAGE_SIZE = 60;
@@ -28,6 +29,12 @@ const PAGE_SIZE = 60;
  * placeholder instead of silently vanishing from the grid.
  */
 export function Screenshots() {
+  useDocumentHead({
+    title: "Screenshots",
+    description: "Galeria de screenshots partilhadas pela comunidade Game On Portugal.",
+    path: "/screenshots",
+  });
+
   const { state, data } = useApi(
     () => api.listScreenshots(700),
     [],

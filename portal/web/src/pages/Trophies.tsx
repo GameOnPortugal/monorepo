@@ -1,5 +1,6 @@
 import { ApiError, EmptyState } from "../components/StateViews";
 import { api } from "../lib/api/client";
+import { useDocumentHead } from "../lib/seo";
 import { useApi } from "../lib/useApi";
 
 // Top-3 highlight via a left border, not text colour — src/lib/platforms.ts's
@@ -34,6 +35,12 @@ const RANK_TEXT: Record<number, string> = {
  * `isExcluded` filter, same tie-break order) — see that file's header.
  */
 export function Trophies() {
+  useDocumentHead({
+    title: "Troféus",
+    description: "Leaderboard de troféus da comunidade Game On Portugal.",
+    path: "/trophies",
+  });
+
   const { state, data } = useApi(
     () => api.leaderboard(100),
     [],

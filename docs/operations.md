@@ -38,8 +38,9 @@ above assume. To open the Portainer UI itself from a laptop, tunnel `:9000`
 the same way and browse `https://localhost:9000`.
 
 Containers: `gop-bot`, `gop-db` (MariaDB 11.7.2), `gop-minio`,
-`gop-createbuckets`, `gop-db-backup`. There is no `redis` container — the
-current bot never reads `REDIS_DSN`.
+`gop-createbuckets`, `gop-db-backup`, `gop-portal-api`, `gop-portal-web`
+(added by plan 03/M8 — see [Portal](#portal-m8) below). There is no `redis`
+container — the current bot never reads `REDIS_DSN`.
 
 ### Deploying
 
@@ -100,9 +101,11 @@ merge to main
       ├─ release-please.yml  release PR / tag / CHANGELOG per component
       │                      (falls back to GITHUB_TOKEN — RELEASE_PLEASE_TOKEN
       │                       not yet created, so the release PR itself gets no CI)
-      └─ deploy.yml          build + push joshlopes/game-on-portugal-bot:{latest,<sha>}
+      └─ deploy.yml          build + push joshlopes/game-on-portugal-{bot,portal-api,portal-web}:{latest,<sha>}
                              → Portainer stack `game-on-portugal` (id 46) on HTZ1
                                 (SSH tunnel → PUT /api/stacks/46)
+                             → health-checks gop-bot, gop-portal-api, gop-portal-web
+                                (M8.14 — the portal joined the health gate; see "Portal" below)
                              → Telegram notification (optional secrets, currently unset)
 
 any failure → workflow-failed.yml → Telegram
@@ -110,6 +113,66 @@ any failure → workflow-failed.yml → Telegram
 
 Full wiring reference — secrets, variables, Portainer stack, DNS, Caddy — is in
 [`../infrastructure/SETUP.md`](../infrastructure/SETUP.md).
+
+## Portal (M8)
+
+The portal (`portal/api`, `portal/web` — [`plans/03-portal.md`](plans/03-portal.md))
+deploys through the exact same pipeline as the bot: `deploy.yml` builds and
+pushes `joshlopes/game-on-portugal-portal-api`/`-portal-web` alongside the
+bot's image on every merge to `main`, and the same `infrastructure/game-on-portugal.yaml`
+stack (id 46) runs all three. **`gop-portal-api` and `gop-portal-web` are
+live on HTZ1 today** — there was no separate portal pipeline to build (M8.14
+found this already true, see the M8.14 row of `GLOBAL-PLAN.md`), only gaps to
+close:
+
+- **The deploy health gate didn't cover them.** Until this change,
+  `deploy.yml` only passed `health-check-container: gop-bot` to
+  `.github/actions/portainer-deploy` — a portal container could crash-loop
+  through every deploy, silently, the same failure mode that step exists to
+  catch for the bot (see that action's own header comment for the 2026-08-20
+  incident that motivated it). The action now accepts a space-separated list
+  and `deploy.yml` passes all three container names.
+- **No public URL yet.** `game-on-portugal.pt`'s apex still points at the
+  2021 GitHub Pages site — the Caddy block that would front `gop-portal-web`
+  publicly (`infrastructure/caddy/game-on-portugal.pt.caddy`) exists in this
+  repo but has **not** been applied to HTZ1's live Caddyfile. That's **M8.15**,
+  a DNS + Caddy cutover Luis makes deliberately, not part of this work. Until
+  then the portal containers are up and internally healthy (`gop-portal-web`'s
+  own healthcheck hits `127.0.0.1:8080`, `gop-portal-api`'s hits
+  `http://localhost:3001/health`) but only reachable from inside HTZ1's
+  Docker networks — verify with `docker exec gop-portal-web wget -qO- http://127.0.0.1:8080/` /
+  `docker exec gop-portal-api bun -e "fetch('http://localhost:3001/health').then(r=>r.text()).then(console.log)"`
+  over the same SSH access as [Accessing HTZ1](#accessing-htz1) describes.
+- **Admin OAuth (M8.10) is off by default.** `portal-api` needs
+  `DISCORD_CLIENT_ID` (already set, reused from the bot), plus two secrets
+  that do **not** exist in the Portainer stack env yet:
+  - `DISCORD_CLIENT_SECRET` — Discord Developer Portal → the Game On Portugal
+    application → OAuth2 tab → "Client Secret" → Reset Secret. Also add the
+    redirect URI there: `https://game-on-portugal.pt/api/auth/callback` (and,
+    for local testing before M8.15's DNS cutover, whatever host is used to
+    reach `gop-portal-api` — see `portal/api/.env.example`'s OAuth section
+    for the full walkthrough, including the local-dev redirect).
+  - `SESSION_SECRET` — any random ≥32-byte value, e.g. `openssl rand -hex 32`.
+    Signs the admin session cookie (`portal/api/src/lib/session.ts` — there is
+    no session table). Rotating it logs out every admin at once.
+
+  Until both are set, `/api/auth/*` and `/api/admin/*` answer `503` and every
+  public page/route is unaffected — see `portal/api/src/lib/discordAuth.ts`'s
+  `loadOAuthConfig()`. Add them as Portainer stack environment variables (same
+  place as `DISCORD_TOKEN`/`MYSQL_ROOT_PASSWORD` today), then redeploy
+  (`workflow_dispatch` on `deploy.yml`, no code change needed).
+- **The admin audit log (M8.11) lives outside MySQL entirely** — a SQLite
+  file at `/data/audit.db` inside `gop-portal-api`, on the new
+  `portal_audit_data` named volume (`infrastructure/game-on-portugal.yaml`).
+  It is *not* covered by `gop-db-backup` (that backs up the bot's MySQL
+  schema only) — if the audit trail needs to survive a host loss, back up
+  that volume too. Not done here: this is new-in-M8.11 infrastructure with
+  no production history yet, and the nightly-backup wiring is a distinct,
+  reviewable change of its own.
+- **`sitemap.xml`/`robots.txt` (M8.13)** are served at the site root once
+  M8.15 exposes it publicly — `robots.txt` is a static file,
+  `sitemap.xml` is generated live by `portal-api` (`src/routes/seo.ts`) and
+  proxied by `gop-portal-web`'s nginx, same pattern as `/api/` and `/health`.
 
 ## Rollback path (until 2026-09-02)
 

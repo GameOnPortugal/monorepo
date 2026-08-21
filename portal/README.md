@@ -1,20 +1,60 @@
 # Game On Portugal — Community Portal
 
-Scaffold for `docs/plans/03-portal.md` (GLOBAL-PLAN milestone M8). Two
-packages:
+Public/admin portal for `docs/plans/03-portal.md` (GLOBAL-PLAN milestone M8).
+Two packages:
 
 ```
 portal/
-  api/   Bun + Hono. Read-only endpoints over discord-bot's Prisma schema.
+  api/   Bun + Hono. Reads discord-bot's Prisma schema; a small set of
+         admin-only endpoints write to it (see "Admin writes" below).
   web/   Vite + React + Tailwind. Mobile-first SPA (375px baseline).
 ```
 
-This PR (M8.2/M8.3/M8.5) scaffolds both packages, wires CI/release-please/deploy,
-and builds one representative page (Home) so the pages in M8.6-M8.13 have a
-pattern to copy. It does **not** build the Marketplace/Screenshots/Trophies/
-Admin pages — that is separate, later work. See
+Landed so far, across four PRs: scaffold + CI/release-please/deploy wiring
+(M8.2/M8.3/M8.5, [#48](https://github.com/GameOnPortugal/monorepo/pull/48)),
+brand assets (M8.1, [#55](https://github.com/GameOnPortugal/monorepo/pull/55)),
+the public pages — Home/Marketplace/Screenshots/Trophies, shared
+platform/condition/zone normalisation (M8.4/M8.6-M8.9,
+[#56](https://github.com/GameOnPortugal/monorepo/pull/56)) — and the admin
+surface: Discord OAuth, admin CRUD + audit log, the jobs page, per-page SEO,
+and deploy/CI documentation (M8.10-M8.14). See
 [`docs/plans/GLOBAL-PLAN.md`](../docs/plans/GLOBAL-PLAN.md) M8 for the full
-task breakdown and what has and hasn't landed.
+task breakdown, what's genuinely done vs. scaffold, and the M8.15 DNS cutover
+that's still open.
+
+## Admin writes (M8.11)
+
+Until M8.10/M8.11, every query in `src/repositories/*.ts` was a `findMany`/
+`findUnique`/`$queryRaw` SELECT — "read-only by convention" (see below). That
+boundary still holds for those files. What changed: `src/repositories/admin/*.ts`
+is a **new**, deliberately separate set of functions that write (force-expire/
+soft-delete an ad, delete a screenshot, ban/exclude a trophy profile,
+edit an ad's description/price/zone) — reachable **only** behind
+`src/middleware/requireAdmin.ts` (`/api/admin/*`, see `src/routes/admin.ts`),
+and every one of them is paired with a row in the audit log
+(`src/audit/db.ts`) recording who/what/when. "Read-only" for the public
+repositories is unchanged; "admin-write, always audited" is the new, narrow
+exception.
+
+The admin session itself needs no new table: it's a signed, stateless cookie
+(HMAC over a JSON payload, `src/lib/session.ts`) — see that file's header for
+why a session table would have hit the same "the bot owns the schema"
+constraint the audit log did, and how this avoids needing one entirely.
+
+The audit log doesn't live in MySQL either, for the same reason: a private
+SQLite file this service owns outright (Bun's built-in `bun:sqlite`, zero new
+dependency — see `src/audit/db.ts`'s header), persisted on its own Docker
+volume in production (`infrastructure/game-on-portugal.yaml`'s
+`portal_audit_data`).
+
+**Discord OAuth + the admin definition** (M8.10) is in `src/lib/discordAuth.ts` —
+gated on guild membership and the same `ManageMessages` permission bit
+`discord-bot/src/Domain/Bot/AdminCheck.ts`'s `isGuildAdmin()` checks (that
+file's header spells out exactly how the two stay in sync without one
+importing the other). Degrades safely when unset: see
+`.env.example`'s "ADMIN OAUTH" section for the three environment variables
+and the Discord Developer Portal setup, and `docs/operations.md`'s "Portal
+(M8)" section for exactly which secrets are still missing in production.
 
 ## Schema ownership — read this before touching `portal/api`
 
@@ -88,9 +128,21 @@ and clean up their own fixture rows (`tests/helpers.ts`) against whichever
 database `DATABASE_URL` points at — point it at a throwaway/test database,
 never production.
 
-Endpoints: `GET /health`, `GET /api/marketplace/ads[?adType=&status=&limit=&offset=]`,
+Public endpoints: `GET /health`, `GET /sitemap.xml`,
+`GET /api/marketplace/ads[?adType=&status=&limit=&offset=]`,
 `GET /api/marketplace/ads/:id`, `GET /api/screenshots[?platform=&limit=&offset=]`,
-`GET /api/trophies/leaderboard[?limit=]`.
+`GET /api/trophies/leaderboard[?limit=]`, `GET /api/stats`.
+
+Auth: `GET /api/auth/config`, `GET /api/auth/login`, `GET /api/auth/callback`,
+`GET /api/auth/me`, `POST /api/auth/logout` — all 503 when OAuth env vars are
+unset (`src/lib/discordAuth.ts`'s `loadOAuthConfig()`).
+
+Admin (`src/routes/admin.ts`, all behind `requireAdmin` — 401 without a valid
+session, 503 when OAuth is unconfigured): `GET /api/admin/dashboard`,
+`GET/PATCH /api/admin/ads[/:id]`, `POST /api/admin/ads/:id/expire`,
+`DELETE /api/admin/ads/:id`, `GET /api/admin/screenshots`,
+`DELETE /api/admin/screenshots/:id`, `GET/PATCH /api/admin/trophy-profiles[/:id]`,
+`GET /api/admin/jobs`, `GET /api/admin/audit-log`.
 
 ### Web
 
@@ -124,23 +176,31 @@ that back the "accents are fills/borders/icons, never text on black" rule.
 Every future page must import `PLATFORMS`/`PlatformBadge` from there rather
 than re-deriving the mapping.
 
-## What is NOT in this PR
+## Admin: what's real vs. what's a follow-up
 
-- **M8.1 (brand assets)**: no logo/icon files. `portal/web/public/favicon.svg`
-  is a plain placeholder and the header wordmark is text
-  (`font-display`), not a traced SVG. The next agent needs to pull the real
-  guild icon
-  (`https://cdn.discordapp.com/icons/818108848492773377/b5d2486a6181a2a5ecb3a4cfbc4b9a0d.png?size=512`)
-  and banner
-  (`https://cdn.discordapp.com/banners/818108848492773377/ffa308a0fad1a858794921dec051bad5.png?size=1024`),
-  trace an SVG logo, and vendor them into `portal/web/public/brand/`. This
-  agent could not fetch/trace binary image assets from a text-only tool
-  loadout.
-- **M8.4 (shared normalisation module)**: `portal/api`'s ads/screenshots
-  repositories and `portal/web`'s `guessPlatform()` both do minimal, local,
-  best-effort mapping with an explicit comment pointing at M8.4 — neither is
-  the real shared module the bot and portal are both supposed to depend on.
-- **M8.6-M8.13** (the rest of the pages, OAuth admin, SEO): Home is a
-  representative skeleton only, not the finished page from M8.6.
-- A dedicated read-only MySQL user for the portal (see "Known limitation"
-  above).
+- **Real, tested, working**: Discord OAuth login gated on guild membership +
+  `ManageMessages` (M8.10); ads (edit/force-expire/soft-delete, including an
+  orphan filter for the known `message_id IS NULL` bug), screenshots
+  (delete), and trophy-profile (ban/exclude) admin CRUD, each one writing a
+  row to the audit log (M8.11); a read-only jobs page over the real
+  `job_runs` table (M8.12); per-page OG/Twitter tags and a live
+  `sitemap.xml` (M8.13).
+- **No "run this job now" button (M8.12)**: `job_runs` is written by the
+  bot's own in-process scheduler; there is no HTTP surface on the bot to
+  trigger a job on demand, and adding one is `discord-bot/src` work out of
+  this agent's scope (see `src/repositories/admin/jobs.ts`'s header and the
+  M8.12 row in `GLOBAL-PLAN.md` for the decision written up in full).
+- **No public URL yet**: `game-on-portugal.pt`'s apex still serves the 2021
+  GitHub Pages site. That's **M8.15**, a deliberate DNS + Caddy change for
+  Luis to make — see `docs/operations.md`'s "Portal (M8)" section.
+- **Two secrets are still missing in the Portainer stack env**:
+  `DISCORD_CLIENT_SECRET` and `SESSION_SECRET`. Until both are set, admin
+  login is unreachable (`503`) and the rest of the site is unaffected — see
+  `.env.example`'s "ADMIN OAUTH" section for exactly what to create and
+  where.
+- **Not done, recorded as follow-ups, not silently skipped**: a dedicated
+  read-only MySQL user for the portal (see "Known limitation" above); the
+  bot adopting the shared normalisation module bot-side (M8.4 landed
+  portal-only in [#56](https://github.com/GameOnPortugal/monorepo/pull/56));
+  a nightly backup of the new `portal_audit_data` volume (today only the
+  bot's MySQL schema is backed up, see `docs/operations.md`).

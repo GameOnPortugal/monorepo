@@ -11,6 +11,7 @@ import {
   type PlatformTag,
 } from "../lib/normalize";
 import { PLATFORM_ORDER } from "../lib/platforms";
+import { useDocumentHead } from "../lib/seo";
 import { useApi } from "../lib/useApi";
 
 type AdTypeFilter = "all" | "sell" | "wanted";
@@ -32,6 +33,12 @@ type ZoneFilter = "all" | string;
  * scaling follow-up, not a correctness gap today.
  */
 export function Marketplace() {
+  useDocumentHead({
+    title: "Marketplace",
+    description: "Anúncios de compra e venda entre membros da comunidade Game On Portugal.",
+    path: "/marketplace",
+  });
+
   const { state, data } = useApi(
     () => api.listAds(200),
     [],

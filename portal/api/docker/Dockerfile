@@ -52,6 +52,15 @@ COPY --from=api-build --chown=app:app /repo/portal/api/package.json ./portal/api
 COPY --from=bot-prisma --chown=app:app /repo/discord-bot/node_modules/@prisma ./discord-bot/node_modules/@prisma
 COPY --from=bot-prisma --chown=app:app /repo/discord-bot/node_modules/.prisma ./discord-bot/node_modules/.prisma
 
+# M8.11's audit log (src/audit/db.ts) — a SQLite file at AUDIT_DB_PATH
+# (infrastructure/game-on-portugal.yaml mounts a named volume at /data in
+# production). Created and chowned here, as root, before dropping to the
+# unprivileged `app` user below — Docker copies this empty directory's
+# ownership into a named volume the first time it is mounted over it, which
+# is what lets `app` (non-root, matching portal-web's own non-root design —
+# see portal/web/docker/Dockerfile) write to it afterwards.
+RUN mkdir -p /data && chown app:app /data
+
 ENV HOME=/home/app
 ENV PORT=3001
 USER app

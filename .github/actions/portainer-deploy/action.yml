@@ -47,9 +47,12 @@ inputs:
     default: '9000'
   health-check-container:
     description: >-
-      Container name to verify after the deploy. The step polls it through
-      Portainer's Docker API proxy and fails the deploy if it is not running,
-      or if it restarts during the observation window. Leave empty to skip.
+      Space-separated container name(s) to verify after the deploy (e.g.
+      "gop-bot gop-portal-api gop-portal-web"). The step polls each one
+      through Portainer's Docker API proxy and fails the deploy if any of
+      them is not running, or restarts, during the observation window — one
+      shared settle/window per run, not one per container, so checking three
+      containers doesn't triple the deploy time. Leave empty to skip.
     required: false
     default: ''
   health-check-settle-seconds:
@@ -177,13 +180,13 @@ runs:
           exit 1
         fi
 
-    - name: Verify the deployed container stays up
+    - name: Verify the deployed container(s) stay up
       if: ${{ inputs.health-check-container != '' }}
       shell: bash
       env:
         PORTAINER_TOKEN: ${{ inputs.portainer-access-token }}
         LOCAL_PORT: ${{ inputs.local-port }}
-        CONTAINER: ${{ inputs.health-check-container }}
+        CONTAINERS: ${{ inputs.health-check-container }}
         SETTLE: ${{ inputs.health-check-settle-seconds }}
         WINDOW: ${{ inputs.health-check-window-seconds }}
       run: |
@@ -201,6 +204,12 @@ runs:
         # Docker does not run healthchecks against a container that is
         # restarting. It was found by hand, over SSH, during an unrelated check.
         #
+        # M8.14 widened this from one container to a space-separated list —
+        # portal-api/portal-web joined the live stack (M8.2/M8.3) but only
+        # gop-bot was ever checked here, so a portal container crash-looping
+        # would have passed every deploy silently, the same failure mode this
+        # step was written to catch in the first place.
+        #
         # The deploy SSH key is tunnel-only (forced command,
         # permitopen=127.0.0.1:9000), so `docker inspect` over SSH is not
         # available here by design. Portainer proxies the Docker API through
@@ -211,68 +220,75 @@ runs:
         inspect() {
           curl -s --connect-timeout 10 --max-time 30 \
             -H "X-API-Key: $PORTAINER_TOKEN" \
-            "${API}/containers/${CONTAINER}/json"
+            "${API}/containers/$1/json"
         }
 
         dump_logs() {
-          echo "--- last 60 log lines from ${CONTAINER} ---"
+          echo "--- last 60 log lines from $1 ---"
           # Docker multiplexes stdout/stderr with an 8-byte header per frame
           # when the container has no TTY; strip the non-printable bytes so
           # the output is readable in the Actions log.
           curl -s --connect-timeout 10 --max-time 30 \
             -H "X-API-Key: $PORTAINER_TOKEN" \
-            "${API}/containers/${CONTAINER}/logs?stdout=1&stderr=1&tail=60" \
+            "${API}/containers/$1/logs?stdout=1&stderr=1&tail=60" \
             | tr -d '\000-\010\013\014\016-\037' || echo "(could not fetch logs)"
           echo "--- end of logs ---"
         }
 
-        echo "Letting ${CONTAINER} settle for ${SETTLE}s after the stack update..."
+        # One shared settle/window for every container, not one per — three
+        # containers should not take three times as long to verify.
+        echo "Letting ${CONTAINERS} settle for ${SETTLE}s after the stack update..."
         sleep "$SETTLE"
 
-        FIRST=$(inspect)
-        if [ -z "$FIRST" ] || ! echo "$FIRST" | jq -e '.State' > /dev/null 2>&1; then
-          echo "❌ Could not inspect ${CONTAINER} through Portainer's Docker API."
-          echo "$FIRST" | head -c 500
-          exit 1
-        fi
+        declare -A FIRST_RESTARTS
+        for CONTAINER in $CONTAINERS; do
+          FIRST=$(inspect "$CONTAINER")
+          if [ -z "$FIRST" ] || ! echo "$FIRST" | jq -e '.State' > /dev/null 2>&1; then
+            echo "❌ Could not inspect ${CONTAINER} through Portainer's Docker API."
+            echo "$FIRST" | head -c 500
+            exit 1
+          fi
 
-        FIRST_STATUS=$(echo "$FIRST" | jq -r '.State.Status')
-        FIRST_RESTARTS=$(echo "$FIRST" | jq -r '.RestartCount')
-        echo "${CONTAINER}: status=${FIRST_STATUS} restartCount=${FIRST_RESTARTS}"
+          FIRST_STATUS=$(echo "$FIRST" | jq -r '.State.Status')
+          FIRST_RESTARTS[$CONTAINER]=$(echo "$FIRST" | jq -r '.RestartCount')
+          echo "${CONTAINER}: status=${FIRST_STATUS} restartCount=${FIRST_RESTARTS[$CONTAINER]}"
 
-        if [ "$FIRST_STATUS" != "running" ]; then
-          echo "❌ ${CONTAINER} is '${FIRST_STATUS}', not 'running', ${SETTLE}s after the deploy."
-          echo "   'restarting' means it is crash-looping: the process dies on boot and"
-          echo "   Docker keeps restarting it. The logs below are from the last attempt."
-          dump_logs
-          exit 1
-        fi
+          if [ "$FIRST_STATUS" != "running" ]; then
+            echo "❌ ${CONTAINER} is '${FIRST_STATUS}', not 'running', ${SETTLE}s after the deploy."
+            echo "   'restarting' means it is crash-looping: the process dies on boot and"
+            echo "   Docker keeps restarting it. The logs below are from the last attempt."
+            dump_logs "$CONTAINER"
+            exit 1
+          fi
+        done
 
-        echo "Watching ${CONTAINER} for ${WINDOW}s to make sure it does not restart..."
+        echo "Watching ${CONTAINERS} for ${WINDOW}s to make sure none of them restart..."
         sleep "$WINDOW"
 
-        SECOND=$(inspect)
-        SECOND_STATUS=$(echo "$SECOND" | jq -r '.State.Status')
-        SECOND_RESTARTS=$(echo "$SECOND" | jq -r '.RestartCount')
-        echo "${CONTAINER}: status=${SECOND_STATUS} restartCount=${SECOND_RESTARTS}"
+        for CONTAINER in $CONTAINERS; do
+          SECOND=$(inspect "$CONTAINER")
+          SECOND_STATUS=$(echo "$SECOND" | jq -r '.State.Status')
+          SECOND_RESTARTS=$(echo "$SECOND" | jq -r '.RestartCount')
+          echo "${CONTAINER}: status=${SECOND_STATUS} restartCount=${SECOND_RESTARTS}"
 
-        if [ "$SECOND_STATUS" != "running" ]; then
-          echo "❌ ${CONTAINER} was running but is now '${SECOND_STATUS}' -- it died after boot."
-          dump_logs
-          exit 1
-        fi
+          if [ "$SECOND_STATUS" != "running" ]; then
+            echo "❌ ${CONTAINER} was running but is now '${SECOND_STATUS}' -- it died after boot."
+            dump_logs "$CONTAINER"
+            exit 1
+          fi
 
-        # A container that boots, runs for a few seconds and then dies passes
-        # the status check on both samples if the restart happens to land
-        # between them. The restart *counter* is what catches that.
-        if [ "$SECOND_RESTARTS" != "$FIRST_RESTARTS" ]; then
-          echo "❌ ${CONTAINER} restarted during the observation window"
-          echo "   (${FIRST_RESTARTS} -> ${SECOND_RESTARTS}). It is not stable."
-          dump_logs
-          exit 1
-        fi
+          # A container that boots, runs for a few seconds and then dies passes
+          # the status check on both samples if the restart happens to land
+          # between them. The restart *counter* is what catches that.
+          if [ "$SECOND_RESTARTS" != "${FIRST_RESTARTS[$CONTAINER]}" ]; then
+            echo "❌ ${CONTAINER} restarted during the observation window"
+            echo "   (${FIRST_RESTARTS[$CONTAINER]} -> ${SECOND_RESTARTS}). It is not stable."
+            dump_logs "$CONTAINER"
+            exit 1
+          fi
 
-        echo "✅ ${CONTAINER} has been up and stable for ${WINDOW}s (restartCount=${SECOND_RESTARTS})"
+          echo "✅ ${CONTAINER} has been up and stable for ${WINDOW}s (restartCount=${SECOND_RESTARTS})"
+        done
 
     - name: Close SSH tunnel
       if: always()
