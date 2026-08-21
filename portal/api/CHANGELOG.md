@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/GameOnPortugal/monorepo/compare/portal-api-v0.3.0...portal-api-v0.4.0) (2026-08-21)
+
+
+### Features
+
+* **bot:** add member privacy opt-out and GDPR erasure (M9.7) ([#66](https://github.com/GameOnPortugal/monorepo/issues/66)) ([07b65ad](https://github.com/GameOnPortugal/monorepo/commit/07b65add0c76bafd3e38b564da681d1b04b0b55f))
+
 ## [0.3.0](https://github.com/GameOnPortugal/monorepo/compare/portal-api-v0.2.0...portal-api-v0.3.0) (2026-08-21)
 
 
