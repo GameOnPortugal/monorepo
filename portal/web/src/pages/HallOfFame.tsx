@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useDocumentHead } from "../lib/seo";
 
 const DISCORD_INVITE = "https://discord.gg/mBJKUhwE23";
 
@@ -30,6 +31,12 @@ const DISCORD_INVITE = "https://discord.gg/mBJKUhwE23";
  * M8.8 row of docs/plans/GLOBAL-PLAN.md.
  */
 export function HallOfFame() {
+  useDocumentHead({
+    title: "Hall of Fame",
+    description: "As screenshots vencedoras da semana na comunidade Game On Portugal.",
+    path: "/screenshots/hall-of-fame",
+  });
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-16 text-center">
       <p className="text-xs font-semibold tracking-[0.3em] text-white/50 uppercase">Hall of Fame</p>

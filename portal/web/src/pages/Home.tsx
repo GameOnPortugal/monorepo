@@ -3,6 +3,7 @@ import { AdCard } from "../components/AdCard";
 import { LazyImage } from "../components/LazyImage";
 import { ApiError, EmptyState, SkeletonRow } from "../components/StateViews";
 import { api } from "../lib/api/client";
+import { useDocumentHead } from "../lib/seo";
 import { useApi } from "../lib/useApi";
 
 const DISCORD_INVITE = "https://discord.gg/mBJKUhwE23";
@@ -20,6 +21,17 @@ const DISCORD_INVITE = "https://discord.gg/mBJKUhwE23";
  * `EmptyState` copy and the honest date-relative note below the stats bar.
  */
 export function Home() {
+  // M8.13 — reasserts the site-level title/description/og:url index.html
+  // already ships (see lib/seo.ts's header for why this is additive, not a
+  // replacement) so navigating *back* to "/" after another page overrode
+  // them restores the real defaults instead of leaving the last page's.
+  useDocumentHead({
+    title: "Game On Portugal",
+    description:
+      "Marketplace, screenshots e leaderboard de troféus da comunidade de jogadores portuguesa no Discord.",
+    path: "/",
+  });
+
   return (
     <div>
       <Hero />
