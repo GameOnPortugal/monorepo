@@ -45,7 +45,6 @@
         "typescript-eslint": "^8"
     },
     "overrides": {
-        "ws": "^8.21.3",
-        "lodash": "^4.18.1"
+        "deepmerge-ts": "^8.0.2"
     }
 }
