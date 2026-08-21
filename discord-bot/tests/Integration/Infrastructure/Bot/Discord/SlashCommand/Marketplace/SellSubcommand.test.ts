@@ -11,6 +11,11 @@ import type { GuildClient } from '../../../../../../../src/Domain/Community/Guil
 import { InMemoryGuildClient } from '../../../../../../../src/Infrastructure/Community/InMemory/InMemoryGuildClient';
 import { CommunityChannels } from '../../../../../../../src/Domain/Community/CommunityChannels';
 import { DiscordChannels } from '../../../../../../../src/Infrastructure/Community/Discord/DiscordChannels';
+import { MAX_ACTIVE_ADS_PER_USER } from '../../../../../../../src/Domain/Marketplace/AdLimits';
+import { createAd } from '../../../../../../Helper/StaticFixtures';
+import type { SafeImageFetcher } from '../../../../../../../src/Infrastructure/Media/SafeImageFetcher';
+import type { MediaStorage } from '../../../../../../../src/Domain/Media/MediaStorage';
+import { adPhotoMediaKey } from '../../../../../../../src/Domain/Media/MediaKey';
 
 /**
  * M5.1: `/marketplace sell` used to post the listing via `interaction.reply()`
@@ -161,5 +166,122 @@ describe('SellSubcommand Integration Test', () => {
         // ...and no ad row exists for the failed write.
         const ads = await adRepository.findByUserId(userId);
         expect(ads.length).toBe(0);
+    });
+
+    // M5.10 — limits.
+
+    it('refuses the 11th active ad with a clear message, and never posts it', async () => {
+        const userId = '444455556666777788';
+        for (let i = 0; i < MAX_ACTIVE_ADS_PER_USER; i++) {
+            await createAd(undefined, `Existing ${i + 1}`, userId);
+        }
+
+        const interaction = new FakeInteraction(sellOptions, userId, invokingChannelId);
+        await sellSubcommand.handle(buildContext(interaction));
+
+        expect(interaction.editReplyCalls.length).toBe(1);
+        expect(interaction.editReplyCalls[0].content).toContain(
+            `${MAX_ACTIVE_ADS_PER_USER} anúncios activos`,
+        );
+        // Refused before ever touching Discord — no orphaned public message.
+        expect(guildClient.sentRichMessages.length).toBe(0);
+        expect(await adRepository.findByUserId(userId)).toHaveLength(MAX_ACTIVE_ADS_PER_USER);
+    });
+
+    it('allows the 10th ad — the limit is inclusive of exactly 10, not 9', async () => {
+        const userId = '444455556666777799';
+        for (let i = 0; i < MAX_ACTIVE_ADS_PER_USER - 1; i++) {
+            await createAd(undefined, `Existing ${i + 1}`, userId);
+        }
+
+        const interaction = new FakeInteraction(sellOptions, userId, invokingChannelId);
+        await sellSubcommand.handle(buildContext(interaction));
+
+        expect(guildClient.sentRichMessages.length).toBe(1);
+        expect(await adRepository.findByUserId(userId)).toHaveLength(MAX_ACTIVE_ADS_PER_USER);
+    });
+
+    // M5.11 — images.
+
+    describe('with an image attachment', () => {
+        let safeImageFetcher: SafeImageFetcher;
+        let mediaStorage: MediaStorage;
+        let originalFetch: SafeImageFetcher['fetch'];
+
+        const ATTACHMENT_URL = 'https://cdn.discordapp.com/attachments/1/2/photo.png';
+
+        beforeEach(() => {
+            safeImageFetcher = myContainer.get<SafeImageFetcher>(TYPES.SafeImageFetcher);
+            mediaStorage = myContainer.get<MediaStorage>(TYPES.MediaStorage);
+            originalFetch = safeImageFetcher.fetch.bind(safeImageFetcher);
+            // No mocking library (AGENT.md) — patch the shared SafeImageFetcher
+            // singleton's one network-touching method for the duration of
+            // this block, same technique DeleteAdSubcommand.test.ts already
+            // uses on the shared AdRepository singleton.
+            safeImageFetcher.fetch = async () => ({
+                bytes: new TextEncoder().encode('fake-image-bytes'),
+                contentType: 'image/png',
+            });
+        });
+
+        afterEach(() => {
+            safeImageFetcher.fetch = originalFetch;
+        });
+
+        it('re-hosts the photo through MediaStorage before posting — the initial embed never carries a cdn.discordapp.com URL', async () => {
+            const userId = '222233334444555566';
+            const interaction = new FakeInteraction(
+                sellOptions,
+                userId,
+                invokingChannelId,
+                undefined,
+                {},
+                {},
+                { image: { contentType: 'image/png', url: ATTACHMENT_URL } },
+            );
+
+            await sellSubcommand.handle(buildContext(interaction));
+
+            expect(guildClient.sentRichMessages.length).toBe(1);
+            const [sent] = guildClient.sentRichMessages;
+            const imageUrl = sent?.content.imageUrl;
+            expect(imageUrl).toBeTruthy();
+            expect(imageUrl).not.toContain('discordapp.com');
+
+            const ads = await adRepository.findByUserId(userId);
+            const [ad] = ads;
+            expect(ad?.images).toEqual([imageUrl as string]);
+            expect(ad?.images[0]).not.toContain('discordapp.com');
+
+            // Actually landed in MediaStorage (MinIO in production, the
+            // in-memory fake here) under the ad-photo key scheme — not just
+            // a URL that happens to not say "discordapp.com".
+            const key = adPhotoMediaKey(ad!.id.toString(), 0, 'png');
+            expect(await mediaStorage.exists(key)).toBe(true);
+        });
+
+        it('rejects a non-image attachment before posting anything', async () => {
+            const userId = '222233334444555577';
+            const interaction = new FakeInteraction(
+                sellOptions,
+                userId,
+                invokingChannelId,
+                undefined,
+                {},
+                {},
+                {
+                    image: {
+                        contentType: 'application/pdf',
+                        url: 'https://cdn.discordapp.com/x.pdf',
+                    },
+                },
+            );
+
+            await sellSubcommand.handle(buildContext(interaction));
+
+            expect(interaction.editReplyCalls[0].content).toBe('O ficheiro tem de ser uma imagem.');
+            expect(guildClient.sentRichMessages.length).toBe(0);
+            expect(await adRepository.findByUserId(userId)).toHaveLength(0);
+        });
     });
 });

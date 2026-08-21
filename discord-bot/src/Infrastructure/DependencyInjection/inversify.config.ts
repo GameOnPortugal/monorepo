@@ -50,12 +50,19 @@ import { GetAdHandler } from '../../Application/Query/Marketplace/GetAd/GetAdHan
 import { DeleteAdSubcommand } from '../Bot/Discord/SlashCommand/Marketplace/DeleteAdSubcommand.ts';
 import { MarketplaceSlashCommand } from '../Bot/Discord/SlashCommand/Marketplace/MarketplaceSlashCommand.ts';
 import { SellSubcommand } from '../Bot/Discord/SlashCommand/Marketplace/SellSubcommand.ts';
+import { WantedSubcommand } from '../Bot/Discord/SlashCommand/Marketplace/WantedSubcommand.ts';
 import { SoldAdSubcommand } from '../Bot/Discord/SlashCommand/Marketplace/SoldAdSubcommand.ts';
 import { BumpAdSubcommand } from '../Bot/Discord/SlashCommand/Marketplace/BumpAdSubcommand.ts';
 import { EditAdSubcommand } from '../Bot/Discord/SlashCommand/Marketplace/EditAdSubcommand.ts';
 import { MarketplaceComponentHandler } from '../Bot/Discord/Component/Marketplace/MarketplaceComponentHandler.ts';
+import { SearchCriteriaStore } from '../Bot/Discord/Component/Marketplace/SearchCriteriaStore.ts';
+import { AdListPresenter } from '../Bot/Discord/SlashCommand/Marketplace/AdListPresenter.ts';
 import { ListUserAdsHandler } from '../../Application/Query/Marketplace/ListUserAds/ListUserAdsHandler';
+import { CountActiveAdsHandler } from '../../Application/Query/Marketplace/CountActiveAds/CountActiveAdsHandler.ts';
+import { ListUserAdsPageHandler } from '../../Application/Query/Marketplace/ListUserAdsPage/ListUserAdsPageHandler.ts';
+import { SearchAdsHandler } from '../../Application/Query/Marketplace/SearchAds/SearchAdsHandler.ts';
 import { ListAdsSubcommand } from '../Bot/Discord/SlashCommand/Marketplace/ListAdsSubcommand';
+import { SearchAdsSubcommand } from '../Bot/Discord/SlashCommand/Marketplace/SearchAdsSubcommand.ts';
 import { GetScreenshotWinnerHandler } from '../../Application/Query/Screenshot/GetScreenshotWinner/GetScreenshotWinnerHandler';
 import { ExpireAdHandler } from '../../Application/Write/Marketplace/ExpireAd/ExpireAdHandler.ts';
 import { MarkAdPendingRenewalHandler } from '../../Application/Write/Marketplace/MarkAdPendingRenewal/MarkAdPendingRenewalHandler.ts';
@@ -88,6 +95,7 @@ import type { MediaStorage } from '../../Domain/Media/MediaStorage.ts';
 import { S3MediaStorage } from '../Media/S3MediaStorage.ts';
 import { InMemoryMediaStorage } from '../Media/InMemoryMediaStorage.ts';
 import { SafeImageFetcher } from '../Media/SafeImageFetcher.ts';
+import { AdImageUploader } from '../Media/AdImageUploader.ts';
 import { requireEnv, validateBaseEnv, validateBotEnv } from '../Config/env.ts';
 
 const myContainer = new Container();
@@ -128,6 +136,9 @@ myContainer.bind(TYPES.CommandHandler).to(GetProfileHandler);
 myContainer.bind(TYPES.CommandHandler).to(GetRankHandler);
 myContainer.bind(TYPES.CommandHandler).to(CreateAdHandler);
 myContainer.bind(TYPES.CommandHandler).to(ListUserAdsHandler);
+myContainer.bind(TYPES.CommandHandler).to(CountActiveAdsHandler);
+myContainer.bind(TYPES.CommandHandler).to(ListUserAdsPageHandler);
+myContainer.bind(TYPES.CommandHandler).to(SearchAdsHandler);
 myContainer.bind(TYPES.CommandHandler).to(DeleteAdHandler);
 myContainer.bind(TYPES.CommandHandler).to(GetAdHandler);
 myContainer.bind(TYPES.CommandHandler).to(MarkAdSoldHandler);
@@ -159,12 +170,19 @@ myContainer.bind(TYPES.AutocompleteHandler).toService(ScreenshotAutocompleteHand
 // per namespace. Both are bound to the symbol *and* toSelf, matching the
 // autocomplete handlers above, so a test can resolve either directly.
 //
-// `mkt`      — MarketplaceComponentHandler (M5.5/M5.6): listing buttons
-//              (contact/sold/bump) and the edit modal submission.
+// `mkt`      — MarketplaceComponentHandler (M5.5/M5.6/M5.8/M5.9): listing
+//              buttons (contact/sold/bump), the edit modal submission, and
+//              the list/search pagination buttons.
 // `trophies` — TrophyComponentHandler (M7.6): `/trophy rank` pagination.
 //
 // BotExecutor throws if two handlers ever claim the same namespace, so this
 // list cannot silently develop an ordering dependency.
+// `toConstantValue`, not `toSelf()` — its constructor takes a plain `ttlMs`
+// default parameter (no `@inject`), same reason `SafeImageFetcher` below is
+// bound this way rather than left to inversify's automatic constructor
+// injection.
+myContainer.bind(SearchCriteriaStore).toConstantValue(new SearchCriteriaStore());
+myContainer.bind(AdListPresenter).toSelf();
 myContainer.bind(MarketplaceComponentHandler).toSelf();
 myContainer.bind(TYPES.ComponentHandler).toService(MarketplaceComponentHandler);
 myContainer.bind(TrophyComponentHandler).toSelf();
@@ -179,7 +197,9 @@ myContainer.bind(CheckTrophyProfileSubcommand).toSelf();
 myContainer.bind(RankPresenter).toSelf();
 myContainer.bind(RankSubcommand).toSelf();
 myContainer.bind(SellSubcommand).toSelf();
+myContainer.bind(WantedSubcommand).toSelf();
 myContainer.bind(ListAdsSubcommand).toSelf();
+myContainer.bind(SearchAdsSubcommand).toSelf();
 myContainer.bind(DeleteAdSubcommand).toSelf();
 myContainer.bind(SoldAdSubcommand).toSelf();
 myContainer.bind(BumpAdSubcommand).toSelf();
@@ -327,6 +347,11 @@ if (
 // timeout, cdn.discordapp.com/media.discordapp.net allowlist) — see
 // SafeImageFetcher.ts.
 myContainer.bind(TYPES.SafeImageFetcher).toConstantValue(new SafeImageFetcher());
+
+// M5.11 — re-hosts a marketplace photo through MediaStorage at submit time,
+// on top of the bindings just above. `toSelf()`, unlike SafeImageFetcher:
+// its constructor params are both `@inject`ed, not plain defaults.
+myContainer.bind(AdImageUploader).toSelf();
 
 // Console Command
 myContainer.bind(WeekScreenshotWinner).toSelf();

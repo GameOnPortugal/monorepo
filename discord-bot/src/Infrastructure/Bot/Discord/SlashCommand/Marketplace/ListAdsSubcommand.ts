@@ -1,70 +1,48 @@
 import { inject, injectable } from 'inversify';
 import type { SlashCommandContext } from '../../../../../Domain/Bot/SlashCommandContext';
-import { MessageFlags, EmbedBuilder } from 'discord.js';
+import { MessageFlags } from 'discord.js';
 import { TYPES } from '../../../../DependencyInjection/types';
 import type Logger from '../../../../../Application/Logger/Logger';
-import { ListUserAds } from '../../../../../Application/Query/Marketplace/ListUserAds/ListUserAds';
+import { ListUserAdsPage } from '../../../../../Application/Query/Marketplace/ListUserAdsPage/ListUserAdsPage';
 import CommandHandlerManager from '../../../../CommandHandler/CommandHandlerManager.ts';
-import type { Ad } from '../../../../../Domain/Marketplace/Ad.ts';
-import { capFields } from '../../../../../Domain/Bot/embedLimits.ts';
 import { safeReply } from '../../../../../Domain/Bot/safeReply.ts';
+import { AdListPresenter } from './AdListPresenter';
 
+const PAGE_SIZE = 10;
+
+/**
+ * `/marketplace list` (M5.8) — was a single embed with one field per ad and
+ * no cap at all, so a user with 26+ listings broke the command outright
+ * (Discord hard-rejects an embed over 25 fields). Replaced the M4.10
+ * stopgap (cap at 25, tell the user how many were omitted) with real
+ * pagination, following M7.6's `/trophy rank` shape (`RankPresenter` +
+ * `TrophyComponentHandler`): a small page (`PAGE_SIZE`, always far under the
+ * 25-field cap) plus Prev/Next buttons that re-run this same query. See
+ * `AdListPresenter` for the embed/button-building shared with `search`.
+ */
 @injectable()
 export class ListAdsSubcommand {
     constructor(
         @inject(TYPES.Logger) private readonly logger: Logger,
         @inject(CommandHandlerManager)
         private readonly commandHandlerManager: CommandHandlerManager,
+        @inject(AdListPresenter) private readonly presenter: AdListPresenter,
     ) {}
-
-    private getStateEmoji(state: string): string {
-        switch (state) {
-            case 'new':
-                return '🆕';
-            case 'like_new':
-                return '✨';
-            case 'used_good':
-                return '👍';
-            case 'used_marks':
-                return '📝';
-            case 'broken':
-                return '🔧';
-            default:
-                return '❓';
-        }
-    }
-
-    private getStateDisplay(state: string): string {
-        switch (state) {
-            case 'new':
-                return 'Novo';
-            case 'like_new':
-                return 'Como novo';
-            case 'used_good':
-                return 'Usado - Bom estado';
-            case 'used_marks':
-                return 'Usado - Com marcas';
-            case 'broken':
-                return 'Avariado';
-            default:
-                return state;
-        }
-    }
 
     public async handle(context: SlashCommandContext): Promise<void> {
         const targetUser = context.interaction.options.getUser('user') ?? context.interaction.user;
 
-        // Ephemeral for the whole command (M5.8 already settles `/marketplace
-        // list` as ephemeral going forward, so this moves toward the settled
-        // design rather than away from it). This also keeps every path below
-        // ephemeral without exception, so there is no ephemeral-to-public
-        // leak on the error/no-ads paths (M0.3).
+        // Ephemeral for the whole command (M5.8 settles `/marketplace list`
+        // as ephemeral going forward), so every path below — including the
+        // error/no-ads paths (M0.3) — stays ephemeral without exception.
         await context.interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         try {
-            const ads = await this.commandHandlerManager.handle(new ListUserAds(targetUser.id));
+            const adPage = await this.commandHandlerManager.handle(
+                new ListUserAdsPage(targetUser.id, 1, PAGE_SIZE),
+            );
 
-            if (ads.length === 0) {
+            if (adPage.totalCount === 0) {
                 await context.interaction.editReply({
                     content:
                         targetUser.id === context.interaction.user.id
@@ -75,42 +53,15 @@ export class ListAdsSubcommand {
             }
 
             const title = `Anúncios de ${targetUser.username}`;
-            const description = `${ads.length} anúncio${ads.length === 1 ? '' : 's'} activo${ads.length === 1 ? '' : 's'} encontrado${ads.length === 1 ? '' : 's'}`;
+            const embed = this.presenter.buildAdListEmbed({
+                title,
+                description: `${adPage.totalCount} anúncio${adPage.totalCount === 1 ? '' : 's'} encontrado${adPage.totalCount === 1 ? '' : 's'}`,
+                adPage,
+                guildId: context.interaction.guildId,
+            });
+            const row = this.presenter.buildListPaginationRow(targetUser.id, adPage);
 
-            const embed = new EmbedBuilder()
-                .setColor('#0099ff')
-                .setTitle(title)
-                .setDescription(description)
-                .setTimestamp();
-
-            const { fields, omittedCount } = capFields(
-                ads,
-                (ad: Ad, index: number) => ({
-                    name: `${index + 1}. ${ad.name}`,
-                    value: [
-                        `${this.getStateEmoji(ad.state)} ${this.getStateDisplay(ad.state)}`,
-                        `💰 Preço: ${ad.price}`,
-                        `📍 Zona: ${ad.zone}`,
-                        `🚚 Envio: ${ad.dispatch}`,
-                        `🆔 ID: ${ad.id.toString()}`,
-                        ad.warranty ? `⚡ Garantia: ${ad.warranty}` : null,
-                        ad.description ? `📝 ${ad.description}` : null,
-                        `\n[Ver anúncio](https://discord.com/channels/${context.interaction.guildId}/${ad.channelId}/${ad.messageId})`,
-                    ]
-                        .filter(Boolean)
-                        .join('\n'),
-                }),
-                title.length + description.length,
-            );
-            embed.addFields(fields);
-
-            if (omittedCount > 0) {
-                embed.setFooter({
-                    text: `A mostrar ${fields.length} de ${ads.length} anúncios — ${omittedCount} omitidos. Restringe a pesquisa ou pede ajuda a um admin para ver os restantes.`,
-                });
-            }
-
-            await context.interaction.editReply({ embeds: [embed] });
+            await context.interaction.editReply({ embeds: [embed], components: [row] });
         } catch (error) {
             this.logger.error('Error listing ads', { error });
             await safeReply(context.interaction, {

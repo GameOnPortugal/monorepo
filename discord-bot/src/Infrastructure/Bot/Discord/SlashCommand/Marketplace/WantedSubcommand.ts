@@ -16,8 +16,20 @@ import { CommunityChannels } from '../../../../../Domain/Community/CommunityChan
 import { DiscordChannels, DISCORD_GUILD_ID } from '../../../../Community/Discord/DiscordChannels';
 import { AdImageUploader } from '../../../../Media/AdImageUploader';
 
+/**
+ * `/marketplace wanted` (M5.7) — restores an old-bot feature (feature-gap
+ * G3). Deliberately the same shape as `SellSubcommand` (post-then-persist,
+ * one write, routed through `GuildClient` to `📖anuncios`) rather than a
+ * shared base class: the two subcommand files already diverge in copy
+ * everywhere a string is user-facing, and every other pair of sibling
+ * subcommands in this directory (`SoldAdSubcommand`/`BumpAdSubcommand`) is
+ * hand-duplicated the same way rather than factored — see those two for the
+ * precedent. `renderAdListing()` is what actually stops the embed itself
+ * from drifting between `sell` and `wanted` (it is already colour-coded by
+ * `adType`, see its doc comment); this file only has to get `adType` right.
+ */
 @injectable()
-export class SellSubcommand {
+export class WantedSubcommand {
     constructor(
         @inject(TYPES.Logger) private readonly logger: Logger,
         @inject(CommandHandlerManager)
@@ -37,19 +49,11 @@ export class SellSubcommand {
         const description = interaction.options.getString('description') ?? '';
         const image = interaction.options.getAttachment('image');
 
-        // Post-then-persist (M0.1), now routed through the GuildClient port to
-        // the marketplace channel (M5.1) instead of `interaction.reply()` —
-        // the command can be run from anywhere, but the listing itself always
-        // lands in #anuncios. The interaction reply becomes a private
-        // confirmation to the seller rather than the public listing itself,
-        // so it is ephemeral from the first ack.
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        // M5.10 — refused *before* anything is posted, not inside
-        // CreateAdHandler: post-then-persist (M0.1) means a limit enforced
-        // only at the write would refuse to save a listing that is already
-        // public, producing exactly the orphaned-message failure mode M0.1
-        // was fixed to stop causing.
+        // M5.10 — same limit, same rationale (checked before posting, not
+        // inside CreateAdHandler) as SellSubcommand; `wanted` and `sell` ads
+        // share one pool of "active ads for this member", not separate caps.
         const activeCount = await this.commandHandlerManager.handle(
             new CountActiveAds(interaction.user.id),
         );
@@ -67,12 +71,8 @@ export class SellSubcommand {
 
         const adId = AdId.generate();
 
-        // M5.11 — re-hosted through MinIO *before* the listing is posted,
-        // not after: the embed's image is set on the very first render
-        // (`renderAdListing`, below), so a raw Discord CDN URL would already
-        // be baked into the message by the time anything else could fix it.
-        // See AdImageUploader.ts for why this differs from the screenshot
-        // gallery's re-host-after-post shape.
+        // M5.11 — see SellSubcommand.ts's identical block for why this has
+        // to happen before the listing is posted.
         let images: string[] = [];
         if (image) {
             try {
@@ -80,7 +80,7 @@ export class SellSubcommand {
                 images = [durableUrl];
             } catch (error) {
                 const correlationId = randomUUID();
-                this.logger.error('Failed to re-host the sale listing photo', {
+                this.logger.error('Failed to re-host the wanted listing photo', {
                     error,
                     correlationId,
                     authorId: interaction.user.id,
@@ -92,12 +92,6 @@ export class SellSubcommand {
             }
         }
 
-        // M5.5: the listing is now a rich embed + buttons
-        // (`renderAdListing`), not a plain string — built from a throwaway,
-        // not-yet-persisted `Ad` holding exactly what is about to be
-        // written, so `SellSubcommand` and the bump/edit paths (which render
-        // from a real, persisted `Ad`) can never drift from the same
-        // renderer.
         const draft = new Ad(
             adId,
             name,
@@ -110,7 +104,7 @@ export class SellSubcommand {
             dispatch,
             warranty,
             description,
-            'sell',
+            'wanted',
             new Date(),
             new Date(),
             undefined,
@@ -126,13 +120,13 @@ export class SellSubcommand {
             );
         } catch (error) {
             const correlationId = randomUUID();
-            this.logger.error('Failed to post sale listing to the marketplace channel', {
+            this.logger.error('Failed to post wanted listing to the marketplace channel', {
                 error,
                 correlationId,
                 authorId: interaction.user.id,
             });
             await interaction.editReply({
-                content: `Não foi possível publicar o teu anúncio. Tenta novamente. (ref: ${correlationId})`,
+                content: `Não foi possível publicar o teu anúncio de procura. Tenta novamente. (ref: ${correlationId})`,
             });
             return;
         }
@@ -150,14 +144,14 @@ export class SellSubcommand {
                 dispatch,
                 warranty,
                 description,
-                'sell',
+                'wanted',
                 images,
             );
 
             await this.commandHandlerManager.handle(command);
         } catch (error) {
             const correlationId = randomUUID();
-            this.logger.error('Failed to persist sale listing after posting', {
+            this.logger.error('Failed to persist wanted listing after posting', {
                 error,
                 correlationId,
                 messageId,
@@ -172,7 +166,7 @@ export class SellSubcommand {
 
         const listingUrl = `https://discord.com/channels/${DISCORD_GUILD_ID}/${DiscordChannels.MARKETPLACE}/${messageId}`;
         await interaction.editReply({
-            content: `✅ O teu anúncio foi publicado: ${listingUrl}`,
+            content: `✅ O teu anúncio de procura foi publicado: ${listingUrl}`,
         });
     }
 }

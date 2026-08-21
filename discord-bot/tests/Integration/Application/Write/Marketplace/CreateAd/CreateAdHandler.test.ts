@@ -68,7 +68,10 @@ describe('CreateAdHandler Integration Test', () => {
         expect(ad.updatedAt).toBeInstanceOf(Date);
         // New M5.3 columns default sanely for a freshly created ad.
         expect(ad.status.toString()).toBe('active');
-        expect(ad.priceCents).toBeNull();
+        // M5.9 — parsed on create (not just on `/marketplace edit`, see
+        // AdPrice.ts) so `search`'s `max_price` filter can find an ad that
+        // was never edited. '100€' matches AdPrice's pattern -> 100.00€.
+        expect(ad.priceCents).toBe(10000);
         expect(ad.images).toEqual([]);
         expect(ad.bumpedAt).toBeNull();
         expect(ad.expiresAt).toBeNull();

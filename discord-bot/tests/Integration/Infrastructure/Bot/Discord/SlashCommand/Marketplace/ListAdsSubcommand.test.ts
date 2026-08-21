@@ -2,27 +2,36 @@ import { describe, expect, beforeEach, it, afterEach } from 'bun:test';
 import { myContainer } from '../../../../../../../src/Infrastructure/DependencyInjection/inversify.config';
 import { TYPES } from '../../../../../../../src/Infrastructure/DependencyInjection/types';
 import { ListAdsSubcommand } from '../../../../../../../src/Infrastructure/Bot/Discord/SlashCommand/Marketplace/ListAdsSubcommand';
+import { MarketplaceComponentHandler } from '../../../../../../../src/Infrastructure/Bot/Discord/Component/Marketplace/MarketplaceComponentHandler';
 import { EMBED_FIELD_VALUE_MAX_LENGTH } from '../../../../../../../src/Domain/Bot/embedLimits';
 import DatabaseUtil from '../../../../../../Helper/DatabaseUtil';
 import FakeInteraction from '../../../../../../Helper/FakeInteraction';
+import FakeComponentInteraction from '../../../../../../Helper/FakeComponentInteraction';
 import { createAd } from '../../../../../../Helper/StaticFixtures';
 import { PrismaClient } from '@prisma/client';
 import { MessageFlags } from 'discord.js';
 import type { SlashCommandContext } from '../../../../../../../src/Domain/Bot/SlashCommandContext';
+import type { ComponentInteractionContext } from '../../../../../../../src/Domain/Bot/InteractionContext';
 
 /**
- * Regression coverage for M4.10: `ListAdsSubcommand` used to add one embed
- * field per ad with no cap. Discord hard-rejects an embed with more than 25
- * fields (and one over the 1024-char per-field-value limit), so a user with
- * 26+ listings — or a single long description — broke the whole `/marketplace
- * list` command outright.
+ * M5.8: `ListAdsSubcommand` used to add one embed field per ad with a hard
+ * cap of 25 and an "N omitted" footer — a user with more than 25 listings
+ * could never see the rest. Replaced with real Prev/Next pagination
+ * (`AdListPresenter`, following M7.6's `/trophy rank` shape), which this
+ * suite exercises end-to-end: the initial page from `ListAdsSubcommand`, and
+ * every subsequent page via `MarketplaceComponentHandler`'s `list-page`
+ * button action.
  */
 describe('ListAdsSubcommand Integration Test', () => {
     let listAdsSubcommand: ListAdsSubcommand;
+    let componentHandler: MarketplaceComponentHandler;
     let ormClient: PrismaClient;
 
     beforeEach(async () => {
         listAdsSubcommand = myContainer.get<ListAdsSubcommand>(ListAdsSubcommand);
+        componentHandler = myContainer.get<MarketplaceComponentHandler>(
+            MarketplaceComponentHandler,
+        );
         ormClient = myContainer.get<PrismaClient>(TYPES.OrmClient);
 
         await DatabaseUtil.truncateAllTables();
@@ -42,11 +51,12 @@ describe('ListAdsSubcommand Integration Test', () => {
         };
     }
 
-    it('defers before querying, then edits the deferred reply with an embed capped at 25 fields', async () => {
+    function componentContext(interaction: FakeComponentInteraction): ComponentInteractionContext {
+        return { kind: 'component', interaction: interaction.asButtonInteraction() };
+    }
+
+    it('a user with 30 ads can page through all of them without ever exceeding the 25-field cap', async () => {
         const userId = '123456789012345678';
-        // Short warranty/description ('') keeps each field small enough that
-        // the 25-field cap — not the 6000-char embed-total budget — is the
-        // constraint this test is actually exercising.
         for (let i = 0; i < 30; i++) {
             await createAd(
                 undefined,
@@ -67,27 +77,59 @@ describe('ListAdsSubcommand Integration Test', () => {
         await listAdsSubcommand.handle(buildContext(interaction));
 
         expect(interaction.deferReplyCalls.length).toBe(1);
-        // The whole command is ephemeral now (M5.8 settles `/marketplace list`
-        // as ephemeral going forward), so the defer itself carries the flag —
-        // not just the error paths.
+        // The whole command is ephemeral (M5.8 settles `/marketplace list` as
+        // ephemeral going forward).
         expect(interaction.deferReplyCalls[0]).toEqual({ flags: MessageFlags.Ephemeral });
-        expect(interaction.replyCalls.length).toBe(0);
         expect(interaction.editReplyCalls.length).toBe(1);
 
-        const { embeds } = interaction.editReplyCalls[0];
-        expect(embeds).toHaveLength(1);
-        const embed = embeds[0];
-        const fields = embed.data.fields;
+        const firstReply = interaction.editReplyCalls[0];
+        const firstFields = firstReply.embeds[0].data.fields;
+        expect(firstFields.length).toBeLessThanOrEqual(25);
+        expect(firstFields.length).toBe(10); // page size
+        expect(firstReply.embeds[0].data.footer.text).toContain('Página 1 de 3');
+        expect(firstReply.embeds[0].data.footer.text).toContain('30 anúncio');
 
-        // Discord hard-rejects more than 25 fields — this is the cap that
-        // stops the command from breaking outright for 26+ listings.
-        expect(fields.length).toBeLessThanOrEqual(25);
-        expect(fields.length).toBe(25);
+        // The pagination row: Prev disabled on page 1, Next enabled.
+        const [firstRow] = firstReply.components;
+        const [prevButton1, nextButton1] = firstRow.components;
+        expect(prevButton1.data.disabled).toBe(true);
+        expect(nextButton1.data.disabled).toBe(false);
 
-        // The user is told how many listings were left out.
-        const footerText = embed.data.footer?.text ?? '';
-        expect(footerText).toContain('25 de 30');
-        expect(footerText).toContain('5 omitidos');
+        // Click through every remaining page via the component handler,
+        // collecting every ad name seen, to prove all 30 are reachable —
+        // never just the first 25.
+        const seenNames = new Set<string>();
+        for (const field of firstFields) {
+            seenNames.add(field.name as string);
+        }
+
+        let page = 2;
+        for (; page <= 3; page++) {
+            const clickInteraction = new FakeComponentInteraction(
+                `mkt:list-page:${userId}:${page}:10`,
+                userId,
+            );
+            await componentHandler.handle(componentContext(clickInteraction));
+
+            expect(clickInteraction.updateCalls.length).toBe(1);
+            const update = clickInteraction.updateCalls[0];
+            const fields = update.embeds[0].data.fields;
+            expect(fields.length).toBeLessThanOrEqual(25);
+            for (const field of fields) {
+                seenNames.add(field.name as string);
+            }
+        }
+
+        // 30 distinct ads were seen across all 3 pages — nothing was skipped
+        // or double-counted, which is what "paginated" actually has to mean.
+        expect(seenNames.size).toBe(30);
+
+        // The last page's Next button is disabled — there is nothing past it.
+        const lastClick = new FakeComponentInteraction(`mkt:list-page:${userId}:3:10`, userId);
+        await componentHandler.handle(componentContext(lastClick));
+        const [lastRow] = lastClick.updateCalls[0].components;
+        const [, nextButtonLast] = lastRow.components;
+        expect(nextButtonLast.data.disabled).toBe(true);
     });
 
     it('truncates an over-long ad description instead of throwing', async () => {
@@ -117,6 +159,34 @@ describe('ListAdsSubcommand Integration Test', () => {
 
         expect(field.value.length).toBeLessThanOrEqual(EMBED_FIELD_VALUE_MAX_LENGTH);
         expect(field.value.endsWith('…')).toBe(true);
+    });
+
+    it('shows status and a working link for each ad', async () => {
+        const userId = '555555555555555555';
+        await createAd(
+            undefined,
+            'Sold Item',
+            userId,
+            'channel-1',
+            'message-1',
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            'sell',
+        );
+
+        const interaction = new FakeInteraction({}, userId, undefined, '333333333333333333', {});
+        await listAdsSubcommand.handle(buildContext(interaction));
+
+        const { embeds } = interaction.editReplyCalls[0];
+        const field = embeds[0].data.fields[0];
+        expect(field.value).toContain('🟢 Activo');
+        expect(field.value).toContain(
+            'https://discord.com/channels/333333333333333333/channel-1/message-1',
+        );
     });
 
     it('stays ephemeral on the "no listings" path too (M0.3) — nothing here should broadcast into the channel', async () => {
