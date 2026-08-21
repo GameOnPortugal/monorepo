@@ -20,5 +20,14 @@ export default defineConfig({
     },
     datasource: {
         url: process.env.DATABASE_URL,
+        // Prisma 7 removed `--shadow-database-url` from `migrate diff`; the
+        // shadow database is configured here instead. It is only consulted by
+        // the schema-drift gate (`bun run db:drift` / the "Check schema drift"
+        // CI step), which replays `prisma/migrations` into a scratch database
+        // and compares the result against schema.prisma. Same laziness rule as
+        // `url` above: read straight from the environment so an unset value
+        // costs nothing at config-load time for the commands that never touch
+        // a database.
+        shadowDatabaseUrl: process.env.SHADOW_DATABASE_URL,
     },
 });

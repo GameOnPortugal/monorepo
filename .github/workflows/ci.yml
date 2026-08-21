@@ -95,10 +95,16 @@ jobs:
           # it passes most of the time, which is the worst way for a gate to be wrong.
           docker compose -f docker-compose.ci.yml up -d --wait mariadb
           docker compose -f docker-compose.ci.yml exec -T mariadb mariadb -uroot -prootpassword -e "CREATE DATABASE IF NOT EXISTS discord_bot_shadow"
+          # Prisma 7 renamed `--to-schema-datamodel` to `--to-schema` and
+          # removed `--shadow-database-url` entirely: the shadow database is
+          # now read from `datasource.shadowDatabaseUrl` in prisma.config.ts,
+          # which in turn reads SHADOW_DATABASE_URL. Passing the old flag is a
+          # hard error ("unknown or unexpected option"), so this step and
+          # package.json's `db:drift` had to move together.
+          SHADOW_DATABASE_URL="mysql://root:rootpassword@127.0.0.1:3306/discord_bot_shadow" \
           bunx prisma migrate diff \
             --from-migrations prisma/migrations \
-            --to-schema-datamodel prisma/schema.prisma \
-            --shadow-database-url "mysql://root:rootpassword@127.0.0.1:3306/discord_bot_shadow" \
+            --to-schema prisma/schema.prisma \
             --exit-code
 
       # Integration tests need MariaDB. Run them inside the CI compose network so
