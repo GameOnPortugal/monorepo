@@ -526,6 +526,69 @@ Update this table as items land. `—` = not started.
 | M9 Feature gap & dead weight | 7 | 5 | #33 — M9.2/M9.3/M9.4 **done**, seven dead models and their tables dropped (migration `20260820102655_drop_dead_models`, guarded and verified against a production copy). M9.1 redesigned onto AutoMod. #44 — **M9.5 verified** (env vars were already clean; fixed the stale trap note in `AGENT.md` instead), **M9.6 done** (`old-discord-bot/` deleted, all references fixed). Remaining: **M9.7** (privacy flag) |
 | **Total** | **93** | **83** | |
 
+### What landed on 2026-08-20/21 (third session)
+
+Nineteen PRs (#40–#59), taking the queue from 58/93 to **83/93**, and the first
+three releases with real content: `discord-bot v1.2.0` (20 features, 3 fixes),
+`portal-api v0.2.0`, `portal-web v0.2.0`.
+
+**Milestones M4, M5, M6 and M7 are now complete**, and M8 went from 0/15 to
+14/15 — the portal exists, is deployed, and serves live data.
+
+**Production was down for roughly three hours and nobody knew.** The bot was
+crash-looping on `No bindings found for service: "Symbol(MediaStorage)"`.
+`inversify.config.ts` built `TYPES.Bot` with
+`toConstantValue(new DiscordBot(…, myContainer.get(BotExecutor), …))`, and
+`toConstantValue` needs its argument *now* — so that `get()` ran while the
+module was still executing, against only the bindings declared above it.
+`BotExecutor` fans out to every `CommandHandler`, one of which needs
+`TYPES.MediaStorage`, bound forty lines further down. Binding order was
+load-bearing and nothing said so.
+
+Bisected to **#37**, not the change that exposed it: #30 added the binding
+harmlessly, #37 was the commit that first made something depend on it. Four
+consecutive deploys reported success over a dead container.
+
+**CI could not have caught it.** Both eager branches sit behind
+`if (botEnv.config)`, true only when `DISCORD_TOKEN` is set — and the suite runs
+without one on purpose. The branch production actually takes had never been
+executed by anything. Fixed with `toDynamicValue` (#45), which removes the
+ordering dependency rather than satisfying it, plus `ContainerBoot.test.ts`,
+which boots the container in a subprocess with production-shaped env.
+
+Three more things that only production knew:
+
+- **The `Deploy` workflow reported success on a container that never became
+  healthy**, and the service `healthcheck` could not help — Docker does not run
+  healthchecks against a *restarting* container, which is exactly the crash-loop
+  case. #47 added a post-deploy gate that samples twice through Portainer's
+  Docker proxy and fails on a moved `RestartCount`. #59 extended it to the
+  portal containers.
+- **A "flaky" test was a connection-pool bug.** `truncateAllTables()` issued
+  `SET FOREIGN_KEY_CHECKS=0` and its `TRUNCATE`s as separate `$executeRaw`
+  calls; the SET is a *session* variable and Prisma pools connections. Measured:
+  **11 of 12 pooled connections still enforced FKs**. It never surfaced as
+  itself — it surfaced as an unrelated test dying in `beforeEach` with an absurd
+  reported duration (469923ms inside an 11-second run), which is what made it
+  look like a flake for weeks. Fixed in #52.
+- **A CI race, also mistaken for a flake.** The readiness probe passed while the
+  entrypoint was still running `migrate deploy`, so `test:setup`'s `migrate
+  reset` dropped `_prisma_migrations` underneath it — the entrypoint died and
+  took the in-flight `exec` with it, exiting 137 with empty test output. Fixed
+  in #43.
+
+Also verified rather than assumed: the screenshot gallery was finished by hand
+(**622 of 624** images re-hosted; the 2 remaining are 2022 Discord CDN links
+whose attachments are genuinely gone), all **76 Dependabot alerts** closed
+because every one lived in the deleted `old-discord-bot/`, and the brand assets
+were pulled from the guild itself — confirming, by sampling the artwork, that
+the four face-button hexes every design doc quoted are exactly right.
+
+> **The lesson, again**: every defect in this list was found by querying
+> production or reading a real log, and none by reading the repo. The two that
+> looked like flakes were the most expensive, because "re-run it" is a cheaper
+> reflex than "read the impossible number in the output".
+
 ### What landed on 2026-08-20 (second session)
 Fourteen more PRs (#23–#37), taking the queue from 41/92 to **54/93** — the
 extra item is **M6.0**, a `MediaStorage` port that was not in the original plan
