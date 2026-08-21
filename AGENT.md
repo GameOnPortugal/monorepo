@@ -6,14 +6,19 @@ material lives in [`docs/`](docs/).
 ## What this repo is
 
 Everything that powers the **Game On Portugal** Discord community (previously
-"Playstation Portugal"): the Discord bot, a cron sidecar that pokes the bot, and
-a copy of the community website.
+"Playstation Portugal"): the Discord bot and the community portal that serves
+`game-on-portugal.pt`.
 
 | Path               | What it is                                                    | Alive?                          |
 | ------------------ | ------------------------------------------------------------- | ------------------------------- |
-| `discord-bot/`     | Current bot. TypeScript + Bun + discord.js v14 + Prisma/MySQL | **Yes** — the only active code  |
-| `old-discord-bot/` | Predecessor bot. Node 15 + discord.js v12 + Sequelize         | No — reference only, not built  |
-| `webpage/`         | Bootstrap static site for game-on-portugal.pt                 | No — the live site is elsewhere |
+| `discord-bot/`     | The bot. TypeScript + Bun + discord.js v14 + Prisma/MySQL     | **Yes**                         |
+| `portal/`          | `api` (Bun + Hono) + `web` (React + Vite), serves the apex    | **Yes**                         |
+| `infrastructure/`  | Portainer stack definition + Caddy reference config           | **Yes** — deployed from `main`  |
+| `brand/`           | Vendored logo/banner/favicons (M8.1)                          | Assets, not code                |
+
+`old-discord-bot/` (deleted M9.6, 2026-08-20) and `webpage/` (deleted 2026-08-21
+with the apex cutover) were the two dead directories; both are preserved in git
+history and neither is coming back.
 
 Details and the reasoning behind "alive?" are in
 [`docs/state-of-the-project.md`](docs/state-of-the-project.md).
@@ -27,8 +32,11 @@ Details and the reasoning behind "alive?" are in
   (`GameOnPortugalBot#9387`). Moved off TedRelayer, the home media server, on
   **2026-08-19**; TedRelayer stays stopped-but-intact as the rollback path
   until **2026-09-02**.
-- **Website**: `game-on-portugal.pt` → GitHub Pages of the *separate*
-  `GameOnPortugal/gameonportugal.github.io` repo, **not** `webpage/` here.
+- **Website**: `game-on-portugal.pt` (and `www`) → the **portal** in this repo
+  (`portal/`), served from HTZ1 since the apex cutover on **2026-08-21**. The
+  2021 GitHub Pages site it replaced lived in the separate
+  `GameOnPortugal/gameonportugal.github.io` repo, now archived; this repo's copy
+  of that markup (`webpage/`) was deleted the same day.
 
 > ✅ **Deployment migration done (2026-08-19).** The CapRover workflows
 > (targeting *Superman*, decommissioned 2026-06-30) have been replaced with the

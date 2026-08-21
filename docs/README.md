@@ -39,10 +39,10 @@ Detailed, self-contained plans written to be handed to independent agents:
 
 ## The 60-second version
 
-One live subproject and one retired one. `discord-bot/` is a Bun +
-TypeScript + discord.js v14 + Prisma/MySQL bot with a clean layered
-architecture, 32 passing integration tests, and a production Docker image that
-still builds today. `webpage/` is a static site that is **not** what serves
+Two live subprojects. `discord-bot/` is a Bun + TypeScript + discord.js v14 +
+Prisma/MySQL bot with a clean layered architecture, 32 passing integration
+tests, and a production Docker image that still builds today. `portal/` is the
+public site and admin surface, and since **2026-08-21** it is what serves
 game-on-portugal.pt.
 
 `old-discord-bot/`, the retired Node 15 predecessor, was **deleted 2026-08-20

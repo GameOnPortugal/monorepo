@@ -253,16 +253,23 @@ both `docker-compose*.yml` files and `infrastructure/game-on-portugal.yaml`.
 `grep -rn` across the whole repo turns up the four dead names only in
 historical/decision prose in `docs/` — nothing reads them.
 
-### 9. `webpage/` is deployed by nothing
+### 9. `webpage/` is deployed by nothing — ✅ **RESOLVED 2026-08-21**
 
-`game-on-portugal.pt` is served by GitHub Pages from the separate
-`GameOnPortugal/gameonportugal.github.io` repo. This directory has a matching
-`CNAME` and appears in the release-please config and labeler, but no workflow
-builds or publishes it, and this repo has no Pages site. Editing it changes
-nothing. Its Unsplash background URL
-(`source.unsplash.com/featured/…`) points at a service Unsplash retired, so that
-is broken wherever it *is* served. Its `forms/` directory contains PHP that
-nothing executes.
+**Fixed by deleting the directory**, once M8.15 pointed the apex at the portal
+and `GameOnPortugal/gameonportugal.github.io` was archived. The 111 files are
+preserved in git history (`git log -- webpage`); the labeler's `Legacy` label
+and the Trivy `skip-dirs` exclusion that existed only for it are gone too.
+(Its release-please entry had already gone earlier, when the portal scaffold
+rewrote `.github/release-please-config.json` in M8.2 — that file now lists only
+`discord-bot`, `portal/api` and `portal/web`.)
+
+As found on 2026-08-19: `game-on-portugal.pt` was served by GitHub Pages from
+the separate `GameOnPortugal/gameonportugal.github.io` repo. This directory had
+a matching `CNAME`, but no workflow built or published it, and this repo had no
+Pages site. Editing it changed nothing. Its Unsplash background URL
+(`source.unsplash.com/featured/…`) pointed at a service Unsplash retired, so
+that was broken wherever it *was* served. Its `forms/` directory contained PHP
+that nothing executed.
 
 ### 10. The trophy feature has been ranking stale data since December 2024
 

@@ -24,8 +24,3 @@ Documentation:
       - any-glob-to-any-file:
           - 'docs/**'
           - '**/*.md'
-
-Legacy:
-  - changed-files:
-      - any-glob-to-any-file:
-          - 'webpage/**'

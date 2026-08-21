@@ -78,39 +78,57 @@ Stale images: `joshlopes/game-on-portugal-bot` (411 MB, 13 months old),
 
 ---
 
-## C2 — Delete `webpage/` (part of M8.15)
+## C2 — Delete `webpage/` (part of M8.15) — ✅ **DONE 2026-08-21**
 
-`webpage/` is a 111-file Bootstrap template copy of the old site. It is
-**deployed by nothing** (`docs/known-issues.md` #9), its `index.html`
-references an `assets/img/logo.png` that does not exist, and the live site was
-GitHub Pages — now the portal.
+`webpage/` was a 111-file Bootstrap template copy of the old site, **deployed by
+nothing** (`docs/known-issues.md` #9), whose `index.html` referenced an
+`assets/img/logo.png` that did not exist.
 
-**Blocked on**: the apex DNS cutover completing and the portal serving
-`game-on-portugal.pt`. Until then this is still the only copy of the old
-markup in the working tree.
+Unblocked and done on the same day as C3, once the apex cutover was verified:
+`game-on-portugal.pt` and `www` both resolve to `195.201.192.35` (HTZ1) and
+serve the portal. Deleted with `git rm -r webpage`; the files remain in history
+(`git log -- webpage`).
 
-Files that reference it and must be updated in the same PR:
+Every file that referenced it was updated in the same PR:
 
-- `.github/labeler.yml` — a `webpage/**` path label
-- `.github/workflows/security.yml` — a scan-exclusion comment
-- `AGENT.md` — the repo table and the "Where it lives" note
+- `.github/labeler.yml` — the `Legacy` label's only glob was `webpage/**`
+  (`old-discord-bot/**` had already gone in M9.6), so the whole label went. The
+  label itself still exists on GitHub; it is simply never applied now.
+- `.github/workflows/security.yml` — the Trivy `skip-dirs: webpage` exclusion
+  and its comment. Trivy now scans the whole tree with nothing excluded.
+- `AGENT.md` — the repo table (which also still listed the long-deleted
+  `old-discord-bot/` and omitted `portal/`) and the "Where it lives" note
 - `docs/README.md`, `docs/plans/00-overview.md`, `docs/known-issues.md` #9
-- `brand/README.md` — references it as *why* there was no logo file (rewrite as
-  past tense; the point still stands)
+  (marked resolved), `docs/state-of-the-project.md`, `docs/plans/03-portal.md`,
+  `docs/plans/04-infrastructure-migration.md` (phase 4 closed),
+  `docs/revival-plan.md` item 24
+- `brand/README.md` — rewritten as past tense; the point it made still stands
+
+**Not touched**: `docs/plans/GLOBAL-PLAN.md`, because PR #71 was open against it
+at the time. Its M8.15 row still says these three follow-ups are "still open,
+now unblocked" — that line needs a one-word update once both PRs land.
 
 ---
 
-## C3 — Archive `GameOnPortugal/gameonportugal.github.io`
+## C3 — Archive `GameOnPortugal/gameonportugal.github.io` — ✅ **DONE 2026-08-21**
 
-Verified 2026-08-21: **not archived**, last pushed **2021-11-11**.
+Archived (`PATCH /repos/… archived=true`), not deleted — it is the provenance of
+the old site, last pushed 2021-11-11. Its Pages site is left configured with the
+`game-on-portugal.pt` CNAME; that is inert now that DNS points elsewhere, and
+archiving freezes it.
 
-Once the apex serves the portal, archive the repo (do not delete — it is the
-provenance of the old site). Then remove the now-pointless
-`_github-pages-challenge-gameonportugal` TXT record from the OVH zone.
+The `_github-pages-challenge-gameonportugal` TXT record was then removed from
+the OVH zone (record id `5215290515`) and the zone refreshed — OVH publishes the
+zone, not the individual record. The zone was snapshotted first to
+`~/ovh-zone-backups/2026-08-21/game-on-portugal.pt.json`. MX, SRV, `autoconfig`,
+`discord`, `media` and `www` were untouched.
 
-**Order matters**: keep the TXT record until you are certain you will not roll
-back to Pages, because re-verifying a domain there is slower than leaving one
-stale TXT record in place.
+**The stated ordering rule was consciously overridden here.** This plan said to
+keep the TXT record "until you are certain you will not roll back to Pages,
+because re-verifying a domain there is slower than leaving one stale TXT record
+in place." Luis's call, 2026-08-21: *"I can't see myself going back."* So the
+cost is known and accepted — a rollback to Pages now means unarchiving the repo
+**and** re-verifying the domain from scratch, not just repointing DNS.
 
 ---
 

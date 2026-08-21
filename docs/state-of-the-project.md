@@ -31,7 +31,7 @@ branch `main`. The org also holds:
 | `monorepo`                  | public     | 2025-06-30 | This repo                                             |
 | `discord-bot`               | public     | 2024-11-13 | **Archived.** Absorbed as `discord-bot/`              |
 | `scheduler`                 | private    | 2024-11-13 | Absorbed as `scheduler/`, original never archived; directory deleted 2026-08-19 |
-| `gameonportugal.github.io`  | public     | 2021-11-11 | **Serves the live website.** Not this repo's `webpage/` |
+| `gameonportugal.github.io`  | public     | 2021-11-11 | Served the live website until 2026-08-21. **Archived** once the portal took over the apex |
 | `screenshot-bot`            | private    | 2021-07-08 | Unrelated, long dead                                  |
 
 **Container images** — Docker Hub under the personal `joshlopes` namespace, not
@@ -93,12 +93,15 @@ porting LFG is greenfield work with no data-migration concern.
 only when `LOKI_HOST` is set. Telegram notifications on deploy and on workflow
 failure, via `.github/actions/send-telegram-message`.
 
-**Website** — `game-on-portugal.pt` resolves to GitHub Pages
-(185.199.108-111.153) and `www` CNAMEs to `gameonportugal.github.io`. It returns
-200 with `last-modified: Thu, 11 Nov 2021`. The `webpage/` directory here is a
-copy carrying the same `CNAME` file, but this repo has **no** Pages site
-(`GET /repos/.../pages` → 404) and **no** workflow that touches `webpage/`.
-Editing `webpage/` therefore changes nothing anyone can see.
+**Website** — *(superseded 2026-08-21 by the M8.15 apex cutover: the domain
+and `www` now resolve to HTZ1 and serve `portal/`; `gameonportugal.github.io`
+is archived and `webpage/` is deleted.)* As of this snapshot,
+`game-on-portugal.pt` resolved to GitHub Pages (185.199.108-111.153) and `www`
+CNAMEd to `gameonportugal.github.io`, returning 200 with
+`last-modified: Thu, 11 Nov 2021`. The `webpage/` directory here was a copy
+carrying the same `CNAME` file, but this repo had **no** Pages site
+(`GET /repos/.../pages` → 404) and **no** workflow touching `webpage/`, so
+editing it changed nothing anyone could see.
 
 ## Subproject detail
 
@@ -204,7 +207,13 @@ old LFG history did not survive the Sequelize→Prisma move. Porting LFG is
 therefore greenfield: no migration, no backfill, but also no continuity of the
 community's old rankings.
 
-### `webpage/` — orphaned
+### `webpage/` — orphaned, and **deleted 2026-08-21**
+
+**The directory was deleted once M8.15 pointed the apex at the portal** and
+`GameOnPortugal/gameonportugal.github.io` was archived — the two things that
+had made it, however uselessly, the last copy of the old markup in the working
+tree. It is preserved in git history (`git log -- webpage`). The description
+below is left as it stood in the 2026-08-19 snapshot.
 
 BootstrapMade "Personal" template v4.6.0, in Portuguese, with `index.html`,
 `discord.html`, `portfolio-details.html`, a PHP contact form under `forms/`
@@ -237,8 +246,9 @@ Observed facts, as of the 2026-08-19 cutover:
   `feat:`/`fix:`-titled PR to merge first, and `RELEASE_PLEASE_TOKEN` was not
   created during the migration (falls back to `GITHUB_TOKEN`, which works but
   means the release PR itself gets no CI run). See known-issues.md #6.
-- `webpage/` still has no workflow at all, and is still slated for deletion
-  along with the rest of the orphaned static site.
+- ~~`webpage/` still has no workflow at all, and is still slated for deletion
+  along with the rest of the orphaned static site.~~ **Deleted 2026-08-21**,
+  with the apex cutover.
 
 ## Overall read
 

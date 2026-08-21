@@ -61,7 +61,7 @@ guild (`plat` = `820982755927392297`, and the three metals). Do not "fix" them.
 ## Brand assets (for plan 03, useful context for all)
 
 Pulled from the live guild — this is the real identity, not the Bootstrap
-template leftovers in `webpage/`:
+template leftovers of the old static site (`webpage/`, deleted 2026-08-21):
 
 - **Icon**: `https://cdn.discordapp.com/icons/818108848492773377/b5d2486a6181a2a5ecb3a4cfbc4b9a0d.png?size=512`
   — a flaming gamepad shaped like a skull, white line-art on black, with four
@@ -84,10 +84,12 @@ template leftovers in `webpage/`:
   `@gameonportugal` on Twitter/Instagram/Twitch,
   `facebook.com/gameonportugalofficial`.
 
-> There is **no logo file in this repo**. `webpage/assets/img/logo.png` is
-> referenced by `index.html` but does not exist, and `apple-touch-icon.png` is
-> the Bootstrap logo. Plan 03 should vendor the guild icon/banner into the repo
-> as proper assets (and ideally trace an SVG).
+> ✅ **Resolved by M8.1** — the guild icon and banner are vendored under
+> [`brand/`](../../brand/README.md), with favicons and an OG card derived from
+> them. When this was written there was **no logo file in the repo at all**:
+> the old static site's `index.html` referenced an `assets/img/logo.png` that
+> did not exist, and its `apple-touch-icon.png` was the Bootstrap logo. Tracing
+> a proper SVG is still open.
 
 ## Data reality — read before designing anything
 
