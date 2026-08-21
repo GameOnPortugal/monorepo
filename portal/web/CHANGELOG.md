@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/GameOnPortugal/monorepo/compare/portal-web-v0.2.0...portal-web-v0.3.0) (2026-08-21)
+
+
+### Features
+
+* **portal-api:** resize-and-cache thumbnail endpoint for the screenshots gallery (M8.8) ([#63](https://github.com/GameOnPortugal/monorepo/issues/63)) ([f41f022](https://github.com/GameOnPortugal/monorepo/commit/f41f022b77fbd4db4f0cf8a3cd545c2a1c0514f2))
+* **portal:** admin OAuth, CRUD + audit log, jobs page, SEO, deploy docs (M8.10-M8.14) ([#59](https://github.com/GameOnPortugal/monorepo/issues/59)) ([708efd4](https://github.com/GameOnPortugal/monorepo/commit/708efd42f4844d5948326456cbd5706d8dbd00a5))
+
 ## [0.2.0](https://github.com/GameOnPortugal/monorepo/compare/portal-web-v0.1.0...portal-web-v0.2.0) (2026-08-21)
 
 
