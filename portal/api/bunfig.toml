@@ -1,0 +1,6 @@
+# Runs before every test file. Keeps the audit log's SQLite file in-memory
+# during `bun test` so the suite never touches ./data (which does not exist
+# in CI unless something creates it) and so parallel test files never share
+# on-disk state — see tests/preload.ts and src/audit/db.ts.
+[test]
+preload = ["./tests/preload.ts"]

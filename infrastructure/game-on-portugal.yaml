@@ -148,6 +148,32 @@ services:
     environment:
       DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in the Portainer stack env}@db:3306/discord-bot
       PORT: "3001"
+      # --- M8.10 admin OAuth (all optional — see portal/api/.env.example for
+      # the full setup runbook incl. the Discord Developer Portal redirect
+      # URIs). Unset means "no admin surface": /api/auth/* and /api/admin/*
+      # answer 503, every public page/route is unaffected — same
+      # degrade-safely contract as the bot's own DISCORD_TOKEN (AGENT.md
+      # "Traps"). DISCORD_CLIENT_ID is already required above for the bot and
+      # is not a secret (it's public in every OAuth URL); reused here rather
+      # than duplicated under a second name.
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
+      # NEW secret Luis must create: Discord Developer Portal -> the Game On
+      # Portugal application -> OAuth2 -> Client Secret -> Reset Secret ->
+      # set as a Portainer stack environment variable (not in this file).
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:-}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-818108848492773377}
+      # NEW secret Luis must create: any random 32+ byte value, e.g.
+      # `openssl rand -hex 32`, set as a Portainer stack environment
+      # variable. Signs the admin session cookie — there is no session
+      # table (src/lib/session.ts explains why), so this is what makes a
+      # session unforgeable. Rotating it logs out every admin.
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      # --- M8.11 audit log: a private SQLite file this service owns (not a
+      # MySQL table — the bot owns that schema, see portal/README.md), kept
+      # on the volume below so it survives redeploys.
+      AUDIT_DB_PATH: /data/audit.db
+    volumes:
+      - portal_audit_data:/data
     restart: unless-stopped
     depends_on:
       db:
@@ -176,3 +202,6 @@ volumes:
   db_data:
   minio_data:
   backup_data:
+  # M8.11's admin audit log (portal/api/src/audit/db.ts) — a private SQLite
+  # file portal-api owns outright, unrelated to the bot's MySQL database.
+  portal_audit_data:
