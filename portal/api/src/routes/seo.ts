@@ -9,6 +9,7 @@
 // (repositories/visibility.ts), so there is no risk of a soft-deleted/opted-out
 // row leaking into the sitemap.
 import { Hono } from "hono";
+import { type OriginRequest, resolvePublicOrigin } from "../lib/publicOrigin";
 import { publicAdsWhere } from "../repositories/visibility";
 import { prisma } from "../db";
 
@@ -16,8 +17,15 @@ export const seo = new Hono();
 
 const STATIC_PATHS = ["/", "/marketplace", "/screenshots", "/screenshots/hall-of-fame", "/trophies"];
 
-function siteOrigin(c: { req: { url: string } }): string {
-  return process.env.WEB_ORIGIN || new URL(c.req.url).origin;
+/**
+ * Sitemap entries are *web* pages, so WEB_ORIGIN wins where it is set (local
+ * dev, where the SPA is on another port). The fallback must not be
+ * `new URL(c.req.url).origin`: nginx's `location = /sitemap.xml` does not
+ * rewrite Host, so that published `http://portal-api:3001/...` — an internal
+ * Docker address — to crawlers. See lib/publicOrigin.ts.
+ */
+function siteOrigin(c: OriginRequest): string {
+  return process.env.WEB_ORIGIN || resolvePublicOrigin(c);
 }
 
 function xmlEscape(value: string): string {

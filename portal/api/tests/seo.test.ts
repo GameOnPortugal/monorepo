@@ -33,4 +33,22 @@ describe("GET /sitemap.xml", () => {
     expect(body).not.toContain(`/marketplace/${deletedId}</loc>`);
     expect(body).not.toContain("/admin");
   });
+
+  // Regression: these assertions used to check paths only, so nobody noticed
+  // production was publishing `http://portal-api:3001/...` — the internal
+  // Docker address — because nginx's sitemap location did not rewrite Host
+  // and the origin was read straight off the request. See lib/publicOrigin.ts.
+  test("builds absolute URLs from the public origin, never the internal upstream", async () => {
+    const previous = process.env.PUBLIC_ORIGIN;
+    process.env.PUBLIC_ORIGIN = "https://game-on-portugal.pt";
+    try {
+      const body = await (await app.request("/sitemap.xml")).text();
+      expect(body).toContain("<loc>https://game-on-portugal.pt/</loc>");
+      expect(body).toContain(`<loc>https://game-on-portugal.pt/marketplace/${activeId}</loc>`);
+      expect(body).not.toContain("portal-api:3001");
+    } finally {
+      if (previous === undefined) delete process.env.PUBLIC_ORIGIN;
+      else process.env.PUBLIC_ORIGIN = previous;
+    }
+  });
 });

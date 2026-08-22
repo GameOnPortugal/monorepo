@@ -50,6 +50,44 @@ describe("GET /api/auth/login", () => {
     expect(location.startsWith("https://discord.com/api/oauth2/authorize")).toBe(true);
     expect(res.headers.get("set-cookie")).toContain("gop_oauth_state=");
   });
+
+  // Regression: Caddy terminates TLS and reaches portal-api over plain HTTP,
+  // so deriving redirect_uri from the request produced
+  // `http://game-on-portugal.pt/api/auth/callback` and Discord answered
+  // "Invalid OAuth2 redirect_uri" — admin login was impossible in production.
+  // The same origin decides the `Secure` cookie flag, so both are pinned here.
+  test("builds an https redirect_uri from PUBLIC_ORIGIN even when the request arrives over http", async () => {
+    const previous = process.env.PUBLIC_ORIGIN;
+    process.env.PUBLIC_ORIGIN = "https://game-on-portugal.pt";
+    try {
+      const res = await app.request("http://portal-api:3001/api/auth/login", { redirect: "manual" });
+      expect(res.status).toBe(302);
+
+      const redirectUri = new URL(res.headers.get("location")!).searchParams.get("redirect_uri");
+      expect(redirectUri).toBe("https://game-on-portugal.pt/api/auth/callback");
+
+      expect(res.headers.get("set-cookie")).toContain("Secure");
+    } finally {
+      if (previous === undefined) delete process.env.PUBLIC_ORIGIN;
+      else process.env.PUBLIC_ORIGIN = previous;
+    }
+  });
+
+  test("falls back to X-Forwarded-Proto when PUBLIC_ORIGIN is not pinned", async () => {
+    const previous = process.env.PUBLIC_ORIGIN;
+    delete process.env.PUBLIC_ORIGIN;
+    try {
+      const res = await app.request("http://game-on-portugal.pt/api/auth/login", {
+        headers: { "X-Forwarded-Proto": "https" },
+        redirect: "manual",
+      });
+
+      const redirectUri = new URL(res.headers.get("location")!).searchParams.get("redirect_uri");
+      expect(redirectUri).toBe("https://game-on-portugal.pt/api/auth/callback");
+    } finally {
+      if (previous !== undefined) process.env.PUBLIC_ORIGIN = previous;
+    }
+  });
 });
 
 async function runCallback(permissions: string | null): Promise<Response> {
