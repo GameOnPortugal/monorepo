@@ -1,4 +1,5 @@
 import { Link, NavLink, Outlet } from "react-router-dom";
+import { BrandMark } from "./BrandMark";
 
 const DISCORD_INVITE = "https://discord.gg/mBJKUhwE23";
 
@@ -6,6 +7,7 @@ const NAV_LINKS = [
   { to: "/marketplace", label: "Marketplace" },
   { to: "/screenshots", label: "Screenshots" },
   { to: "/trophies", label: "Troféus" },
+  { to: "/como-participar", label: "Como participar" },
 ];
 
 // Mobile-first shell (375px baseline — docs/plans/03-portal.md "Mobile"):
@@ -23,8 +25,15 @@ export function Layout() {
     <div className="flex min-h-dvh flex-col">
       <header className="sticky top-0 z-10 border-b border-surface-border bg-background/90 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
-          <a href="/" className="shrink-0 font-display text-lg tracking-tight">
-            GAME ON <span className="text-accent-yellow">PORTUGAL</span>
+          {/* M10.1 — the mark alongside the wordmark. The wordmark stays as
+              real text rather than becoming part of an image: it is the
+              accessible name, it stays crisp at every zoom level, and it is
+              what M8.5 already got right. The mark is additive. */}
+          <a href="/" className="focus-glow flex shrink-0 items-center gap-2">
+            <BrandMark className="h-8" />
+            <span className="font-display text-lg tracking-tight">
+              GAME ON <span className="text-accent-yellow">PORTUGAL</span>
+            </span>
           </a>
           <nav className="flex min-w-0 flex-1 items-center gap-4 overflow-x-auto text-sm text-white/70">
             {NAV_LINKS.map((link) => (
@@ -56,7 +65,10 @@ export function Layout() {
 
       <footer className="border-t border-surface-border">
         <div className="mx-auto flex max-w-5xl flex-col gap-2 px-4 py-8 text-sm text-white/60">
-          <p>Game On Portugal — comunidade de jogadores portuguesa.</p>
+          <p className="flex items-center gap-2">
+            <BrandMark className="h-6 opacity-70" />
+            Game On Portugal — comunidade de jogadores portuguesa.
+          </p>
           <nav className="flex flex-wrap gap-4">
             <a href={DISCORD_INVITE} target="_blank" rel="noreferrer" className="hover:text-white">
               Discord
@@ -72,13 +84,15 @@ export function Layout() {
             >
               Facebook
             </a>
-            {/* M8.10 — discreet, not hidden: /admin is protected by Discord
-                OAuth + ManageMessages either way (see pages/admin/AdminLayout.tsx),
-                so linking it plainly is no less safe than a moderator having
-                to know the URL, and it's one fewer thing to remember. */}
-            <a href="/admin" className="hover:text-white">
-              Admin
-            </a>
+            {/* M10.2 — the /admin link was removed from here (Luis,
+                2026-08-22). M8.10's "discreet, not hidden" reasoning still
+                holds on the security question: the route is gated on Discord
+                OAuth + ManageMessages (pages/admin/AdminLayout.tsx), so the
+                link was never what protected it, and removing it protects
+                nothing by itself. What it does buy is that the login form is
+                no longer advertised to every passer-by and every crawler, so
+                the auth logs stop collecting drive-by attempts. Moderators
+                navigate to /admin directly; the route is unchanged. */}
             {/* M9.7 — the privacy page: what's shown publicly, how to opt
                 out, and the GDPR erasure path. */}
             <Link to="/privacy" className="hover:text-white">

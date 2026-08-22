@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { AdCard } from "../components/AdCard";
+import { BrandMark } from "../components/BrandMark";
 import { LazyImage } from "../components/LazyImage";
 import { ApiError, EmptyState, SkeletonRow } from "../components/StateViews";
 import { api } from "../lib/api/client";
@@ -52,7 +53,11 @@ export function Home() {
 function Hero() {
   return (
     <section className="scanlines relative overflow-hidden border-b border-surface-border px-4 py-16 text-center sm:py-24">
-      <p className="text-xs font-semibold tracking-[0.3em] text-white/50 uppercase">Discord community</p>
+      {/* M10.1 — the mark leads the hero. Decorative: the H1 immediately
+          below says the same thing as text, so announcing it twice would
+          only add noise for a screen reader. */}
+      <BrandMark variant="lg" className="mx-auto h-24 sm:h-32" />
+      <p className="mt-6 text-xs font-semibold tracking-[0.3em] text-white/50 uppercase">Discord community</p>
       <h1 className="mx-auto mt-4 max-w-2xl font-display text-4xl leading-tight sm:text-6xl">
         GAME ON <span className="text-accent-yellow">PORTUGAL</span>
       </h1>

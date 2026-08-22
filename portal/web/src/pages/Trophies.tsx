@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { ApiError, EmptyState } from "../components/StateViews";
 import { api } from "../lib/api/client";
 import { useDocumentHead } from "../lib/seo";
@@ -18,6 +19,21 @@ const RANK_BORDER: Record<number, string> = {
 const RANK_TEXT: Record<number, string> = {
   1: "text-accent-yellow",
 };
+
+/**
+ * M10.9 — link a ranked hunter to the profile the numbers came from.
+ *
+ * Same base URL the bot already scrapes
+ * (`discord-bot/src/Infrastructure/Trophy/PsnProfilesTrophySource.ts`'s
+ * `BASE_URL`), and `psnProfile` is exactly the path segment
+ * `extractPsnProfileFromUrl` parsed out of the URL the member submitted to
+ * `/trophy create` — so any profile that appears on this leaderboard at all
+ * is one PSNProfiles served a page for. `encodeURIComponent` because the
+ * column is un-validated free text at the database level.
+ */
+function psnProfileUrl(psnProfile: string): string {
+  return `https://psnprofiles.com/${encodeURIComponent(psnProfile)}`;
+}
 
 /**
  * M8.9 — trophy leaderboard. The plan-03 pages table and the M8.9 row in
@@ -54,6 +70,19 @@ export function Trophies() {
         Ranking por pontos de troféus somados por perfil. Sincronizado periodicamente com a PSN — pode estar alguns
         minutos atrás do que vês no Discord.
       </p>
+      {/* M10.10 — the leaderboard showed the result and never said how to get
+          into it. Both links go to the same page; they are separate because
+          "how do I join" and "why am I missing" are different questions asked
+          by different people, and burying the second inside the first is how
+          the excluded-but-fixable case goes unanswered. */}
+      <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+        <Link to="/como-participar#ranking" className="focus-glow text-accent-blue hover:underline">
+          Como entrar no ranking →
+        </Link>
+        <Link to="/como-participar#fora-do-ranking" className="focus-glow text-white/60 hover:text-white">
+          Não apareço aqui, porquê?
+        </Link>
+      </p>
 
       {state === "loading" && (
         <div className="mt-6 space-y-2" aria-hidden>
@@ -86,7 +115,22 @@ export function Trophies() {
                 <span className={`w-8 text-right font-display text-lg ${RANK_TEXT[entry.rank] ?? "text-white/50"}`}>
                   {entry.rank}
                 </span>
-                <span>{entry.psnProfile ?? "Perfil sem nome"}</span>
+                {entry.psnProfile ? (
+                  <a
+                    href={psnProfileUrl(entry.psnProfile)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="focus-glow hover:underline"
+                  >
+                    {entry.psnProfile}
+                    <span aria-hidden className="ml-1 text-white/40">
+                      ↗
+                    </span>
+                    <span className="sr-only"> (abre o perfil no PSNProfiles)</span>
+                  </a>
+                ) : (
+                  <span>Perfil sem nome</span>
+                )}
               </span>
               <span className="text-sm text-white/60">
                 {entry.points.toLocaleString("pt-PT")} pts · {entry.trophyCount} troféus

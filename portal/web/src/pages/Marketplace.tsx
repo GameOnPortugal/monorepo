@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { AdCard } from "../components/AdCard";
 import { ApiError, EmptyState, SkeletonRow } from "../components/StateViews";
@@ -83,6 +84,13 @@ export function Marketplace() {
     <div className="mx-auto max-w-5xl px-4 py-8">
       <h1 className="font-display text-2xl">Marketplace</h1>
       <p className="mt-1 text-sm text-white/60">Anúncios de compra e venda entre membros da comunidade.</p>
+      {/* M10.10 — how to actually post one; the portal is read-only, the ad
+          is created in Discord. */}
+      <p className="mt-3 text-sm">
+        <Link to="/como-participar#marketplace" className="focus-glow text-accent-blue hover:underline">
+          Como publicar um anúncio →
+        </Link>
+      </p>
 
       <Filters
         adType={adType}
