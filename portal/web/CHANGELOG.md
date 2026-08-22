@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/GameOnPortugal/monorepo/compare/portal-web-v0.5.0...portal-web-v0.6.0) (2026-08-22)
+
+
+### Features
+
+* **portal-web:** put the community logo on the site, add "Como participar" (M10.1-M10.3, M10.9-M10.11) ([#84](https://github.com/GameOnPortugal/monorepo/issues/84)) ([19d8df8](https://github.com/GameOnPortugal/monorepo/commit/19d8df8e8fc26ba0672489f8b97120c25d61d40c))
+
 ## [0.5.0](https://github.com/GameOnPortugal/monorepo/compare/portal-web-v0.4.0...portal-web-v0.5.0) (2026-08-22)
 
 
