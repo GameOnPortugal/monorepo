@@ -10,6 +10,7 @@ short version.
 | [architecture.md](architecture.md)                   | You are about to change `discord-bot/` code                                |
 | [operations.md](operations.md)                       | You need to build, release, deploy, or debug the running bot               |
 | [known-issues.md](known-issues.md)                   | You want the itemised list of what is broken or rotten, with severities    |
+| [psn-crawl.md](psn-crawl.md)                         | You are touching the trophy crawl, or `/trophy rank` has stopped updating  |
 | [revival-plan.md](revival-plan.md)                   | You want the original narrative sequencing (superseded by the global plan) |
 | [session-log-2026-08-19.md](session-log-2026-08-19.md) | You want the record of how all of this was found, and why each call was made |
 | [plans/](plans/00-overview.md)                       | You are an agent about to build one of the workstreams                     |
