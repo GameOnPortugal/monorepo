@@ -26,14 +26,26 @@
 
 const http = require('http');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const { chromium } = require('patchright');
 
 const PORT = Number(process.env.PORT || 8791);
 const TOKEN = process.env.PSN_FETCH_TOKEN || '';
 const ALLOWED_ORIGIN = 'https://psnprofiles.com';
-const MIN_REQUEST_INTERVAL_MS = Number(process.env.MIN_REQUEST_INTERVAL_MS || 1500);
+// 1.5s survives a short burst but not a real backfill: in the first
+// production run Cloudflare served ~40 pages happily and then began issuing
+// challenges that never cleared, on URLs it had answered minutes earlier.
+// The limit is sustained volume, not any single request, so the throttle is
+// the thing that has to give. 6s puts a ~1000-page catch-up at roughly 100
+// minutes, which is a fine price for a job that runs unattended.
+const MIN_REQUEST_INTERVAL_MS = Number(process.env.MIN_REQUEST_INTERVAL_MS || 6000);
 const NAV_TIMEOUT_MS = Number(process.env.NAV_TIMEOUT_MS || 60000);
-const CHALLENGE_TIMEOUT_MS = Number(process.env.CHALLENGE_TIMEOUT_MS || 45000);
+const CHALLENGE_TIMEOUT_MS = Number(process.env.CHALLENGE_TIMEOUT_MS || 60000);
+/** After a challenge fails, sit out this long before retrying on a fresh browser. */
+const COOLDOWN_MS = Number(process.env.COOLDOWN_MS || 120000);
+/** Attempts per request, including the first. Each retry gets a new browser context. */
+const MAX_ATTEMPTS = Number(process.env.MAX_ATTEMPTS || 2);
 const PROFILE_DIR = process.env.PROFILE_DIR || '/data/profile';
 
 if (!TOKEN) {
@@ -53,15 +65,54 @@ function tokenMatches(presented) {
 }
 
 let browserContext = null;
+/** Guards against two concurrent relaunches racing for the same profile lock. */
+let launching = null;
 let lastRequestAt = 0;
 /** Serialises navigations: each request chains onto the previous one. */
 let queue = Promise.resolve();
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Chromium leaves `SingletonLock`/`SingletonCookie`/`SingletonSocket` in the
+ * profile directory and refuses to start if they name a process that is gone.
+ * Because the profile lives on a volume that outlives the container, any
+ * ungraceful stop (`docker compose up` recreating this service, an OOM kill)
+ * strands them and every subsequent launch fails with "Target page, context
+ * or browser has been closed" — which reads like a bug in this code rather
+ * than leftover state. They are only ever valid for a live browser we own, so
+ * clearing them before each launch is safe.
+ */
+function clearStaleProfileLocks() {
+  for (const name of ['SingletonLock', 'SingletonCookie', 'SingletonSocket']) {
+    try {
+      fs.rmSync(path.join(PROFILE_DIR, name), { force: true });
+    } catch (error) {
+      log('profile.lock-cleanup-failed', { name, error: error.message });
+    }
+  }
+}
+
 async function getContext() {
   if (browserContext) return browserContext;
+  // Serialise launches: the queue makes concurrent requests impossible today,
+  // but a relaunch racing itself would corrupt the profile in a way that is
+  // very hard to diagnose.
+  if (launching) return launching;
 
+  launching = (async () => {
+    clearStaleProfileLocks();
+    return launchContext();
+  })();
+
+  try {
+    return await launching;
+  } finally {
+    launching = null;
+  }
+}
+
+async function launchContext() {
   // Headed (under xvfb) and persistent, both load-bearing: headless is
   // detected outright, and a persistent profile keeps the clearance cookie
   // so most requests skip the challenge entirely.
@@ -82,7 +133,49 @@ async function getContext() {
   return browserContext;
 }
 
+/**
+ * Drops the browser so the next request starts a fresh one. Cloudflare's
+ * clearance lives in the browser profile, so once it has decided this
+ * session is suspicious, reusing the same context just replays the failure —
+ * a relaunch is what actually re-earns clearance.
+ */
+async function recycleContext(reason) {
+  log('browser.recycling', { reason });
+  const ctx = browserContext;
+  browserContext = null;
+  if (ctx) {
+    await ctx.close().catch(() => {});
+  }
+  // Chromium releases the profile lock asynchronously after close() resolves;
+  // relaunching immediately hits the very stale-lock failure above.
+  await sleep(3000);
+  clearStaleProfileLocks();
+}
+
 async function fetchPage(url) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      return await attemptFetch(url);
+    } catch (error) {
+      lastError = error;
+      if (attempt >= MAX_ATTEMPTS) break;
+
+      // Only a challenge failure is worth the expensive recovery; a genuine
+      // 404 or a navigation error would just fail again more slowly.
+      if (!/challenge did not clear/i.test(error.message)) break;
+
+      log('fetch.retrying', { url, attempt, cooldownMs: COOLDOWN_MS });
+      await recycleContext('challenge did not clear');
+      await sleep(COOLDOWN_MS);
+    }
+  }
+
+  throw lastError;
+}
+
+async function attemptFetch(url) {
   const elapsed = Date.now() - lastRequestAt;
   if (elapsed < MIN_REQUEST_INTERVAL_MS) {
     await sleep(MIN_REQUEST_INTERVAL_MS - elapsed);
