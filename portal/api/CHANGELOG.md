@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/GameOnPortugal/monorepo/compare/portal-api-v0.4.0...portal-api-v0.5.0) (2026-08-22)
+
+
+### Features
+
+* **portal-api:** fix OAuth redirect_uri and cookie security via PUBLIC_ORIGIN (M8.10) ([#80](https://github.com/GameOnPortugal/monorepo/issues/80)) ([26c1a3a](https://github.com/GameOnPortugal/monorepo/commit/26c1a3a90f304172e0e116b3594c8d79ddec1bb8))
+
 ## [0.4.0](https://github.com/GameOnPortugal/monorepo/compare/portal-api-v0.3.0...portal-api-v0.4.0) (2026-08-21)
 
 
