@@ -104,10 +104,12 @@ Cheap, self-contained, and it makes everything after it verifiable.
 
 ## Phase 5 — Decide the fate of the dead weight
 
-24. **`webpage/`.** *(issue #9)* Either wire a Pages deploy from this monorepo and
-    retire `gameonportugal.github.io`, or delete the directory and its
-    release-please/labeler entries. The status quo — a copy that looks live and
-    is not — is the worst of both.
+24. ✅ **`webpage/`.** **Done (2026-08-21).** Resolved the third way this item did
+    not anticipate: neither branch of the either/or, because M8 built a real
+    portal. The apex now serves `portal/` from HTZ1, `gameonportugal.github.io`
+    is archived, and the directory plus its labeler entry are deleted (its
+    release-please entry had already gone with the M8.2 scaffold). Preserved in
+    git history — `git log -- webpage`.
 25. ✅ **`old-discord-bot/`.** **Done (2026-08-20, M9.6).** Deleted outright
     rather than moved to `reference/` — git history already preserves every
     version (`git log -- old-discord-bot`), so a `reference/` copy would have

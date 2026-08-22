@@ -98,10 +98,10 @@ to HTZ1 regardless ([plan 04](04-infrastructure-migration.md)), so building for
 a temporary static host would be throwaway work. The table above is kept for the
 reasoning, not as an open choice.
 
-`game-on-portugal.pt` currently serves GitHub Pages from
-`GameOnPortugal/gameonportugal.github.io` (last touched 2021). Whichever option
-wins, that repo and this repo's orphaned `webpage/` directory both need
-resolving — see issue #9.
+When this was written, `game-on-portugal.pt` served GitHub Pages from
+`GameOnPortugal/gameonportugal.github.io` (last touched 2021). ✅ **Resolved
+2026-08-21**: the apex serves this portal, that repo is archived, and this
+repo's orphaned `webpage/` directory is deleted (issue #9).
 
 ### Media storage
 

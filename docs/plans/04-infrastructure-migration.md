@@ -194,17 +194,21 @@ cd ~/game-on-portugal && docker compose start game-on-portugal-app
 Known issue #11 (the DB root password printed in plaintext on boot) is
 unchanged by this migration — still open, still `M0.7`.
 
-### Phase 4 — Public cutover (only once plan 03 has a portal) — remaining, = GLOBAL-PLAN M8.15
+### Phase 4 — Public cutover — ✅ **DONE 2026-08-21**, = GLOBAL-PLAN M8.15
 
-20. Point the `game-on-portugal.pt` apex and `www` at HTZ1 in the OVH zone, and
+20. ✅ Point the `game-on-portugal.pt` apex and `www` at HTZ1 in the OVH zone, and
     **refresh the zone** — OVH applies the zone, not the individual record.
-21. Add the apex Caddy block; reload Caddy.
-22. Archive `GameOnPortugal/gameonportugal.github.io` and delete this repo's
-    orphaned `webpage/` directory (issue #9).
+21. ✅ Add the apex Caddy block; reload Caddy. **Done before step 20, deliberately**:
+    the host had no vhost for the apex, so flipping DNS first would have taken
+    the site down rather than moved it.
+22. ✅ Archive `GameOnPortugal/gameonportugal.github.io` and delete this repo's
+    orphaned `webpage/` directory (issue #9). Both done 2026-08-21, together
+    with dropping the now-pointless `_github-pages-challenge-gameonportugal`
+    TXT record — see [08 C2/C3](08-decommission-and-cleanup.md).
 
-Steps 20–22 are independent of 14–19 and should not be bundled with them. They
-were deliberately **not** done as part of this cutover — the apex still serves
-the 2021 GitHub Pages site, on purpose, until the portal exists.
+Steps 20–22 were independent of 14–19 and deliberately **not** bundled with the
+2026-08-19 cutover: the apex kept serving the 2021 GitHub Pages site until there
+was a portal to replace it.
 
 ### Phase 5 — Decommission — remaining, due 2026-09-02
 

@@ -1,9 +1,10 @@
 # Brand assets — Game On Portugal
 
 The community's identity, vendored into the repo (M8.1). Before this, there was
-**no logo file anywhere in the tree** — `webpage/index.html` referenced
-`assets/img/logo.png`, which did not exist — and every design document quoted
-hex values nobody could check against the actual artwork.
+**no logo file anywhere in the tree** — the old static site's `index.html`
+referenced an `assets/img/logo.png` that did not exist (that directory,
+`webpage/`, was deleted on 2026-08-21) — and every design document quoted hex
+values nobody could check against the actual artwork.
 
 ## Sources
 
