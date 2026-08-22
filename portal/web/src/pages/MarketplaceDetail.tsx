@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { AdCard } from "../components/AdCard";
 import { LazyImage } from "../components/LazyImage";
@@ -50,6 +50,14 @@ export function MarketplaceDetail() {
   const { state, data } = useApi(() => api.getAd(id!), [id], () => false);
   const [activeImage, setActiveImage] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+
+  // React Router reuses this component instance across `:id` changes (e.g.
+  // clicking a related ad below), so image/lightbox state from the previous
+  // ad would otherwise leak into the new one.
+  useEffect(() => {
+    setActiveImage(0);
+    setLightboxOpen(false);
+  }, [id]);
 
   const ad = data?.ad;
 

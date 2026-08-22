@@ -164,7 +164,7 @@ async function rankOf(psnProfile: string, points: number, trophyCount: number): 
       ) ranked
       WHERE ranked.points > ?
          OR (ranked.points = ? AND ranked.trophyCount > ?)
-         OR (ranked.points = ? AND ranked.trophyCount = ? AND ranked.psnProfile < ?)
+         OR (ranked.points = ? AND ranked.trophyCount = ? AND (ranked.psnProfile IS NULL OR ranked.psnProfile < ?))
     `,
     points,
     points,
