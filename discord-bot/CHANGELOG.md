@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/GameOnPortugal/monorepo/compare/discord-bot-v1.4.0...discord-bot-v1.4.1) (2026-08-22)
+
+
+### Bug Fixes
+
+* **infra:** make the trophy crawl survive a deploy, and stop it starving profiles ([#90](https://github.com/GameOnPortugal/monorepo/issues/90)) ([c3974a0](https://github.com/GameOnPortugal/monorepo/commit/c3974a0f190039816173c4fbd7e26e9be54f1125))
+
 ## [1.4.0](https://github.com/GameOnPortugal/monorepo/compare/discord-bot-v1.3.1...discord-bot-v1.4.0) (2026-08-22)
 
 
