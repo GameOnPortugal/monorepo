@@ -36,6 +36,13 @@ class FakeGuildClient implements GuildClient {
         return 'https://discord.com/channels/x/y/z';
     }
 
+    // M10.4 added fetchUser to the port after this fake was written. The
+    // reporter has no business looking anyone up, so this answers the way
+    // the real client does for an unknown account rather than inventing one.
+    async fetchUser(_userId: string): Promise<null> {
+        return null;
+    }
+
     // M5.1/M5.2 added deleteMessage to the GuildClient port after this fake
     // was written. Recorded rather than ignored so a future reporter change
     // that started deleting messages would be visible in a test, not silent.

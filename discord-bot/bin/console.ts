@@ -7,6 +7,7 @@ import { RunJobConsoleCommand } from '../src/Infrastructure/Job/RunJobConsoleCom
 import FixOldTrophies from '../src/Ui/Cli/FixOldTrophies.ts';
 import ApplyAutoModConfig from '../src/Ui/Cli/ApplyAutoModConfig.ts';
 import TrophiesCatchUpAnnounce from '../src/Ui/Cli/TrophiesCatchUpAnnounce.ts';
+import BackfillScreenshotWinners from '../src/Ui/Cli/BackfillScreenshotWinners.ts';
 
 const logger = myContainer.get<Logger>(TYPES.Logger);
 const consoleCommands: Record<string, ConsoleCommand> = {};
@@ -25,6 +26,10 @@ consoleCommands[ApplyAutoModConfig.commandName] =
 // by default, posts only with --post (see TrophiesCatchUpAnnounce.ts).
 consoleCommands[TrophiesCatchUpAnnounce.commandName] =
     myContainer.get<TrophiesCatchUpAnnounce>(TrophiesCatchUpAnnounce);
+// M10.7 — rebuilds the screenshot contest's history from past announcements
+// in #screenshots. Dry by default; --apply writes (see the class doc).
+consoleCommands[BackfillScreenshotWinners.commandName] =
+    myContainer.get<BackfillScreenshotWinners>(BackfillScreenshotWinners);
 
 async function run(): Promise<number> {
     const args = process.argv.slice(2);

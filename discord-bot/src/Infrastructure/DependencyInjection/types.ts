@@ -26,6 +26,10 @@ const TYPES = {
     JobStateRepository: Symbol.for('JobStateRepository'),
     // M9.7 — the member public-visibility opt-out flag.
     PrivacyRepository: Symbol.for('PrivacyRepository'),
+    // M10.4 — the cached Discord name/avatar behind an `author_id`.
+    DiscordProfileRepository: Symbol.for('DiscordProfileRepository'),
+    // M10.7 — decided weeks of the screenshot contest.
+    WeeklyWinnerRepository: Symbol.for('WeeklyWinnerRepository'),
 
     // Clients
     HttpClient: Symbol.for('HttpClient'),

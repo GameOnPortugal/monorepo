@@ -6,7 +6,13 @@ import type {
     RichMessageContent,
 } from '../../../Domain/Community/GuildClient.ts';
 import { injectable } from 'inversify';
-import type { APIChannel, APIMessage, InvalidRequestWarningData, RateLimitData } from 'discord.js';
+import type {
+    APIChannel,
+    APIMessage,
+    APIUser,
+    InvalidRequestWarningData,
+    RateLimitData,
+} from 'discord.js';
 import {
     REST,
     Routes,
@@ -24,6 +30,7 @@ import { convertChannel, DISCORD_GUILD_ID } from './DiscordChannels.ts';
 import { convertEmoji } from './DiscordEmoji.ts';
 import { ClientError } from '../../../Domain/Community/ClientError.ts';
 import type { DirectMessagePayload } from '../../../Domain/Community/DirectMessage.ts';
+import type { CommunityUser } from '../../../Domain/Community/CommunityUser.ts';
 import type Logger from '../../../Application/Logger/Logger.ts';
 
 /**
@@ -336,6 +343,26 @@ export class DiscordGuildClient implements GuildClient {
         }
     }
 
+    async fetchUser(userId: string): Promise<CommunityUser | null> {
+        this.requireToken();
+
+        try {
+            return toCommunityUser((await this.rest.get(Routes.user(userId))) as APIUser);
+        } catch (error) {
+            // Unknown User (10013): the account was deleted. Same shape as
+            // `isGuildMember`'s 10007 handling — only this one specific
+            // "they are gone" answer becomes a value, everything else stays
+            // an error so a rate limit never blanks somebody's name.
+            if (
+                error instanceof DiscordAPIError &&
+                (error.code === RESTJSONErrorCodes.UnknownUser || error.status === 404)
+            ) {
+                return null;
+            }
+            throw new ClientError(`Failed to fetch user: ${(error as Error).message}`);
+        }
+    }
+
     private async fetchRawMessage(
         channel: CommunityChannels,
         messageId: string,
@@ -372,6 +399,23 @@ function toCommunityMessage(message: APIMessage): CommunityMessage {
         embedImageUrls: (message.embeds ?? [])
             .map((embed) => embed.image?.url)
             .filter((url): url is string => url !== undefined),
+        authorId: message.author?.id ?? '',
+        authorIsBot: message.author?.bot === true,
+    };
+}
+
+/**
+ * `APIUser` -> the port's `CommunityUser`. `global_name` is Discord's
+ * post-2023 display name (the field that replaced the `#1234` discriminator
+ * era's separate display concept); it is null for accounts that never set
+ * one, which the port documents as "display the username instead".
+ */
+function toCommunityUser(user: APIUser): CommunityUser {
+    return {
+        id: user.id,
+        username: user.username,
+        displayName: user.global_name ?? null,
+        avatarHash: user.avatar ?? null,
     };
 }
 

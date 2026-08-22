@@ -7,6 +7,7 @@ import type { ScreenshotRepository } from '../../../../Domain/Screenshot/Screens
 import type { TrophyProfileRepository } from '../../../../Domain/Trophy/TrophyProfileRepository';
 import type { TrophyRepository } from '../../../../Domain/Trophy/TrophyRepository';
 import type { PrivacyRepository } from '../../../../Domain/Privacy/PrivacyRepository';
+import type { DiscordProfileRepository } from '../../../../Domain/Profile/DiscordProfileRepository';
 import { TYPES } from '../../../../Infrastructure/DependencyInjection/types';
 import type Logger from '../../../Logger/Logger';
 
@@ -24,6 +25,12 @@ import type Logger from '../../../Logger/Logger';
  * ads' normal soft-delete). The trophy profile's child `Trophies` rows are
  * deleted first — the schema has no `onDelete: Cascade` on that relation, so
  * deleting the profile first would just throw a foreign-key error.
+ *
+ * `screenshot_winners` rows are deliberately **not** deleted: erasing the
+ * member's screenshots already removes everything the Hall of Fame could
+ * display for them, and the surviving row records only that a contest week
+ * had a winner. Rewriting the contest's history to say a week never happened
+ * is not what erasure asks for.
  */
 @injectable()
 export class DeleteMemberDataHandler implements CommandHandler<DeleteMemberData> {
@@ -35,6 +42,8 @@ export class DeleteMemberDataHandler implements CommandHandler<DeleteMemberData>
         private readonly trophyProfileRepository: TrophyProfileRepository,
         @inject(TYPES.TrophyRepository) private readonly trophyRepository: TrophyRepository,
         @inject(TYPES.PrivacyRepository) private readonly privacyRepository: PrivacyRepository,
+        @inject(TYPES.DiscordProfileRepository)
+        private readonly discordProfileRepository: DiscordProfileRepository,
         @inject(TYPES.Logger) private readonly logger: Logger,
     ) {}
 
@@ -57,6 +66,19 @@ export class DeleteMemberDataHandler implements CommandHandler<DeleteMemberData>
             await this.trophyProfileRepository.delete(trophyProfile.id);
             trophyProfileDeleted = true;
         }
+
+        // M10.4 — the cached copy of their name and avatar goes too. An
+        // erasure request that left a `discord_profiles` row behind would
+        // keep exactly the personal data it was asked to remove.
+        //
+        // The re-hosted avatar *object* in MediaStorage is not removed here.
+        // That matches what `deleteAllByAuthor` above already does with
+        // screenshot images — this handler has never deleted stored media,
+        // only rows — so a media sweep is one follow-up covering both, not
+        // something to half-do for avatars alone. The object is keyed by
+        // Discord's avatar hash, so it is not reachable from the member's id
+        // once the row naming it is gone.
+        await this.discordProfileRepository.delete(discordId);
 
         // Nothing left to protect — remove the opt-out row too, if any.
         await this.privacyRepository.delete(discordId);

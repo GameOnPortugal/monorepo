@@ -176,3 +176,103 @@ model PrivacySetting {
 
   @@map("privacy_settings")
 }
+
+// M10.4 — the Discord identity behind an `author_id`, cached locally.
+//
+// `screenshots.author_id` (and `ads.author_id`) is a bare snowflake: the
+// portal could never credit anyone because no name or picture was ever
+// persisted, only a join key nothing joins to. This table is that missing
+// side of the join — one row per member, refreshed by DiscordProfilesSyncJob
+// and written at ingest time by the `/screenshot` command.
+//
+// Deliberately one row per *member*, not `author_name`/`author_avatar_url`
+// columns duplicated onto `screenshots` (which is what
+// docs/plans/09-portal-community-identity.md originally proposed). Production
+// has 624 screenshots from 83 distinct authors and 71 ads from 31: a member
+// who renames, or changes their avatar, is one UPDATE here rather than a
+// sweep over every row they ever posted, and the marketplace gets the same
+// credit for free without a second backfill.
+//
+// No foreign key from `screenshots.author_id`, for the same reason
+// PrivacySetting has none: `author_id` is un-enforced legacy free text, and
+// an FK would make a screenshot from someone who has since deleted their
+// Discord account unwritable. The join is done in application code.
+//
+// `avatarUrl` is a **re-hosted** MinIO URL, never a cdn.discordapp.com one.
+// Discord's avatar URLs are not signed (unlike attachments — cross-cutting
+// rule 3), but they embed the member's raw snowflake in the path, which the
+// portal's public responses must never leak, and they 404 the moment the
+// member changes avatar. `avatarHash` is Discord's own hash for the avatar
+// currently stored, kept purely so a re-sync can tell "unchanged, skip the
+// download" from "changed, re-host". A null `avatarUrl` means the member has
+// no custom avatar (Discord's generated default) or the re-host failed —
+// the portal renders a monogram either way.
+model DiscordProfile {
+  discordId   String   @id
+  // Discord's unique handle (`luis`), always present.
+  username    String
+  // The per-guild nickname or global display name, if the member set one.
+  // Preferred over `username` for display; null means "just use username".
+  displayName String?
+  avatarUrl   String?  @db.Text
+  avatarHash  String?
+  // When this row was last reconciled against the Discord API — the cursor
+  // DiscordProfilesSyncJob orders by, so a bounded run always refreshes the
+  // stalest rows rather than re-fetching the same ones.
+  syncedAt    DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([syncedAt])
+  @@map("discord_profiles")
+}
+
+// M10.7 — one row per week the screenshot contest was decided.
+//
+// Until now the weekly winner existed only as a Discord message:
+// `WeekScreenshotWinnerJob` counted `trophy_plat` reactions live, announced
+// the result and forgot it. That is why the portal's Hall of Fame has been a
+// placeholder — there was nothing to query.
+//
+// `source` distinguishes the two ways a row gets here:
+//   - `announced` — written by WeekScreenshotWinner at the moment it posted
+//     the announcement. Authoritative.
+//   - `inferred`  — reconstructed by `screenshots:backfill-winners` from an
+//     old announcement still in #screenshots history. Faithful to what was
+//     actually announced, but only for announcements that still exist; a
+//     deleted one is unrecoverable, and the portal says so rather than
+//     implying the history is complete.
+// Recomputing old weeks from today's reaction counts is deliberately NOT an
+// option (docs/plans/GLOBAL-PLAN.md M10 finding 3): reactions kept
+// accumulating after each contest closed, so it would retroactively hand old
+// weeks to the wrong people.
+//
+// Unique on `weekStart` — one contest per week — which is also what makes the
+// backfill idempotent: re-running it upserts the same rows instead of
+// duplicating them.
+model ScreenshotWinner {
+  id           String   @id @default(uuid())
+  screenshotId String
+  // Denormalised from the screenshot at the time of winning. A screenshot can
+  // be deleted (by its author, or by M9.7's erasure command) without erasing
+  // the fact that a contest had a winner that week.
+  authorId     String?
+  weekStart    DateTime
+  weekEnd      DateTime
+  // Reactions counted at the moment the winner was picked. Null for an
+  // inferred row whose announcement did not state a count — the old bot's
+  // format never did. Never back-computed from today's reactions.
+  voteCount    Int?
+  // Permalink to the winning screenshot's own message, as announced.
+  messageUrl   String?  @db.Text
+  // The announcement message itself, so a re-run can trace a row back to its
+  // evidence (and a future backfill can skip announcements already parsed).
+  announcementMessageId String?
+  source       String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([weekStart])
+  @@index([screenshotId])
+  @@map("screenshot_winners")
+}

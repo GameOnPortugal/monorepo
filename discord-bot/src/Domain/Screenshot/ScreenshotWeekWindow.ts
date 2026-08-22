@@ -58,3 +58,29 @@ export function computeWeekWindow(referenceDate: Date): WeekWindow {
 export function nextContestOpeningDay(window: WeekWindow): Date {
     return dayjs.tz(window.end, COMMUNITY_TIMEZONE).add(1, 'day').startOf('day').toDate();
 }
+
+/**
+ * The Monday->Sunday window that **contains** `date`, as opposed to
+ * `computeWeekWindow`'s "the most recently completed week relative to now".
+ *
+ * Added for M10.7's winner backfill, which knows a winning screenshot's
+ * `createdAt` and needs the contest week it was posted in. Going through
+ * `computeWeekWindow(screenshot.createdAt)` would be wrong by exactly one
+ * week for any screenshot posted mid-week — that function deliberately looks
+ * *backwards* from its reference, because its caller is a job closing out the
+ * week that is ending.
+ */
+export function weekWindowContaining(date: Date): WeekWindow {
+    const reference = dayjs.tz(date, COMMUNITY_TIMEZONE);
+    const daysSinceSunday = reference.day(); // 0 (Sun) .. 6 (Sat)
+
+    // Sunday closes the week it is in; every other day looks forward to the
+    // next one. `7 - daysSinceSunday` is the distance to that closing Sunday.
+    const end =
+        daysSinceSunday === 0
+            ? reference.endOf('day')
+            : reference.add(7 - daysSinceSunday, 'day').endOf('day');
+    const start = end.subtract(6, 'day').startOf('day');
+
+    return { start: start.toDate(), end: end.toDate() };
+}

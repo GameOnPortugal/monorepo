@@ -41,6 +41,19 @@ export interface MediaStorage {
     /** True if `key` has already been written — lets a re-host job skip re-uploading. */
     exists(key: string): Promise<boolean>;
 
+    /**
+     * The public URL `key` has (or would have) — the same value `put` returns,
+     * without uploading anything.
+     *
+     * Added for M10.4's avatar re-host, which is keyed by Discord's avatar
+     * hash so that a member whose picture has not changed hits `exists()` and
+     * skips the download entirely. Without this, learning the URL of an
+     * object already in storage would mean re-uploading it, which is exactly
+     * what `exists()` is there to avoid. Synchronous: every implementation
+     * derives it from configuration and the key, never from a round trip.
+     */
+    publicUrlFor(key: string): string;
+
     /** Removes the object. Not an error if it is already gone (delete is idempotent). */
     delete(key: string): Promise<void>;
 }

@@ -11,6 +11,7 @@ import { CommunityChannels } from '../../../../src/Domain/Community/CommunityCha
 import WeekScreenshotWinner, {
     parseWeekScreenshotWinnerArgs,
 } from '../../../../src/Ui/Cli/WeekScreenshotWinner.ts';
+import type { WeeklyWinnerRepository } from '../../../../src/Domain/Screenshot/WeeklyWinnerRepository.ts';
 
 describe('parseWeekScreenshotWinnerArgs', () => {
     test('defaults to now and public mode with no arguments', () => {
@@ -47,6 +48,7 @@ describe('parseWeekScreenshotWinnerArgs', () => {
 describe('WeekScreenshotWinner Integration Test', () => {
     let command: WeekScreenshotWinner;
     let guildClient: InMemoryGuildClient;
+    let weeklyWinners: WeeklyWinnerRepository;
     let ormClient: PrismaClient;
 
     // Same fixed Thursday reference as GetScreenshotWinnerHandler.test.ts,
@@ -56,6 +58,7 @@ describe('WeekScreenshotWinner Integration Test', () => {
     beforeEach(async () => {
         command = myContainer.get<WeekScreenshotWinner>(WeekScreenshotWinner);
         guildClient = myContainer.get<GuildClient>(TYPES.GuildClient) as InMemoryGuildClient;
+        weeklyWinners = myContainer.get<WeeklyWinnerRepository>(TYPES.WeeklyWinnerRepository);
         ormClient = myContainer.get<PrismaClient>(TYPES.OrmClient);
 
         await DatabaseUtil.truncateAllTables();
@@ -118,6 +121,26 @@ describe('WeekScreenshotWinner Integration Test', () => {
         expect(banner).toContain('Concurso');
         expect(banner).toContain('ABERTO');
         expect(banner).toContain('12/01'); // the Monday opening the next contest
+    });
+
+    test('M10.7 — announcing also records the week, so the Hall of Fame has a history', async () => {
+        const { authorId, reactionCount } = await seedWinner();
+
+        await command.run([weekReferenceArg]);
+
+        const [winner] = await weeklyWinners.findAll();
+        expect(winner?.authorId).toBe(authorId);
+        expect(winner?.voteCount).toBe(reactionCount);
+        expect(winner?.source).toBe('announced');
+        expect(winner?.weekStart.toISOString()).toBe('2026-01-05T00:00:00.000Z');
+    });
+
+    test('M10.7 — a dry run announces nothing, so it records nothing either', async () => {
+        await seedWinner();
+
+        await command.run(['--date=' + weekReferenceArg, '--dry-run']);
+
+        expect(await weeklyWinners.findAll()).toHaveLength(0);
     });
 
     test('dry-run mode reports to the admin channel only — nothing public, no !give-xp', async () => {

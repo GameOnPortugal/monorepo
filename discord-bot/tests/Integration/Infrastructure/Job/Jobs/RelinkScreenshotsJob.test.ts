@@ -46,6 +46,10 @@ class CountingMediaStorage implements MediaStorage {
         return this.inner.exists(key);
     }
 
+    publicUrlFor(key: string): string {
+        return this.inner.publicUrlFor(key);
+    }
+
     async delete(key: string): Promise<void> {
         return this.inner.delete(key);
     }

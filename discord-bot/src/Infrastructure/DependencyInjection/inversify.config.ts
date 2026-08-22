@@ -105,6 +105,15 @@ import type { PrivacyRepository } from '../../Domain/Privacy/PrivacyRepository.t
 import { OrmPrivacyRepository } from '../Orm/OrmPrivacyRepository.ts';
 import { SetPrivacyOptOutHandler } from '../../Application/Write/Privacy/SetPrivacyOptOut/SetPrivacyOptOutHandler.ts';
 import { DeleteMemberDataHandler } from '../../Application/Write/Privacy/DeleteMemberData/DeleteMemberDataHandler.ts';
+// M10.4/M10.7 — screenshot credit (author identity) and contest history.
+import type { DiscordProfileRepository } from '../../Domain/Profile/DiscordProfileRepository.ts';
+import OrmDiscordProfileRepository from '../Orm/OrmDiscordProfileRepository.ts';
+import type { WeeklyWinnerRepository } from '../../Domain/Screenshot/WeeklyWinnerRepository.ts';
+import OrmWeeklyWinnerRepository from '../Orm/OrmWeeklyWinnerRepository.ts';
+import { SyncDiscordProfileHandler } from '../../Application/Write/Profile/SyncDiscordProfile/SyncDiscordProfileHandler.ts';
+import { RecordWeeklyWinnerHandler } from '../../Application/Write/Screenshot/RecordWeeklyWinner/RecordWeeklyWinnerHandler.ts';
+import { DiscordProfilesSyncJob } from '../Job/Jobs/DiscordProfilesSyncJob.ts';
+import BackfillScreenshotWinners from '../../Ui/Cli/BackfillScreenshotWinners.ts';
 import { PrivacySlashCommand } from '../Bot/Discord/SlashCommand/Privacy/PrivacySlashCommand.ts';
 import { OptOutSubcommand } from '../Bot/Discord/SlashCommand/Privacy/OptOutSubcommand.ts';
 import { OptInSubcommand } from '../Bot/Discord/SlashCommand/Privacy/OptInSubcommand.ts';
@@ -149,6 +158,14 @@ myContainer
     .bind<PrivacyRepository>(TYPES.PrivacyRepository)
     .to(OrmPrivacyRepository)
     .inSingletonScope();
+myContainer
+    .bind<DiscordProfileRepository>(TYPES.DiscordProfileRepository)
+    .to(OrmDiscordProfileRepository)
+    .inSingletonScope();
+myContainer
+    .bind<WeeklyWinnerRepository>(TYPES.WeeklyWinnerRepository)
+    .to(OrmWeeklyWinnerRepository)
+    .inSingletonScope();
 
 // Command Handlers
 myContainer.bind(TYPES.CommandHandler).to(PingHandler);
@@ -178,6 +195,9 @@ myContainer.bind(TYPES.CommandHandler).to(FindActiveAdsForReconcileHandler);
 // M9.7 — privacy.
 myContainer.bind(TYPES.CommandHandler).to(SetPrivacyOptOutHandler);
 myContainer.bind(TYPES.CommandHandler).to(DeleteMemberDataHandler);
+// M10.4/M10.7 — author identity and contest history.
+myContainer.bind(TYPES.CommandHandler).to(SyncDiscordProfileHandler);
+myContainer.bind(TYPES.CommandHandler).to(RecordWeeklyWinnerHandler);
 
 // Slash Commands
 myContainer.bind(TYPES.SlashCommandHandler).to(PingSlashCommand);
@@ -425,6 +445,10 @@ myContainer.bind(FixOldTrophies).toSelf();
 // config; see ApplyAutoModConfig.ts for why this is not a scheduled Job.
 myContainer.bind(ApplyAutoModConfig).toSelf();
 myContainer.bind(TrophiesCatchUpAnnounce).toSelf();
+// M10.7 — one-off historical reconstruction, dry by default. Not a scheduled
+// job: it scans five years of channel history to rebuild a table that, from
+// here on, `week-screenshot-winner` keeps current on its own.
+myContainer.bind(BackfillScreenshotWinners).toSelf();
 
 // Jobs (M6.1, M6.8) — an in-process replacement for the deleted `scheduler/`
 // container. Register a new job here alongside its dependencies; it becomes
@@ -450,12 +474,16 @@ myContainer.bind(AdsLifecycleJob).toSelf();
 myContainer.bind(AdsReconcileJob).toSelf();
 myContainer.bind(RelinkScreenshotsJob).toSelf();
 myContainer.bind(TrophiesSyncJob).toSelf();
+myContainer.bind(DiscordProfilesSyncJob).toSelf();
 myContainer.bind(RunJobConsoleCommand).toSelf();
 
 myContainer.get(JobRunner).register(myContainer.get(WeekScreenshotWinnerJob));
 myContainer.get(JobRunner).register(myContainer.get(RelinkScreenshotsJob));
 myContainer.get(JobRunner).register(myContainer.get(AdsLifecycleJob));
 myContainer.get(JobRunner).register(myContainer.get(AdsReconcileJob));
+// M10.4 — the portal cannot credit anybody until this has run at least once;
+// see DiscordProfilesSyncJob's doc comment for why the backfill *is* the job.
+myContainer.get(JobRunner).register(myContainer.get(DiscordProfilesSyncJob));
 
 // trophies:sync (M7.3) is always *registered* — so it is listed by
 // `jobs:run list` and runnable by hand at any time — but whether the ticker

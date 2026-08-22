@@ -50,6 +50,8 @@ export default class DatabaseUtil {
             await tx.$executeRawUnsafe('TRUNCATE TABLE ads');
             await tx.$executeRawUnsafe('TRUNCATE TABLE job_runs');
             await tx.$executeRawUnsafe('TRUNCATE TABLE privacy_settings');
+            await tx.$executeRawUnsafe('TRUNCATE TABLE discord_profiles');
+            await tx.$executeRawUnsafe('TRUNCATE TABLE screenshot_winners');
 
             // Restored on the same connection before it returns to the pool.
             // Leaving it at 0 would silently disable referential integrity for

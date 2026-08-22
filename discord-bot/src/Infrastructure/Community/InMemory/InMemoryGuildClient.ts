@@ -9,6 +9,7 @@ import { CommunityChannels } from '../../../Domain/Community/CommunityChannels.t
 import { CustomEmoji } from '../../../Domain/Community/CustomEmoji.ts';
 import { ClientError } from '../../../Domain/Community/ClientError.ts';
 import type { DirectMessagePayload } from '../../../Domain/Community/DirectMessage.ts';
+import type { CommunityUser } from '../../../Domain/Community/CommunityUser.ts';
 
 interface InMemoryMessage {
     reactions: Partial<Record<CustomEmoji, number>>;
@@ -16,6 +17,8 @@ interface InMemoryMessage {
     createdAt: Date;
     attachmentUrls: string[];
     embedImageUrls: string[];
+    authorId: string;
+    authorIsBot: boolean;
 }
 
 export interface SentMessage {
@@ -45,6 +48,14 @@ export interface SentDirectMessage {
 }
 
 /**
+ * The author id this fake stamps on every message it posts itself. Any
+ * snowflake-shaped constant would do — it exists only so M10.7's winner
+ * backfill, which filters `#screenshots` history down to *bot* messages, has
+ * something consistent to see here.
+ */
+const BOT_AUTHOR_ID = '000000000000000001';
+
+/**
  * Test/no-token stand-in for `DiscordGuildClient`, mirroring `InMemoryClient`
  * (the equivalent stand-in for `Bot`): bound automatically when
  * `DISCORD_TOKEN` is unset, so the container never has to reach Discord's
@@ -70,6 +81,9 @@ export class InMemoryGuildClient implements GuildClient {
     /** userIds explicitly marked as having left the guild — see markMemberLeft(). */
     private readonly membersWhoLeft = new Set<string>();
 
+    /** M10.4 — identities `fetchUser()` can answer with; see registerUser(). */
+    private readonly users = new Map<string, CommunityUser>();
+
     /**
      * Registers a message so it can be "found" by the methods below.
      * `reactions` keeps its original signature (a bare emoji->count record)
@@ -85,6 +99,8 @@ export class InMemoryGuildClient implements GuildClient {
             createdAt?: Date;
             attachmentUrls?: string[];
             embedImageUrls?: string[];
+            authorId?: string;
+            authorIsBot?: boolean;
         } = {},
     ): void {
         this.messages.set(messageId, {
@@ -93,6 +109,12 @@ export class InMemoryGuildClient implements GuildClient {
             createdAt: extra.createdAt ?? new Date(),
             attachmentUrls: extra.attachmentUrls ?? [],
             embedImageUrls: extra.embedImageUrls ?? [],
+            // M10.7: a message this fake posts itself is the bot's own, so
+            // `authorIsBot` defaults to true — the winner backfill only ever
+            // parses bot announcements, and a test registering one would
+            // otherwise have to opt in every time.
+            authorId: extra.authorId ?? BOT_AUTHOR_ID,
+            authorIsBot: extra.authorIsBot ?? true,
         });
     }
 
@@ -131,6 +153,7 @@ export class InMemoryGuildClient implements GuildClient {
         this.nextMessageId = 1;
         this.failNextSendWith = undefined;
         this.membersWhoLeft.clear();
+        this.users.clear();
     }
 
     async getTotalReactionsByEmoji(
@@ -170,6 +193,8 @@ export class InMemoryGuildClient implements GuildClient {
             createdAt: new Date(),
             attachmentUrls: [],
             embedImageUrls: [],
+            authorId: BOT_AUTHOR_ID,
+            authorIsBot: true,
         });
 
         return messageId;
@@ -194,6 +219,8 @@ export class InMemoryGuildClient implements GuildClient {
             createdAt: new Date(),
             attachmentUrls: [],
             embedImageUrls: content.imageUrl ? [content.imageUrl] : [],
+            authorId: BOT_AUTHOR_ID,
+            authorIsBot: true,
         });
 
         return messageId;
@@ -253,6 +280,8 @@ export class InMemoryGuildClient implements GuildClient {
             createdAt: new Date(),
             attachmentUrls: [],
             embedImageUrls: [],
+            authorId: BOT_AUTHOR_ID,
+            authorIsBot: true,
         });
 
         return messageId;
@@ -274,6 +303,8 @@ export class InMemoryGuildClient implements GuildClient {
             createdAt: message.createdAt,
             attachmentUrls: [...message.attachmentUrls],
             embedImageUrls: [...message.embedImageUrls],
+            authorId: message.authorId,
+            authorIsBot: message.authorIsBot,
         };
     }
 
@@ -299,11 +330,29 @@ export class InMemoryGuildClient implements GuildClient {
                 createdAt: message.createdAt,
                 attachmentUrls: [...message.attachmentUrls],
                 embedImageUrls: [...message.embedImageUrls],
+                authorId: message.authorId,
+                authorIsBot: message.authorIsBot,
             };
         });
     }
 
     async isGuildMember(userId: string): Promise<boolean> {
         return !this.membersWhoLeft.has(userId);
+    }
+
+    /**
+     * M10.4 — returns whatever `registerUser()` recorded for `userId`, or
+     * `null` (the real client's Unknown-User case) for anyone unregistered.
+     * Defaulting to null rather than to a synthetic user is deliberate: a
+     * test that forgets to register somebody should exercise the
+     * "account is gone" branch loudly, not silently invent a name.
+     */
+    async fetchUser(userId: string): Promise<CommunityUser | null> {
+        return this.users.get(userId) ?? null;
+    }
+
+    /** Registers the identity `fetchUser(user.id)` will return. */
+    registerUser(user: CommunityUser): void {
+        this.users.set(user.id, user);
     }
 }
