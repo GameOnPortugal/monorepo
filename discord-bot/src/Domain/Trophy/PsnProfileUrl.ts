@@ -1,4 +1,35 @@
 /**
+ * PSN online IDs are 3-16 characters, starting with a letter or digit, and
+ * may otherwise contain only letters, digits, `-` and `_`.
+ *
+ * Validating here is what stops a malformed name reaching the database. One
+ * profile in production (`sabathian>`, registered 2022 by the old bot's raw
+ * `url.split('/')`) carries a stray `>`; PSNProfiles normalises it away on
+ * fetch, so the crawl works, but it renders as `sabathian>` on every
+ * leaderboard. All 118 production profiles satisfy this pattern once that
+ * row is corrected, so it rejects nothing legitimate.
+ */
+const PSN_ONLINE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{2,15}$/;
+
+function toPsnOnlineId(segment: string | undefined): string | null {
+    if (segment === undefined || segment.length === 0) {
+        return null;
+    }
+
+    // `new URL()` percent-encodes anything unusual in the path, so a pasted
+    // `.../sabathian>` arrives here as `sabathian%3E`. Decode first, then
+    // validate, so the check sees the character rather than its escape.
+    let decoded: string;
+    try {
+        decoded = decodeURIComponent(segment);
+    } catch {
+        return null;
+    }
+
+    return PSN_ONLINE_ID.test(decoded) ? decoded : null;
+}
+
+/**
  * Extracts a PSN profile username from either URL shape PSNProfiles.com
  * supports (M7.5):
  *
@@ -38,14 +69,13 @@ export function extractPsnProfileFromUrl(url: string): string | null {
 
     // Bare profile URL: https://psnprofiles.com/<username>
     if (segments.length === 1) {
-        return segments[0] ?? null;
+        return toPsnOnlineId(segments[0]);
     }
 
     // Trophy URL: https://psnprofiles.com/trophies/<id>-<game>/<username>
     // — three path segments, matching the old bot's 6-part full-URL split.
     if (segments.length === 3 && segments[0] === 'trophies') {
-        const username = segments[2];
-        return username !== undefined && username.length > 0 ? username : null;
+        return toPsnOnlineId(segments[2]);
     }
 
     return null;

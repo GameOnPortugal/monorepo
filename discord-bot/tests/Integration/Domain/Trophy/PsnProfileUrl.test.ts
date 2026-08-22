@@ -85,6 +85,56 @@ describe('extractPsnProfileFromUrl', () => {
             url: 'https://psnprofiles.com/games/some-game/Josh_Lopes',
             expected: null,
         },
+        // PSN online ID rules. The production row `sabathian>` (registered in
+        // 2022 by the old bot's raw url.split('/')) is why these exist:
+        // PSNProfiles normalises the stray character away when fetching, so
+        // nothing failed loudly — it just rendered as `sabathian>` on every
+        // leaderboard until someone looked.
+        {
+            description: 'username with a stray character is rejected, not stored',
+            url: 'https://psnprofiles.com/sabathian>',
+            expected: null,
+        },
+        {
+            description: 'the same stray character already percent-encoded is also rejected',
+            url: 'https://psnprofiles.com/sabathian%3E',
+            expected: null,
+        },
+        {
+            description: 'stray character in a trophy URL is rejected too',
+            url: 'https://psnprofiles.com/trophies/12-grand-theft-auto-iv/sabathian>',
+            expected: null,
+        },
+        {
+            description: 'the corrected name is accepted',
+            url: 'https://psnprofiles.com/sabathian',
+            expected: 'sabathian',
+        },
+        {
+            description: 'hyphens and underscores are legal in a PSN ID',
+            url: 'https://psnprofiles.com/Zephyr-pt',
+            expected: 'Zephyr-pt',
+        },
+        {
+            description: 'too short for a PSN ID (min 3)',
+            url: 'https://psnprofiles.com/ab',
+            expected: null,
+        },
+        {
+            description: 'too long for a PSN ID (max 16)',
+            url: 'https://psnprofiles.com/abcdefghijklmnopq',
+            expected: null,
+        },
+        {
+            description: 'a 16-character PSN ID is still legal',
+            url: 'https://psnprofiles.com/abcdefghijklmnop',
+            expected: 'abcdefghijklmnop',
+        },
+        {
+            description: 'must not start with a hyphen',
+            url: 'https://psnprofiles.com/-Zephyr',
+            expected: null,
+        },
     ];
 
     for (const { description, url, expected } of cases) {

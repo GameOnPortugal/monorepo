@@ -5,6 +5,7 @@ import { Trophy, type TrophyArray } from '../../Domain/Trophy/Trophy';
 import { TrophyId } from '../../Domain/Trophy/TrophyId';
 import type { TrophyRepository } from '../../Domain/Trophy/TrophyRepository';
 import type { TrophyRankData } from '../../Domain/Trophy/TrophyRankData';
+import type { CatchUpSummary } from '../../Domain/Trophy/CatchUpSummary';
 import type { UserPosition } from '../../Domain/Trophy/UserPosition';
 import RecordNotFound from '../../Domain/RecordNotFound';
 import { TrophyAlreadyClaimed } from '../../Domain/Trophy/TrophyAlreadyClaimed';
@@ -25,6 +26,15 @@ interface UserRankRow {
     position: number;
     points: number;
     num_trophies: number;
+}
+
+interface CatchUpSummaryRow {
+    userId: string;
+    psnProfile: string | null;
+    points: number;
+    num_trophies: number;
+    first_completion: Date;
+    last_completion: Date;
 }
 
 /**
@@ -304,6 +314,35 @@ export class OrmTrophyRepository implements TrophyRepository {
         `);
 
         return Number(rows[0]?.total ?? 0);
+    }
+
+    async findCatchUpSummariesSince(since: Date): Promise<CatchUpSummary[]> {
+        const rows = await this.prismaClient.$queryRaw<CatchUpSummaryRow[]>(Prisma.sql`
+            SELECT
+                tp.userId AS userId,
+                tp.psnProfile AS psnProfile,
+                CAST(COALESCE(SUM(t.points), 0) AS SIGNED) AS points,
+                CAST(COUNT(t.id) AS SIGNED) AS num_trophies,
+                MIN(t.completionDate) AS first_completion,
+                MAX(t.completionDate) AS last_completion
+            FROM trophyprofiles tp
+            INNER JOIN trophies t ON t.trophyProfile = tp.id
+            WHERE tp.isExcluded = false
+              AND tp.userId IS NOT NULL
+              AND tp.userId <> ''
+              AND t.completionDate >= ${since}
+            GROUP BY tp.id, tp.userId, tp.psnProfile
+            ORDER BY points DESC, num_trophies DESC, tp.psnProfile ASC
+        `);
+
+        return rows.map((row) => ({
+            userId: row.userId,
+            psnProfile: row.psnProfile ?? '',
+            points: Number(row.points ?? 0),
+            numTrophies: Number(row.num_trophies ?? 0),
+            firstCompletionDate: new Date(row.first_completion),
+            lastCompletionDate: new Date(row.last_completion),
+        }));
     }
 
     /**

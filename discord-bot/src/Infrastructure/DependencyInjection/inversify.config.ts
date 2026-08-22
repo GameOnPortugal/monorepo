@@ -79,6 +79,7 @@ import type { AutoModClient } from '../../Domain/Community/AutoModClient.ts';
 import { DiscordAutoModClient } from '../Community/Discord/DiscordAutoModClient.ts';
 import { InMemoryAutoModClient } from '../Community/InMemory/InMemoryAutoModClient.ts';
 import ApplyAutoModConfig from '../../Ui/Cli/ApplyAutoModConfig.ts';
+import TrophiesCatchUpAnnounce from '../../Ui/Cli/TrophiesCatchUpAnnounce.ts';
 import WeekScreenshotWinner from '../../Ui/Cli/WeekScreenshotWinner.ts';
 import { InMemoryClient } from '../Bot/InMemory/InMemoryClient.ts';
 import type { JobStateRepository } from '../../Domain/Job/JobStateRepository.ts';
@@ -423,6 +424,7 @@ myContainer.bind(FixOldTrophies).toSelf();
 // M9.1 — manual, operator-run reconciliation of the checked-in AutoMod
 // config; see ApplyAutoModConfig.ts for why this is not a scheduled Job.
 myContainer.bind(ApplyAutoModConfig).toSelf();
+myContainer.bind(TrophiesCatchUpAnnounce).toSelf();
 
 // Jobs (M6.1, M6.8) — an in-process replacement for the deleted `scheduler/`
 // container. Register a new job here alongside its dependencies; it becomes
