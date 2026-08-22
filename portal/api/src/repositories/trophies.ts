@@ -1,5 +1,5 @@
 import { prisma } from "../db";
-import { publicTrophyProfileFilter } from "./visibility";
+import { optedOutDiscordIds, publicTrophyProfileFilter } from "./visibility";
 
 // Trophy leaderboard. Mirrors the aggregation/sort in the bot's
 // OrmTrophyRepository.queryRankedHunters (discord-bot/src/Infrastructure/Orm/OrmTrophyRepository.ts)
@@ -62,4 +62,117 @@ export async function getLeaderboard(limit: number): Promise<LeaderboardEntry[]>
     points: Number(row.points),
     trophyCount: Number(row.trophyCount),
   }));
+}
+
+// ---------------------------------------------------------------------------
+// M11 — one hunter's own platinum list, for the portal's hunter detail view.
+// ---------------------------------------------------------------------------
+
+export interface HunterTrophy {
+  /** The PSNProfiles trophy URL, e.g. `.../trophies/11783-assassins-creed-valhalla/Someone`. */
+  url: string | null;
+  points: number;
+  completionDate: Date | null;
+}
+
+export interface Hunter {
+  psnProfile: string;
+  rank: number;
+  points: number;
+  trophyCount: number;
+  trophies: HunterTrophy[];
+}
+
+/**
+ * Everything the portal can honestly say about one trophy hunter.
+ *
+ * The game a trophy belongs to is **not** a column — it is only recoverable
+ * from `trophies.url`'s slug (`/trophies/<id>-<game-slug>/<profile>`), which
+ * is what `PsnProfilesTrophySource.parseProfileTrophies` captured when the
+ * trophy was claimed. That parsing is deliberately left to the client
+ * (`portal/web/src/lib/psn.ts`) rather than done here: it is presentation of
+ * an already-public URL, it needs no database access, and keeping it
+ * client-side means a slug format change is a display bug rather than an API
+ * contract change.
+ *
+ * Same visibility contract as `getLeaderboard` — an excluded or opted-out
+ * profile is not found at all, so this endpoint can never be used to look up
+ * someone who chose not to appear on the leaderboard.
+ */
+export async function getHunter(psnProfile: string): Promise<Hunter | null> {
+  const optedOut = await optedOutDiscordIds();
+
+  const profile = await prisma.trophyProfile.findFirst({
+    where: {
+      psnProfile,
+      isExcluded: false,
+      ...(optedOut.length > 0 ? { OR: [{ userId: null }, { userId: { notIn: optedOut } }] } : {}),
+    },
+    select: { id: true, psnProfile: true },
+  });
+
+  if (!profile?.psnProfile) return null;
+
+  const rows = await prisma.trophies.findMany({
+    where: { trophyProfile: profile.id },
+    orderBy: [{ completionDate: "desc" }, { createdAt: "desc" }],
+    select: { url: true, points: true, completionDate: true },
+  });
+
+  // INNER JOIN semantics, same as the leaderboard: a profile with zero
+  // trophies is not a zero-point hunter, it is not a hunter.
+  if (rows.length === 0) return null;
+
+  const trophies = rows.map((row) => ({
+    url: row.url,
+    points: row.points ?? 0,
+    completionDate: row.completionDate,
+  }));
+  const points = trophies.reduce((sum, trophy) => sum + trophy.points, 0);
+
+  return {
+    psnProfile: profile.psnProfile,
+    rank: await rankOf(profile.psnProfile, points, trophies.length),
+    points,
+    trophyCount: trophies.length,
+    trophies,
+  };
+}
+
+/**
+ * The hunter's position in the same ordering `getLeaderboard` uses, computed
+ * as "how many profiles sort strictly before this one, plus one".
+ *
+ * The comparison mirrors that query's `ORDER BY points DESC, trophyCount
+ * DESC, psnProfile ASC` exactly, tie-break included — otherwise a hunter's
+ * detail page could claim a rank the leaderboard doesn't give them. Counting
+ * rather than paginating the whole board keeps this O(profiles) in SQL
+ * instead of pulling every hunter over the wire to find one index.
+ */
+async function rankOf(psnProfile: string, points: number, trophyCount: number): Promise<number> {
+  const rows = await prisma.$queryRawUnsafe<{ better: bigint | number }[]>(
+    `
+      SELECT CAST(COUNT(*) AS SIGNED) AS better FROM (
+        SELECT
+          tp.psnProfile AS psnProfile,
+          COALESCE(SUM(t.points), 0) AS points,
+          COUNT(t.id) AS trophyCount
+        FROM trophyprofiles tp
+        INNER JOIN trophies t ON t.trophyProfile = tp.id
+        WHERE ${publicTrophyProfileFilter()}
+        GROUP BY tp.id, tp.psnProfile
+      ) ranked
+      WHERE ranked.points > ?
+         OR (ranked.points = ? AND ranked.trophyCount > ?)
+         OR (ranked.points = ? AND ranked.trophyCount = ? AND ranked.psnProfile < ?)
+    `,
+    points,
+    points,
+    trophyCount,
+    points,
+    trophyCount,
+    psnProfile,
+  );
+
+  return Number(rows[0]?.better ?? 0) + 1;
 }

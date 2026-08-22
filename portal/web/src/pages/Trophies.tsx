@@ -1,144 +1,248 @@
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ApiError, EmptyState } from "../components/StateViews";
+import { HelpLink, PageHeader } from "../components/PageHeader";
+import { Monogram, PlayerCard } from "../components/PlayerCard";
+import { ApiError, EmptyState, SkeletonRow, SkeletonRows } from "../components/StateViews";
+import { SearchField } from "../components/ui/Controls";
 import { api } from "../lib/api/client";
 import { useDocumentHead } from "../lib/seo";
 import { useApi } from "../lib/useApi";
 
-// Top-3 highlight via a left border, not text colour — src/lib/platforms.ts's
-// contrast table is why: yellow (rank 1) is AAA-safe as text (19.02:1) so it
-// gets both, but red (rank 3, 4.87:1 — "technically AA-passing but
-// marginal") stays out of text entirely here, matching the stricter line
-// M8.5 already drew for this exact colour ("even the one place that seemed
-// safe, error-copy, uses a red left border with white text instead" — see
-// GLOBAL-PLAN.md's M8.5 row). Accents are for fills/borders/icons.
-const RANK_BORDER: Record<number, string> = {
-  1: "border-accent-yellow",
-  2: "border-white/40",
-  3: "border-accent-red",
-};
-const RANK_TEXT: Record<number, string> = {
-  1: "text-accent-yellow",
-};
+const PAGE_SIZE = 25;
+
+// The route clamps `limit` to 100 (portal/api/src/routes/trophies.ts), so this
+// board is the top 100 and says so — rather than implying it is everyone.
+const BOARD_SIZE = 100;
 
 /**
- * M10.9 — link a ranked hunter to the profile the numbers came from.
- *
- * Same base URL the bot already scrapes
- * (`discord-bot/src/Infrastructure/Trophy/PsnProfilesTrophySource.ts`'s
- * `BASE_URL`), and `psnProfile` is exactly the path segment
- * `extractPsnProfileFromUrl` parsed out of the URL the member submitted to
- * `/trophy create` — so any profile that appears on this leaderboard at all
- * is one PSNProfiles served a page for. `encodeURIComponent` because the
- * column is un-validated free text at the database level.
- */
-function psnProfileUrl(psnProfile: string): string {
-  return `https://psnprofiles.com/${encodeURIComponent(psnProfile)}`;
-}
-
-/**
- * M8.9 — trophy leaderboard. The plan-03 pages table and the M8.9 row in
- * GLOBAL-PLAN both originally called for an honest "data frozen at
- * 2024-12-02" notice — that was true when this task was scoped, but the
- * task brief for THIS agent is explicit that M7 (the trophy sync port)
- * landed the same night (commit history: M7.1-M7.7, "feat(trophies): ...").
- * Adding a stale-data banner here would be actively wrong, not just
- * outdated, so it is deliberately absent — see the M8.9 row in
- * docs/plans/GLOBAL-PLAN.md for this call spelled out.
+ * M8.9 + M11 — the trophy leaderboard, rebuilt as the Hall of Fame.
  *
  * Numbers match `/trophy rank` for the same query by construction:
  * `portal/api`'s `getLeaderboard` (src/repositories/trophies.ts) mirrors
- * `OrmTrophyRepository.queryRankedHunters`'s SQL shape exactly (same
- * `isExcluded` filter, same tie-break order) — see that file's header.
+ * `OrmTrophyRepository.queryRankedHunters`'s SQL shape exactly — same
+ * `isExcluded` filter, same tie-break order.
+ *
+ * M11 adds the podium, a name search over the loaded board, a points bar so
+ * the gap between hunters is legible at a glance, and a route into each
+ * hunter's own platinum list (`/trophies/:psnProfile`) — which is the thing
+ * this page was missing: it showed a ranking and gave you nowhere to go.
+ *
+ * No stale-data banner: M7's sync port landed, so the numbers are live. The
+ * header says "sincronizado periodicamente" rather than claiming real-time,
+ * which is the honest description of a cron-driven scrape.
  */
 export function Trophies() {
   useDocumentHead({
-    title: "Troféus",
-    description: "Leaderboard de troféus da comunidade Game On Portugal.",
+    title: "Hall of Fame",
+    description: "Ranking de troféus da comunidade Game On Portugal — os caçadores de platinas da comunidade.",
     path: "/trophies",
   });
 
-  const { state, data } = useApi(
-    () => api.leaderboard(100),
+  const board = useApi(
+    () => api.leaderboard(BOARD_SIZE),
     [],
     (value) => value.leaderboard.length === 0,
   );
+  const stats = useApi(() => api.stats(), [], () => false);
+
+  const [query, setQuery] = useState("");
+  const [visible, setVisible] = useState(PAGE_SIZE);
+
+  const entries = board.data?.leaderboard ?? [];
+  const podium = entries.slice(0, 3);
+  const rest = entries.slice(3);
+
+  const filtered = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return rest;
+    return rest.filter((entry) => (entry.psnProfile ?? "").toLowerCase().includes(term));
+  }, [rest, query]);
+
+  // The bar is scaled to the leader, not to the visible slice — otherwise the
+  // bars would rescale as you search or page, making the same hunter look
+  // different depending on how you got there.
+  const topPoints = entries[0]?.points ?? 0;
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
-      <h1 className="font-display text-2xl">Trophy leaderboard</h1>
-      <p className="mt-1 text-sm text-white/60">
-        Ranking por pontos de troféus somados por perfil. Sincronizado periodicamente com a PSN — pode estar alguns
-        minutos atrás do que vês no Discord.
-      </p>
-      {/* M10.10 — the leaderboard showed the result and never said how to get
-          into it. Both links go to the same page; they are separate because
-          "how do I join" and "why am I missing" are different questions asked
-          by different people, and burying the second inside the first is how
-          the excluded-but-fixable case goes unanswered. */}
-      <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-        <Link to="/como-participar#ranking" className="focus-glow text-accent-blue hover:underline">
-          Como entrar no ranking →
-        </Link>
-        <Link to="/como-participar#fora-do-ranking" className="focus-glow text-white/60 hover:text-white">
-          Não apareço aqui, porquê?
-        </Link>
-      </p>
+    <div>
+      <PageHeader
+        eyebrow="Caçadores de platinas"
+        title="Hall of Fame"
+        description="Ranking por pontos de platinas somados por perfil, sincronizado periodicamente com o PSNProfiles. Pode estar alguns minutos atrás do que vês no Discord."
+        stats={[
+          {
+            label: "Caçadores",
+            value: stats.data?.hunters?.toLocaleString("pt-PT") ?? "···",
+            accent: "var(--color-accent-blue)",
+          },
+          {
+            label: "Platinas",
+            value: stats.data?.trophies?.toLocaleString("pt-PT") ?? "···",
+            accent: "var(--color-accent-yellow)",
+          },
+        ]}
+      >
+        <div className="flex flex-wrap gap-x-6 gap-y-2">
+          <HelpLink to="/como-participar#ranking">Como entrar no ranking</HelpLink>
+          {/* Kept separate from the link above on purpose: "how do I join" and
+              "why am I missing" are different questions asked by different
+              people, and burying the second inside the first is how the
+              excluded-but-fixable case goes unanswered (M10.11). */}
+          <Link
+            to="/como-participar#fora-do-ranking"
+            className="focus-glow rounded font-mono text-xs text-white/50 transition-colors hover:text-white"
+          >
+            Não apareço aqui, porquê?
+          </Link>
+        </div>
+      </PageHeader>
 
-      {state === "loading" && (
-        <div className="mt-6 space-y-2" aria-hidden>
-          {Array.from({ length: 8 }, (_, i) => i).map((key) => (
-            <div key={key} className="chamfer h-12 animate-pulse border border-surface-border bg-surface" />
-          ))}
-        </div>
-      )}
-      {state === "error" && (
-        <div className="mt-6">
-          <ApiError what="o leaderboard" />
-        </div>
-      )}
-      {state === "empty" && (
-        <div className="mt-6">
-          <EmptyState>Sem troféus registados ainda.</EmptyState>
-        </div>
-      )}
+      <div className="mx-auto max-w-6xl px-4 py-10">
+        {board.state === "loading" && (
+          <>
+            <SkeletonRow tiles={3} className="grid grid-cols-1 gap-4 sm:grid-cols-3" />
+            <div className="mt-10">
+              <SkeletonRows rows={8} />
+            </div>
+          </>
+        )}
 
-      {state === "ready" && data && (
-        <ol className="mt-6 divide-y divide-surface-border border border-surface-border">
-          {data.leaderboard.map((entry) => (
-            <li
-              key={entry.rank}
-              className={`flex items-center justify-between border-l-2 px-4 py-3 ${
-                RANK_BORDER[entry.rank] ?? "border-transparent"
-              }`}
-            >
-              <span className="flex items-center gap-4">
-                <span className={`w-8 text-right font-display text-lg ${RANK_TEXT[entry.rank] ?? "text-white/50"}`}>
-                  {entry.rank}
-                </span>
-                {entry.psnProfile ? (
-                  <a
-                    href={psnProfileUrl(entry.psnProfile)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="focus-glow hover:underline"
+        {board.state === "error" && <ApiError what="o ranking" />}
+
+        {board.state === "empty" && <EmptyState>Sem troféus registados ainda.</EmptyState>}
+
+        {board.state === "ready" && (
+          <>
+            <section aria-labelledby="podio">
+              <h2 id="podio" className="sr-only">
+                Pódio
+              </h2>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                {podium.map((entry) => (
+                  <PlayerCard
+                    key={entry.rank}
+                    rank={entry.rank}
+                    psnProfile={entry.psnProfile}
+                    points={entry.points}
+                    trophyCount={entry.trophyCount}
+                    featured
+                  />
+                ))}
+              </div>
+            </section>
+
+            <section aria-labelledby="tabela" className="mt-14">
+              <div className="flex flex-wrap items-end justify-between gap-4 border-b border-surface-border pb-4">
+                <h2 id="tabela" className="font-display text-3xl font-extrabold uppercase">
+                  A tabela
+                </h2>
+                <SearchField
+                  value={query}
+                  onChange={(next) => {
+                    setQuery(next);
+                    setVisible(PAGE_SIZE);
+                  }}
+                  label="Procurar caçador"
+                  placeholder="Procurar caçador…"
+                />
+              </div>
+
+              <p className="mt-4 font-mono text-xs text-white/40">
+                <span className="tabular text-white">{filtered.length.toLocaleString("pt-PT")}</span>
+                {query.trim() !== "" && <> de {rest.length.toLocaleString("pt-PT")}</>} caçadores · top {BOARD_SIZE}
+              </p>
+
+              {filtered.length === 0 ? (
+                <div className="mt-6">
+                  <EmptyState>Nenhum caçador corresponde a “{query.trim()}”.</EmptyState>
+                </div>
+              ) : (
+                <ol className="mt-4 space-y-1.5">
+                  {filtered.slice(0, visible).map((entry) => (
+                    <li key={entry.rank}>
+                      <HunterRow
+                        rank={entry.rank}
+                        psnProfile={entry.psnProfile}
+                        points={entry.points}
+                        trophyCount={entry.trophyCount}
+                        topPoints={topPoints}
+                      />
+                    </li>
+                  ))}
+                </ol>
+              )}
+
+              {visible < filtered.length && (
+                <div className="mt-6 text-center">
+                  <button
+                    type="button"
+                    onClick={() => setVisible((count) => count + PAGE_SIZE)}
+                    className="focus-glow rounded-lg border border-surface-border px-6 py-2.5 font-mono text-xs tracking-wide text-white/70 transition-colors hover:border-white/30 hover:text-white"
                   >
-                    {entry.psnProfile}
-                    <span aria-hidden className="ml-1 text-white/40">
-                      ↗
-                    </span>
-                    <span className="sr-only"> (abre o perfil no PSNProfiles)</span>
-                  </a>
-                ) : (
-                  <span>Perfil sem nome</span>
-                )}
-              </span>
-              <span className="text-sm text-white/60">
-                {entry.points.toLocaleString("pt-PT")} pts · {entry.trophyCount} troféus
-              </span>
-            </li>
-          ))}
-        </ol>
-      )}
+                    Mostrar mais ({filtered.length - visible} restantes)
+                  </button>
+                </div>
+              )}
+            </section>
+          </>
+        )}
+      </div>
     </div>
+  );
+}
+
+function HunterRow({
+  rank,
+  psnProfile,
+  points,
+  trophyCount,
+  topPoints,
+}: {
+  rank: number;
+  psnProfile: string | null;
+  points: number;
+  trophyCount: number;
+  topPoints: number;
+}) {
+  const width = topPoints > 0 ? Math.max(2, Math.round((points / topPoints) * 100)) : 0;
+
+  const inner = (
+    <>
+      <span className="tabular w-10 shrink-0 text-right font-display text-2xl leading-none font-extrabold text-white/25">
+        {rank}
+      </span>
+
+      {psnProfile ? <Monogram name={psnProfile} /> : <span aria-hidden className="h-9 w-9 shrink-0 rounded-lg bg-white/10" />}
+
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-semibold">{psnProfile ?? "Perfil sem nome"}</span>
+        <span className="mt-1.5 block h-1 overflow-hidden rounded-full bg-white/8">
+          <span
+            className="block h-full rounded-full bg-gradient-to-r from-accent-mint to-accent-blue"
+            style={{ width: `${width}%` }}
+          />
+        </span>
+      </span>
+
+      <span className="shrink-0 text-right">
+        <span className="tabular block font-display text-xl leading-none font-extrabold">
+          {points.toLocaleString("pt-PT")}
+        </span>
+        <span className="mt-1 block font-mono text-[10px] text-white/40">
+          {trophyCount.toLocaleString("pt-PT")} platinas
+        </span>
+      </span>
+    </>
+  );
+
+  const className =
+    "shine flex items-center gap-3 rounded-xl border border-surface-border bg-surface px-4 py-3 transition-colors hover:border-white/25 sm:gap-4";
+
+  if (!psnProfile) return <div className={className}>{inner}</div>;
+
+  return (
+    <Link to={`/trophies/${encodeURIComponent(psnProfile)}`} className={`focus-glow ${className}`}>
+      {inner}
+    </Link>
   );
 }

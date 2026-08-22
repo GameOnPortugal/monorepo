@@ -47,6 +47,20 @@ export interface LeaderboardEntry {
   trophyCount: number;
 }
 
+export interface HunterTrophy {
+  url: string | null;
+  points: number;
+  completionDate: string | null;
+}
+
+export interface Hunter {
+  psnProfile: string;
+  rank: number;
+  points: number;
+  trophyCount: number;
+  trophies: HunterTrophy[];
+}
+
 export interface PortalStats {
   activeAds: number;
   screenshots: number;
@@ -93,5 +107,7 @@ export const api = {
   listScreenshots: (limit = 8) =>
     get<{ screenshots: Screenshot[]; total: number }>(`/api/screenshots?limit=${limit}`),
   leaderboard: (limit = 10) => get<{ leaderboard: LeaderboardEntry[] }>(`/api/trophies/leaderboard?limit=${limit}`),
+  hunter: (psnProfile: string) =>
+    get<{ hunter: Hunter }>(`/api/trophies/hunters/${encodeURIComponent(psnProfile)}`),
   stats: () => get<PortalStats>("/api/stats"),
 };
