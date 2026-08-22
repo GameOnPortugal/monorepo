@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/GameOnPortugal/monorepo/compare/portal-web-v0.6.0...portal-web-v0.7.0) (2026-08-22)
+
+
+### Features
+
+* **portal-web:** redesign the portal around collectible cards, add hunter pages and real filters ([#86](https://github.com/GameOnPortugal/monorepo/issues/86)) ([def8ee3](https://github.com/GameOnPortugal/monorepo/commit/def8ee323191e7e3401db052d49551b428f11252))
+
 ## [0.6.0](https://github.com/GameOnPortugal/monorepo/compare/portal-web-v0.5.0...portal-web-v0.6.0) (2026-08-22)
 
 
