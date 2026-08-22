@@ -32,12 +32,57 @@ export interface Ad {
   createdAt: string;
 }
 
+/**
+ * M10.5 — the public identity of whoever posted something.
+ *
+ * Deliberately just a name and a picture: portal-api never returns the
+ * Discord id these are looked up by (portal/api/src/repositories/credit.ts),
+ * and `avatarUrl` is always a re-hosted media.game-on-portugal.pt URL, never
+ * a cdn.discordapp.com one.
+ */
+export interface Author {
+  name: string;
+  avatarUrl: string | null;
+}
+
+/** M10.7 — set on a screenshot that won its contest week. */
+export interface ScreenshotWinnerBadge {
+  weekStart: string;
+  weekEnd: string;
+  /** Null when the announcement never stated one — the old bot's never did. */
+  voteCount: number | null;
+  /** `announced` (written live) or `inferred` (recovered from channel history). */
+  source: string;
+}
+
 export interface Screenshot {
   id: string;
   name: string | null;
   platform: string | null;
   imageUrl: string | null;
   createdAt: string;
+  /** Null when the bot has no cached profile for the author yet. */
+  author: Author | null;
+  /** Discord permalink, so the credit is verifiable. */
+  messageUrl: string | null;
+  winner: ScreenshotWinnerBadge | null;
+}
+
+/** M10.8 — one decided week of the screenshot contest. */
+export interface Winner {
+  weekStart: string;
+  weekEnd: string;
+  voteCount: number | null;
+  source: string;
+  screenshot: {
+    id: string;
+    name: string | null;
+    platform: string | null;
+    imageUrl: string | null;
+    createdAt: string;
+    messageUrl: string | null;
+  };
+  author: Author | null;
 }
 
 export interface LeaderboardEntry {
@@ -106,6 +151,11 @@ export const api = {
   getAd: (id: string) => get<{ ad: Ad }>(`/api/marketplace/ads/${encodeURIComponent(id)}`),
   listScreenshots: (limit = 8) =>
     get<{ screenshots: Screenshot[]; total: number }>(`/api/screenshots?limit=${limit}`),
+  // `total` is the number of decided weeks, which can exceed `winners.length`
+  // — a week whose screenshot was deleted, or whose author opted out, is
+  // withheld. The Hall of Fame uses the difference to say the history it
+  // shows is incomplete rather than quietly shortening it.
+  winners: (limit = 200) => get<{ winners: Winner[]; total: number }>(`/api/screenshots/winners?limit=${limit}`),
   leaderboard: (limit = 10) => get<{ leaderboard: LeaderboardEntry[] }>(`/api/trophies/leaderboard?limit=${limit}`),
   hunter: (psnProfile: string) =>
     get<{ hunter: Hunter }>(`/api/trophies/hunters/${encodeURIComponent(psnProfile)}`),
