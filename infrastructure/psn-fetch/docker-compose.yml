@@ -9,7 +9,9 @@ services:
     restart: unless-stopped
     environment:
       PSN_FETCH_TOKEN: ${PSN_FETCH_TOKEN:?PSN_FETCH_TOKEN is required}
-      MIN_REQUEST_INTERVAL_MS: 1500
+      # See server.js: 1.5s survived a burst but not a real backfill —
+      # Cloudflare escalated after ~40 pages. Sustained volume is the limit.
+      MIN_REQUEST_INTERVAL_MS: 6000
     volumes:
       - psn-fetch-profile:/data
     # Bound to loopback on purpose. The bot reaches this through the reverse

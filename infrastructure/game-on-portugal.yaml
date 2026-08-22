@@ -31,6 +31,27 @@ services:
       S3_BUCKET: ${S3_BUCKET:-gop-media}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-gameonportugal}
       S3_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY in the Portainer stack env (min 8 chars)}
+      # --- Trophy crawl (M7.3) — full detail in docs/psn-crawl.md -----------
+      # PSNProfiles is behind a Cloudflare challenge that cannot be cleared
+      # from a datacenter IP at all, so fetches go through the psn-fetch
+      # sidecar on a residential connection. Unset, the bot falls back to
+      # fetching directly, which fails on every request in production.
+      PSN_FETCH_URL: ${PSN_FETCH_URL:-}
+      PSN_FETCH_TOKEN: ${PSN_FETCH_TOKEN:-}
+      # The sidecar's worst case is a failed challenge (60s) plus a cooldown
+      # (120s) plus a retry, which overruns the client's 120s default and
+      # surfaces as "The operation timed out" mid-walk.
+      PSN_FETCH_TIMEOUT_MS: ${PSN_FETCH_TIMEOUT_MS:-300000}
+      # Both default to OFF on purpose. Merging to `main` deploys, so neither
+      # a job that writes to ~118 real members' profiles nor a feature that
+      # posts publicly may switch itself on as a side effect of a deploy —
+      # they are set in the Portainer stack env by an operator who watched a
+      # dry run first.
+      TROPHIES_SYNC_ENABLED: ${TROPHIES_SYNC_ENABLED:-false}
+      TROPHIES_ANNOUNCE_ENABLED: ${TROPHIES_ANNOUNCE_ENABLED:-false}
+      # #ps-trophy-hall. No default in DiscordChannels.ts — announcements
+      # throw (caught and logged) until this is set.
+      DISCORD_CHANNEL_TROPHIES: ${DISCORD_CHANNEL_TROPHIES:-}
       # Optional Grafana Loki shipping. Leave unset to log to stdout only.
       LOKI_HOST: ${LOKI_HOST:-}
       LOKI_AUTH: ${LOKI_AUTH:-}
