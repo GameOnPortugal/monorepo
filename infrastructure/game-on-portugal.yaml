@@ -168,6 +168,18 @@ services:
       # table (src/lib/session.ts explains why), so this is what makes a
       # session unforgeable. Rotating it logs out every admin.
       SESSION_SECRET: ${SESSION_SECRET:-}
+      # The public base URL of the site, stated rather than inferred. Caddy
+      # terminates TLS and talks plain HTTP to nginx, so without this the API
+      # derived an `http://` OAuth redirect_uri (which Discord refuses) and a
+      # sitemap full of `http://portal-api:3001/...`. Must match a redirect
+      # URI registered on the Discord application, scheme included — see
+      # portal/api/src/lib/publicOrigin.ts.
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-https://game-on-portugal.pt}
+      # Production is single-origin (nginx proxies /api/), so CORS is not
+      # load-bearing here — but leaving it unset made the API answer public
+      # requests with the dev default `http://localhost:5173`. State the real
+      # origins instead.
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://game-on-portugal.pt,https://www.game-on-portugal.pt}
       # --- M8.11 audit log: a private SQLite file this service owns (not a
       # MySQL table — the bot owns that schema, see portal/README.md), kept
       # on the volume below so it survives redeploys.

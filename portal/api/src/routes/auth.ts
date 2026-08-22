@@ -15,6 +15,7 @@ import {
   fetchDiscordUser,
   loadOAuthConfig,
 } from "../lib/discordAuth";
+import { type OriginRequest, resolvePublicOrigin } from "../lib/publicOrigin";
 import { encodeSession } from "../lib/session";
 import { SESSION_COOKIE } from "../middleware/requireAdmin";
 import { decodeSession } from "../lib/session";
@@ -23,9 +24,16 @@ export const auth = new Hono();
 
 const STATE_COOKIE = "gop_oauth_state";
 
-/** Where the API lives from the browser's point of view, to build redirect_uri. */
-function apiOrigin(c: { req: { url: string } }): string {
-  return new URL(c.req.url).origin;
+/**
+ * Where the API lives from the browser's point of view, to build redirect_uri.
+ *
+ * Behind Caddy + nginx the inbound request is plain HTTP, so this cannot be
+ * read off `c.req.url` — doing so sent Discord an `http://` redirect_uri it
+ * refuses. See lib/publicOrigin.ts for the full reasoning and the env var
+ * production pins.
+ */
+function apiOrigin(c: OriginRequest): string {
+  return resolvePublicOrigin(c);
 }
 
 /**
@@ -35,7 +43,7 @@ function apiOrigin(c: { req: { url: string } }): string {
  * WEB_ORIGIN only needs to differ from apiOrigin() in local dev, where
  * portal-web (Vite, :5173) and portal-api (:3001) are two separate processes.
  */
-function webOrigin(c: { req: { url: string } }): string {
+function webOrigin(c: OriginRequest): string {
   return process.env.WEB_ORIGIN || apiOrigin(c);
 }
 
