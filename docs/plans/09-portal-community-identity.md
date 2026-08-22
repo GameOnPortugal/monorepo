@@ -122,7 +122,31 @@ contamination of the trophy ledger. Rendered with the mark's yellow
 
 ## Decisions that are Luis's, not an agent's
 
-### 1. How much of a player's identity goes on a public web page
+### 1. How much of a player's identity goes on a public web page — ✅ **DECIDED (Luis, 2026-08-22): option B**
+
+> "Ignore all that privacy thingy it's fine to put their usernames in the
+> public page until there is a problem this is a small community dont
+> overthink about it now."
+
+**Display name + permalink.** No avatar (option C stays rejected on its own
+merits — re-hosting someone else's image for marginal gain, per cross-cutting
+rule 3 — not on privacy grounds).
+
+This unblocks **M10.5**. Two things still hold, because neither is a privacy
+deliberation:
+
+- The existing `publicOptOut` filter keeps working as it already does — it is
+  one `AND` in a shared `WHERE` builder (`repositories/visibility.ts`), so
+  honouring it costs nothing and removing it would be work.
+- `author_id`/`channel_id`/`message_id` stay unexposed; the API returns a
+  *derived* `messageUrl` and `authorName`. That is an API-surface call, not a
+  privacy one — raw snowflakes are join keys, and publishing them invites
+  clients to depend on internal identifiers.
+
+The original analysis is kept below as the reasoning behind the options, not
+as an open question.
+
+#### The options as originally posed
 
 Crediting the player is the point of item 3, but it moves a Discord display
 name from a members-only server onto an indexable public page. That is new

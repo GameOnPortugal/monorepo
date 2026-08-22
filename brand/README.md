@@ -63,8 +63,44 @@ Generated into `portal/web/public/`:
 | `favicon-512.png` | icon | PWA / maskable |
 | `apple-touch-icon.png` | icon | 180×180, iOS home screen |
 | `og-image.png` | lockup | 1200×630 social card |
+| `brand/mark-64.png` | icon | **transparent**, header/footer (M10.1) |
+| `brand/mark-512.png` | icon | **transparent**, hero + image placeholder (M10.1) |
 
-Two things the derivation does deliberately:
+### The two transparent marks (M10.1)
+
+Everything above this line only ever appears *outside* the page — a browser
+tab, an iOS home screen, a shared link. Until M10.1 the portal never put the
+mark on screen at all; every on-page brand appearance was the *text* wordmark
+set in Archivo Black. These two files are what fixed that.
+
+They are the one pair of derived assets that **keeps alpha instead of
+compositing onto `#060302`**, because they have to sit on `--color-surface`
+(`#120D0A`) in `LazyImage`'s placeholder as well as on the page background,
+and an opaque `#060302` crop shows a visible dark square on the lighter card.
+
+Recovering that alpha needs a step the favicons don't: despite what the
+section below says about the mark being "white line-art on transparency", the
+source file is **fully opaque** (`getchannel('A').getextrema() == (255, 255)`)
+— it is already composited over `#060302`. That is precisely a
+premultiplied-over-near-black image, so both channels are recoverable:
+
+- **alpha** = each pixel's distance from `#060302`, taken as the **max
+  channel**, not luminance — luminance would key the four saturated face
+  buttons (blue `#4199E7` etc.) down to roughly half-transparent, since they
+  are much darker than the white line-art around them.
+- **colour** = un-premultiply by that alpha, which is what keeps the
+  antialiased edges from compositing back darker (i.e. the mark looking
+  thinner than the artwork).
+
+Then crop to the alpha bounding box — `(126, 42, 728, 803)`, giving a
+**602×761** mark — and resize to 512 and 64 on the long edge. Two sizes rather
+than one, so a 28 px header icon doesn't pull the 105 KB hero file.
+
+The result is taller than it is wide; that is the artwork's real proportion
+(the same reason the square favicons carry horizontal padding, noted below),
+so callers size `BrandMark` by height and let width follow.
+
+Two things the *favicon/OG* derivation does deliberately:
 
 - **Composites onto `#060302` instead of keeping alpha.** The mark is white
   line-art on transparency. Anything that renders it against a light surface —

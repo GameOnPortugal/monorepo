@@ -1,6 +1,7 @@
 import { Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { AdminAuthProvider } from "./lib/AdminAuthContext";
+import { ComoParticipar } from "./pages/ComoParticipar";
 import { HallOfFame } from "./pages/HallOfFame";
 import { Home } from "./pages/Home";
 import { Marketplace } from "./pages/Marketplace";
@@ -43,6 +44,7 @@ export default function App() {
         <Route path="screenshots" element={<Screenshots />} />
         <Route path="screenshots/hall-of-fame" element={<HallOfFame />} />
         <Route path="trophies" element={<Trophies />} />
+        <Route path="como-participar" element={<ComoParticipar />} />
         <Route path="privacy" element={<Privacy />} />
         <Route path="*" element={<NotFound />} />
       </Route>

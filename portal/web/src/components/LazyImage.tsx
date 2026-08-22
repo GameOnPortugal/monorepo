@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { BrandMark } from "./BrandMark";
 
 /**
  * M8.8's request-count half of "a phone must not download a 4 MB PNG per
@@ -78,8 +79,20 @@ export function LazyImage({
       className={`${className ?? ""} ${onClick ? "focus-glow cursor-pointer" : ""}`.trim()}
     >
       {showPlaceholder ? (
-        <div className="flex h-full w-full items-center justify-center bg-surface text-xs text-white/40">
-          {!src || broken ? "Sem imagem" : ""}
+        // M10.3 — a branded placeholder instead of the bare "Sem imagem"
+        // tile. Two states share this branch and must stay visually
+        // distinct: not-yet-in-viewport (nothing to say — an empty surface
+        // that is about to be replaced) and genuinely-missing (the two dead
+        // 2022 Discord CDN links, or a thumbnail the API refused), which
+        // shows the mark plus the reason. Rendering the mark while merely
+        // scrolling would make a loading gallery flash logos.
+        <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-surface">
+          {(!src || broken) && (
+            <>
+              <BrandMark variant="lg" className="h-10 opacity-25" />
+              <span className="text-xs text-white/40">Sem imagem</span>
+            </>
+          )}
         </div>
       ) : (
         <img
