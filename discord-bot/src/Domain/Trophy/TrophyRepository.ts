@@ -1,6 +1,7 @@
 import type { Trophy } from './Trophy';
 import type { TrophyId } from './TrophyId';
 import type { TrophyRankData } from './TrophyRankData';
+import type { CatchUpSummary } from './CatchUpSummary';
 import type { TrophyProfileId } from './TrophyProfileId';
 import type { UserPosition } from './UserPosition';
 
@@ -74,4 +75,19 @@ export interface TrophyRepository {
     countLifetimeHunters(): Promise<number>;
 
     findUserPosition(userId: string): Promise<UserPosition>;
+
+    /**
+     * Per-member totals for trophies *earned* on or after `since`, newest
+     * window first — the input to `trophies:catchup-announce` (the one-off
+     * "the crawl is back and here is what it recovered" post).
+     *
+     * Filters on `completionDate`, not `createdAt`, deliberately: the
+     * message tells a member what *they* achieved in that period, which is
+     * about when they earned the platinum, not when this bot happened to
+     * notice it.
+     *
+     * Excluded profiles and profiles with no linked Discord user are left
+     * out — there is nobody to mention.
+     */
+    findCatchUpSummariesSince(since: Date): Promise<CatchUpSummary[]>;
 }

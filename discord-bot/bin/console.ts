@@ -6,6 +6,7 @@ import WeekScreenshotWinner from '../src/Ui/Cli/WeekScreenshotWinner.ts';
 import { RunJobConsoleCommand } from '../src/Infrastructure/Job/RunJobConsoleCommand.ts';
 import FixOldTrophies from '../src/Ui/Cli/FixOldTrophies.ts';
 import ApplyAutoModConfig from '../src/Ui/Cli/ApplyAutoModConfig.ts';
+import TrophiesCatchUpAnnounce from '../src/Ui/Cli/TrophiesCatchUpAnnounce.ts';
 
 const logger = myContainer.get<Logger>(TYPES.Logger);
 const consoleCommands: Record<string, ConsoleCommand> = {};
@@ -20,6 +21,10 @@ consoleCommands[FixOldTrophies.commandName] = myContainer.get<FixOldTrophies>(Fi
 // M9.1 — manual AutoMod config reconciliation, dry-run by default (see ApplyAutoModConfig.ts).
 consoleCommands[ApplyAutoModConfig.commandName] =
     myContainer.get<ApplyAutoModConfig>(ApplyAutoModConfig);
+// One-off "the trophy hall is alive again" post after a backfill — previews
+// by default, posts only with --post (see TrophiesCatchUpAnnounce.ts).
+consoleCommands[TrophiesCatchUpAnnounce.commandName] =
+    myContainer.get<TrophiesCatchUpAnnounce>(TrophiesCatchUpAnnounce);
 
 async function run(): Promise<number> {
     const args = process.argv.slice(2);

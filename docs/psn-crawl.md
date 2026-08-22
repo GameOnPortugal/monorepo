@@ -218,6 +218,39 @@ docker exec gop-bot bun run:command jobs:run trophies:sync --dry-run --limit=20
 TROPHIES_SYNC_ENABLED=true
 ```
 
+### Coming back from an outage
+
+The order above matters when the crawl has been down for a long time. Leave
+`TROPHIES_ANNOUNCE_ENABLED` **unset** while the backfill runs.
+
+The steady-state announcement guards are tuned for steady state: a profile
+gaining more than 3 trophies in one run collapses to a single summary, and
+the whole run is capped at 10 messages. Since a backfill is spread over many
+10-minute runs, leaving announcements on would dribble out disconnected "we
+synced 47 trophies" lines with no explanation of why months-old platinums are
+suddenly being mentioned.
+
+Instead, once the backfill has caught up, post one deliberate message per
+member:
+
+```bash
+# preview — prints exactly what would be posted, sends nothing
+bun run:command trophies:catchup-announce --since=2024-11-30
+
+# send it
+bun run:command trophies:catchup-announce --since=2024-11-30 --post
+```
+
+Each member gets: *"🏆 Parabéns @X! O ranking de troféus está de volta —
+desde novembro de 2024 conquistaste **N troféus platina**, num total de
+**X TP**."*
+
+It previews by default and refuses to post at all if more members match than
+`--max` (default 60), because the realistic way to get this wrong is a
+`--since` that sweeps in everybody, and posting "just the first few" would be
+the worst outcome. **Then** set `TROPHIES_ANNOUNCE_ENABLED=true` so
+individual trophies are announced from that point on.
+
 `trophies:sync` is always *registered* (so it can be dry-run by hand) but only
 *scheduled* when that flag is `true`. Those are two different things, and
 conflating them is what made the runbook impossible before 2026-08-22: the

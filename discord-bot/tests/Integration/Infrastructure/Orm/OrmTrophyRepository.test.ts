@@ -371,4 +371,112 @@ describe('OrmTrophyRepository Integration Test', () => {
             expect(results).toHaveLength(2);
         });
     });
+
+    describe('findCatchUpSummariesSince (backfill announcement)', () => {
+        const SINCE = new Date('2024-11-30T00:00:00Z');
+
+        test('aggregates per member and filters to trophies earned on or after `since`', async () => {
+            const profile = await createTrophyProfile(undefined, 'user-a', 'HunterA');
+            // Before the window — must not be counted.
+            await createTrophy(
+                undefined,
+                profile.id.toString(),
+                'https://p/1',
+                500,
+                new Date('2024-06-01'),
+            );
+            // Inside the window.
+            await createTrophy(
+                undefined,
+                profile.id.toString(),
+                'https://p/2',
+                250,
+                new Date('2025-03-04'),
+            );
+            await createTrophy(
+                undefined,
+                profile.id.toString(),
+                'https://p/3',
+                800,
+                new Date('2026-01-20'),
+            );
+
+            const summaries = await trophyRepository.findCatchUpSummariesSince(SINCE);
+
+            expect(summaries).toHaveLength(1);
+            expect(summaries[0]!.userId).toBe('user-a');
+            expect(summaries[0]!.numTrophies).toBe(2);
+            expect(summaries[0]!.points).toBe(1050);
+            expect(summaries[0]!.firstCompletionDate.toISOString().slice(0, 10)).toBe('2025-03-04');
+            expect(summaries[0]!.lastCompletionDate.toISOString().slice(0, 10)).toBe('2026-01-20');
+        });
+
+        test('orders by points so the biggest hauls are announced first', async () => {
+            const small = await createTrophyProfile(undefined, 'user-small', 'Small');
+            await createTrophy(
+                undefined,
+                small.id.toString(),
+                'https://s/1',
+                50,
+                new Date('2025-05-05'),
+            );
+            const big = await createTrophyProfile(undefined, 'user-big', 'Big');
+            await createTrophy(
+                undefined,
+                big.id.toString(),
+                'https://b/1',
+                2000,
+                new Date('2025-05-05'),
+            );
+
+            const summaries = await trophyRepository.findCatchUpSummariesSince(SINCE);
+
+            expect(summaries.map((s) => s.userId)).toEqual(['user-big', 'user-small']);
+        });
+
+        test('skips excluded profiles and profiles with nobody to mention', async () => {
+            const excluded = await createTrophyProfile(
+                undefined,
+                'user-excluded',
+                'Excluded',
+                false,
+                false,
+                true,
+            );
+            await createTrophy(
+                undefined,
+                excluded.id.toString(),
+                'https://e/1',
+                500,
+                new Date('2025-05-05'),
+            );
+
+            // No linked Discord account — there is no one to @mention.
+            const orphan = await createTrophyProfile(undefined, '', 'Orphan');
+            await createTrophy(
+                undefined,
+                orphan.id.toString(),
+                'https://o/1',
+                500,
+                new Date('2025-05-05'),
+            );
+
+            const summaries = await trophyRepository.findCatchUpSummariesSince(SINCE);
+
+            expect(summaries).toHaveLength(0);
+        });
+
+        test('returns nothing when no trophies fall inside the window', async () => {
+            const profile = await createTrophyProfile(undefined, 'user-old', 'OldOnly');
+            await createTrophy(
+                undefined,
+                profile.id.toString(),
+                'https://x/1',
+                500,
+                new Date('2024-01-01'),
+            );
+
+            expect(await trophyRepository.findCatchUpSummariesSince(SINCE)).toHaveLength(0);
+        });
+    });
 });
