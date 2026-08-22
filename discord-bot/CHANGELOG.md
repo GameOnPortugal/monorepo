@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/GameOnPortugal/monorepo/compare/discord-bot-v1.3.1...discord-bot-v1.4.0) (2026-08-22)
+
+
+### Features
+
+* **bot:** announce what the trophy crawl recovered while it was down ([#78](https://github.com/GameOnPortugal/monorepo/issues/78)) ([098e4df](https://github.com/GameOnPortugal/monorepo/commit/098e4dfa5722e24a12dd12c73bb2d8dbda4a1668))
+
 ## [1.3.1](https://github.com/GameOnPortugal/monorepo/compare/discord-bot-v1.3.0...discord-bot-v1.3.1) (2026-08-22)
 
 
