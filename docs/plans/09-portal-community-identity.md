@@ -95,11 +95,11 @@ immediately; M10.5 blocks on M10.4, M10.8 blocks on M10.7.
 | **M10.1** | **Put the mark on the site.** Derive a transparent mark PNG (and a wide lockup) from `brand/` into `portal/web/public/brand/`, then use it: header lockup beside the wordmark, hero mark above the H1, footer mark. Keep the text wordmark as the accessible name (`alt`), don't replace it with an image-only header. | web | — |
 | **M10.2** | **Un-link `/admin` from the footer.** | web | — |
 | **M10.3** | **Branded placeholder.** Replace `LazyImage`'s bare "Sem imagem" tile with the mark on `#060302` at low opacity. Covers the 2 dead 2022 CDN links and every future broken URL. | web | — |
-| **M10.4** | **Persist votes + author display name.** Schema: `screenshots.vote_count Int?`, `votes_synced_at DateTime?`, `author_name String?`. Capture `author_name` at ingest (`CreateScreenshotHandler`); refresh vote counts on a schedule with a new `ScreenshotVotesSyncJob`; backfill all 624 rows once. | bot (migration + job) | — |
-| **M10.5** | **Credit + permalink + votes on the gallery.** Expose `authorName`, `voteCount` and a derived `messageUrl` (never `author_id`/`channel_id`/`message_id` themselves) and render them in the lightbox and tiles. | api + web | M10.4 |
+| **M10.4** | ✅ **identity half DONE (2026-08-22), vote half deferred.** Shipped as a **`discord_profiles` table** (one row per member: username, display name, re-hosted avatar), *not* `screenshots.author_name` — 624 screenshots come from 83 authors and 71 ads from 31, so per-member is one UPDATE on a rename instead of a sweep, and the marketplace is credited for free. Capture at ingest + `DiscordProfilesSyncJob` (which *is* the backfill: never-synced authors sort first). `vote_count`/`votes_synced_at`/`ScreenshotVotesSyncJob` **not built** — see the GLOBAL-PLAN M10.4 row. | bot (migration + job) | — |
+| **M10.5** | ✅ **DONE (2026-08-22)** — **Credit + permalink on the gallery.** Exposes a display name, a re-hosted `avatarUrl` and a derived `messageUrl` (never `author_id`/`channel_id`/`message_id` themselves), rendered on the tiles, in the lightbox and on the Home preview. Votes deferred with M10.4's vote half. | api + web | M10.4 |
 | **M10.6** | **Sort control** — "mais votadas" / "mais recentes". Server-side once `vote_count` is a real column. | api + web | M10.4 |
-| **M10.7** | **Winner persistence + historical backfill.** New `ScreenshotWinner` model (screenshot id, author id + name, ISO week, week start/end, vote count at the time, announcement message url, `source: 'announced' \| 'inferred'`). Write a row when `WeekScreenshotWinnerJob` picks a winner; a one-shot `screenshots:backfill-winners` console command reconstructs history by parsing announcements. | bot (migration + job + CLI) | — |
-| **M10.8** | **Hall of Fame, for real.** Replace the placeholder with the winner gallery: winning shot, player credit, week, vote count, permalink, and an inferred-row disclaimer where `source = 'inferred'`. Add a **winner badge** to the screenshot gallery and to the player's credit line. | api + web | M10.7 |
+| **M10.7** | ✅ **DONE (2026-08-22)** — **Winner persistence + historical backfill.** `#screenshots` was scanned on 2026-08-22: 1,444 messages back to 2021-04-02, **178 winner announcements, 137 resolving to a surviving screenshot row**. | bot (migration + job + CLI) | — |
+| **M10.8** | ✅ **DONE (2026-08-22)** — **Hall of Fame, for real.** Winner gallery with credit, week, vote count where known, permalink, an archival marker on `inferred` rows, and a count of weeks withheld because the screenshot was deleted or the author opted out. Winner badge on the gallery tiles and in the lightbox. | api + web | M10.7 |
 | **M10.9** | **PSN profile links** on the leaderboard — `https://psnprofiles.com/<psnProfile>`, the same base URL `PsnProfilesTrophySource` already scrapes. `rel="noreferrer"`, external-link affordance. | web | — |
 | **M10.10** | **"Como participar" explainers** for the rank system and the marketplace — what the commands are, where they run, what the rules are, and a Discord CTA. Rank: `/trophy` register + how points work. Marketplace: `/marketplace sell`, the 10-ad limit, expiry/bump. | web | — |
 | **M10.11** | **"Porque não apareço no ranking?"** — the banlist ask, redesigned. See the decision below. | web | Luis's call |
@@ -132,6 +132,30 @@ contamination of the trophy ledger. Rendered with the mark's yellow
 merits — re-hosting someone else's image for marginal gain, per cross-cutting
 rule 3 — not on privacy grounds).
 
+> ### ⬆️ Amended the same day — **avatars are in** (Luis, 2026-08-22)
+>
+> Luis asked for Discord avatars as well as usernames, and delegated the call:
+> *"decide for me. Pick the plan and see it completed."* **Option C, with
+> re-hosting.** The reasoning that rejected it does not survive contact with
+> what the repo already has:
+>
+> - Cross-cutting rule 3 is about *attachment* URLs, which are signed and
+>   expire in 24h. Avatar URLs are neither — they are stable until the member
+>   changes picture. So "the CDN link will die" was never the avatar problem.
+> - The **real** objections are different and both solved by re-hosting:
+>   `cdn.discordapp.com/avatars/<userId>/<hash>.png` embeds the member's raw
+>   snowflake in a public URL, which this very decision forbids everywhere
+>   else; and it 404s the moment they change avatar.
+> - "Re-hosting for marginal gain" priced work that no longer needs doing.
+>   M6.0/M6.2 built the MediaStorage pipeline and M6.3 already re-hosted 622
+>   screenshots through it; an avatar is one more `put()` on a 128px PNG,
+>   keyed by the avatar hash so an unchanged picture is skipped entirely and
+>   the key never contains a user id (`MediaKey.ts`).
+>
+> Implemented in `SyncDiscordProfileHandler`. A failed re-host is never a
+> failed sync — the name is what the credit needs, and a member with no
+> picture renders the same hashed monogram tile the trophy leaderboard uses.
+
 This unblocks **M10.5**. Two things still hold, because neither is a privacy
 deliberation:
 
@@ -158,7 +182,7 @@ Three options, in increasing exposure:
 | - | ----- | ----- |
 | **A** | Permalink only, no name | Zero new personal data; the credit is "click through to Discord to see who". Weakest on Luis's actual goal. |
 | **B** | Display name + permalink | **Recommended.** The name is already attached to the post inside a ~public community, and the permalink makes the attribution verifiable rather than a claim the portal invents. Honours the existing `publicOptOut` filter, which already hides an opted-out author's screenshots entirely. |
-| **C** | Display name + avatar + permalink | Avatars mean re-hosting another person's image (cross-cutting rule 3 forbids hot-linking the Discord CDN) for marginal gain. Not recommended. |
+| **C** | Display name + avatar + permalink | Avatars mean re-hosting another person's image (cross-cutting rule 3 forbids hot-linking the Discord CDN) for marginal gain. Not recommended. **— chosen anyway, 2026-08-22; see the amendment above for why this reasoning did not hold up.** |
 
 Whichever is chosen, the privacy page (`portal/web/src/pages/Privacy.tsx`)
 must be updated to say that screenshots are credited by name, and point at
