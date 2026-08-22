@@ -13,6 +13,7 @@ import EventDispatcher from '../../Application/Event/EventDispatcher/EventDispat
 import type { HttpClient } from '../../Domain/Http/HttpClient.ts';
 import RetryHttpClient from '../Http/RetryHttpClient.ts';
 import FetchHttpClient from '../Http/FetchHttpClient.ts';
+import BrowserFetchHttpClient from '../Http/BrowserFetchHttpClient.ts';
 import type { TrophySource } from '../../Domain/Trophy/TrophySource.ts';
 import { PsnProfilesTrophySource } from '../Trophy/PsnProfilesTrophySource.ts';
 import { PingHandler } from '../../Application/Query/Ping/PingHandler.ts';
@@ -249,7 +250,41 @@ myContainer.bind<EventDispatcher>(EventDispatcher).toSelf();
 myContainer.bind(FetchHttpClient).toSelf();
 myContainer.bind(RetryHttpClient).toSelf();
 myContainer.bind<HttpClient>(TYPES.HttpClient).to(RetryHttpClient);
-myContainer.bind<TrophySource>(TYPES.TrophySource).to(PsnProfilesTrophySource);
+myContainer.bind(BrowserFetchHttpClient).toSelf();
+
+// PSNProfiles is behind a Cloudflare challenge that plain `fetch` cannot
+// clear from anywhere, and that a headless browser cannot clear from a
+// datacenter IP either — see BrowserFetchHttpClient for the measurements.
+// When a psn-fetch sidecar is configured, the trophy source (and only the
+// trophy source) goes through it; everything else keeps using
+// RetryHttpClient. Unconfigured, this falls back to the direct client so
+// tests and local development are unchanged — the trophy source is
+// constructed with a plain HttpClient either way and knows nothing about
+// which one it got.
+const psnFetchConfigured =
+    (process.env.PSN_FETCH_URL ?? '') !== '' && (process.env.PSN_FETCH_TOKEN ?? '') !== '';
+
+myContainer
+    .bind<TrophySource>(TYPES.TrophySource)
+    .toDynamicValue(
+        (context) =>
+            new PsnProfilesTrophySource(
+                psnFetchConfigured
+                    ? context.get(BrowserFetchHttpClient)
+                    : context.get<HttpClient>(TYPES.HttpClient),
+            ),
+    );
+
+if (!psnFetchConfigured) {
+    myContainer
+        .get<Logger>(TYPES.Logger)
+        .warn(
+            'PSN_FETCH_URL/PSN_FETCH_TOKEN are not both set, so trophies:sync will fetch ' +
+                'PSNProfiles directly. That is expected in tests and local development, but in ' +
+                'production it will fail on every request: PSNProfiles serves a Cloudflare ' +
+                'challenge that only the psn-fetch sidecar can clear.',
+        );
+}
 
 // Bot
 // M1.3: DISCORD_TOKEN / DISCORD_CLIENT_ID are required for the live bot
@@ -420,26 +455,29 @@ myContainer.get(JobRunner).register(myContainer.get(RelinkScreenshotsJob));
 myContainer.get(JobRunner).register(myContainer.get(AdsLifecycleJob));
 myContainer.get(JobRunner).register(myContainer.get(AdsReconcileJob));
 
-// trophies:sync (M7.3) is always bound above and always runnable by hand
-// (`bun run:command jobs:run trophies:sync --dry-run`), but registering it
-// with the scheduler is opt-in. Merging to `main` *is* the deploy pipeline
-// here, so an unconditional registration would start writing trophy rows
-// and setting isBanned/isExcluded on ~118 real community members every 10
-// minutes the moment this lands, before anyone had watched a single run —
-// and since isExcluded removes a profile from future consideration with no
-// automatic un-flagging, a bad first run is effectively permanent. See
-// TrophiesSyncJob's doc comment ("Scheduling is opt-in") for the full
+// trophies:sync (M7.3) is always *registered* — so it is listed by
+// `jobs:run list` and runnable by hand at any time — but whether the ticker
+// may start it on its own is opt-in. Merging to `main` is the deploy
+// pipeline here, so an unconditionally scheduled job would start writing
+// trophy rows and setting isBanned/isExcluded on ~118 real community members
+// every 10 minutes the moment this lands, before anyone had watched a single
+// run — and since isExcluded removes a profile from future consideration
+// with no automatic un-flagging, a bad first run is effectively permanent.
+// See TrophiesSyncJob's doc comment ("Scheduling is opt-in") for the full
 // reasoning and the enable runbook. Mirrors the DISCORD_TOKEN-unset ->
 // InMemoryClient pattern above: a silently-disabled feature is its own
 // failure mode (that one is why M1.3 exists), so this logs clearly rather
-// than just quietly not registering.
-if (process.env.TROPHIES_SYNC_ENABLED === 'true') {
-    myContainer.get(JobRunner).register(myContainer.get(TrophiesSyncJob));
-} else {
+// than just quietly not scheduling.
+const trophiesSyncScheduled = process.env.TROPHIES_SYNC_ENABLED === 'true';
+myContainer
+    .get(JobRunner)
+    .register(myContainer.get(TrophiesSyncJob), { scheduled: trophiesSyncScheduled });
+
+if (!trophiesSyncScheduled) {
     myContainer
         .get<Logger>(TYPES.Logger)
         .warn(
-            'trophies:sync is bound but NOT scheduled (TROPHIES_SYNC_ENABLED is not "true"). ' +
+            'trophies:sync is registered but NOT scheduled (TROPHIES_SYNC_ENABLED is not "true"). ' +
                 'Dry-run it first — bun run:command jobs:run trophies:sync --dry-run — read the ' +
                 'report (especially any newly-flagged profiles), then set ' +
                 'TROPHIES_SYNC_ENABLED=true to schedule it every 10 minutes.',

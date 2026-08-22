@@ -269,6 +269,40 @@ describe('JobRunner', () => {
         expect(job.callCount).toBe(1);
     });
 
+    test('a manual-only job is runnable by hand but never started by a tick', async () => {
+        // The regression this locks down: gating registration on an env flag
+        // made the documented "dry-run it before you enable it" runbook
+        // impossible, because the job was not in the runner's map at all and
+        // `jobs:run trophies:sync --dry-run` failed with `Unknown job`.
+        const job = new ScriptedJob('manual-only', '* * * * *');
+        const runner = createRunner(jobStateRepository, reporter);
+        runner.register(job, { scheduled: false });
+
+        expect(runner.listJobs()).toContain('manual-only');
+        expect(runner.listScheduledJobs()).not.toContain('manual-only');
+
+        // Due by its cron, but the ticker must leave it alone.
+        runner.tickOnce(new Date());
+        await runner.waitForIdle();
+        expect(job.callCount).toBe(0);
+
+        const result = await runner.runNow('manual-only', { dryRun: true });
+        expect(job.callCount).toBe(1);
+        expect(result.failed).toBe(0);
+    });
+
+    test('a job registered without options stays scheduled by default', async () => {
+        const job = new ScriptedJob('scheduled-by-default', '* * * * *');
+        const runner = createRunner(jobStateRepository, reporter);
+        runner.register(job);
+
+        expect(runner.listScheduledJobs()).toContain('scheduled-by-default');
+
+        runner.tickOnce(new Date());
+        await runner.waitForIdle();
+        expect(job.callCount).toBe(1);
+    });
+
     test('runNow rejects an unknown job name', async () => {
         const runner = createRunner(jobStateRepository, reporter);
 

@@ -1,0 +1,31 @@
+# psn-fetch runs on a residential connection (TedRelayer), NOT on HTZ1:
+# Hetzner's IP range fails the Cloudflare challenge 0/12 regardless of how
+# good the browser is. See infrastructure/psn-fetch/README.md.
+services:
+  psn-fetch:
+    build: .
+    image: gop-psn-fetch:1.0.0
+    container_name: gop-psn-fetch
+    restart: unless-stopped
+    environment:
+      PSN_FETCH_TOKEN: ${PSN_FETCH_TOKEN:?PSN_FETCH_TOKEN is required}
+      MIN_REQUEST_INTERVAL_MS: 1500
+    volumes:
+      - psn-fetch-profile:/data
+    # Bound to loopback on purpose. The bot reaches this through the reverse
+    # SSH tunnel documented in the README, so the port is never exposed to
+    # the LAN, let alone forwarded at the router.
+    ports:
+      - "127.0.0.1:8791:8791"
+    # Chromium needs more than the default 64MB of /dev/shm or it crashes
+    # part-way through rendering a large trophy page.
+    shm_size: "1gb"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:8791/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  psn-fetch-profile:

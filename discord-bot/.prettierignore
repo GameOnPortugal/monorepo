@@ -12,3 +12,8 @@ bun.lock
 # release-please owns this file end to end and rewrites it on every
 # release — reformatting it here just means fighting release-please forever.
 CHANGELOG.md
+
+# Captured verbatim from the live PSNProfiles site, broken markup and all —
+# that's the point (see PsnProfilesTrophySource.test.ts). Reformatting would
+# defeat the fixture, and some of it isn't valid HTML for Prettier to parse.
+tests/Integration/Infrastructure/Trophy/fixtures/*.html
