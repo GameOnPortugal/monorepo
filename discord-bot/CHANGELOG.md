@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/GameOnPortugal/monorepo/compare/discord-bot-v1.3.0...discord-bot-v1.3.1) (2026-08-22)
+
+
+### Bug Fixes
+
+* **bot:** make the trophy leaderboard update again (M7.3) ([#75](https://github.com/GameOnPortugal/monorepo/issues/75)) ([7ee0b55](https://github.com/GameOnPortugal/monorepo/commit/7ee0b55e516e63993fbf80db083705c669b43e23))
+
 ## [1.3.0](https://github.com/GameOnPortugal/monorepo/compare/discord-bot-v1.2.0...discord-bot-v1.3.0) (2026-08-21)
 
 
