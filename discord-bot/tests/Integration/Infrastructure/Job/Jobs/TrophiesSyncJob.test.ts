@@ -72,9 +72,12 @@ describe('TrophiesSyncJob', () => {
         await ormClient.$disconnect();
     });
 
-    test('exposes a stable name and the every-10-minutes schedule', () => {
+    test('exposes a stable name and the hourly schedule', () => {
         expect(job.name).toBe('trophies:sync');
-        expect(job.schedule).toBe('*/10 * * * *');
+        // Hourly, not every 10 minutes: a full pass takes ~16 minutes at the
+        // crawler's 6s spacing, so a 10-minute schedule meant the job was
+        // effectively always running. See TrophiesSyncJob's comment.
+        expect(job.schedule).toBe('0 * * * *');
     });
 
     test('catch-up mode: creates newer trophies and stops at the first already-claimed one', async () => {

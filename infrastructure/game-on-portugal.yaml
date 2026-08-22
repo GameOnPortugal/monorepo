@@ -42,6 +42,13 @@ services:
       # (120s) plus a retry, which overruns the client's 120s default and
       # surfaces as "The operation timed out" mid-walk.
       PSN_FETCH_TIMEOUT_MS: ${PSN_FETCH_TIMEOUT_MS:-300000}
+      # One pass over the community costs ~4 budget units per profile (rank
+      # fetch, guild check, trophy-list page, first already-claimed check).
+      # At 54 active profiles that is ~216, so JobRunner's default of 200
+      # starves whichever profiles sort last — they are skipped on every run,
+      # forever. Sized with headroom for new trophies rather than to the
+      # exact current count.
+      JOB_WORK_LIMIT: ${JOB_WORK_LIMIT:-600}
       # Both default to OFF on purpose. Merging to `main` deploys, so neither
       # a job that writes to ~118 real members' profiles nor a feature that
       # posts publicly may switch itself on as a side effect of a deploy —
