@@ -1,22 +1,34 @@
 @import "tailwindcss";
 
-/* Self-hosted webfonts (no third-party CDN — see portal/README.md). Archivo
-   Black is the stand-in "heavy display face echoing the wordmark's brush
-   weight" until M8.1 (brand vendoring) traces/sources the real one; Inter is
-   the neutral body sans. Two families total, per docs/plans/03-portal.md. */
+/* Self-hosted webfonts (no third-party CDN — see portal/README.md).
+ *
+ * Three roles, deliberately (M11 "Holo" redesign):
+ *   - display  Big Shoulders Display — a tall, condensed, high-contrast
+ *              grotesk. Chosen over the previous Archivo Black because the
+ *              redesign leans on *large* numerals (ranks, prices, point
+ *              totals) and a condensed face lets a 5-digit score sit in a
+ *              narrow card without shrinking to unreadable. Archivo Black is
+ *              kept below as the wordmark face only.
+ *   - body     Space Grotesk — a neutral geometric sans with enough
+ *              character not to read as a default UI font.
+ *   - mono     JetBrains Mono — every label, eyebrow, count and timestamp.
+ *              Data reads as data.
+ */
+@import "@fontsource-variable/big-shoulders-display";
+@import "@fontsource-variable/space-grotesk";
+@import "@fontsource-variable/jetbrains-mono";
 @import "@fontsource/archivo-black";
-@import "@fontsource-variable/inter";
 
 /*
- * Design tokens — docs/plans/03-portal.md "Brand and design direction" +
- * docs/plans/00-overview.md "Brand assets" (palette sampled from the guild
- * icon). This @theme block is the SINGLE place these values are defined;
- * every component consumes them as Tailwind utilities (bg-background,
- * text-accent-blue, font-display, etc.) rather than hardcoding hex codes.
+ * Design tokens — the SINGLE place these values are defined; every component
+ * consumes them as Tailwind utilities (bg-background, text-accent-blue,
+ * font-display, …) rather than hardcoding hex codes.
  *
- * Dark-first, not dark-mode-as-afterthought: there is no light theme in v1
- * (settled, GLOBAL-PLAN M8 note) — --color-background/--color-foreground are
- * applied directly in the `body` rule below, not behind a `dark:` variant.
+ * Palette is unchanged from M8.1 and still sampled from the guild icon
+ * (brand/README.md) — the redesign changes typography, structure and motion,
+ * not the brand's colours.
+ *
+ * Dark-first, not dark-mode-as-afterthought: there is no light theme.
  */
 @theme {
   --color-background: #060302;
@@ -37,13 +49,23 @@
   --color-surface: #120d0a;
   --color-surface-border: #2a211c;
 
-  --font-display: "Archivo Black", "Arial Black", system-ui, sans-serif;
-  --font-body: "Inter Variable", "Inter", system-ui, sans-serif;
+  /* Podium metals. Rank 1 reuses the brand yellow; 2 and 3 are neutral
+     silver/bronze rather than brand accents, so a podium never implies a
+     platform. */
+  --color-rank-silver: #d8d8d8;
+  --color-rank-bronze: #c98b4b;
 
-  /* Chamfered corners ("restrained gaming cues", plan 03) instead of rounded
-     ones — a single cut-corner radius token used everywhere via `rounded-chamfer`
-     is more consistent than every component picking its own clip-path. */
+  --font-display: "Big Shoulders Display Variable", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "Space Grotesk Variable", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+  /* The wordmark only — "GAME ON PORTUGAL" set in the header/footer/hero.
+     It echoes the brush lockup in brand/logo-lockup-2048.png. */
+  --font-wordmark: "Archivo Black", "Arial Black", system-ui, sans-serif;
+
+  /* The cut-corner radius: primary buttons on the public pages, and all of
+     /admin. Cards use --radius-card. See .chamfer below. */
   --radius-chamfer: 0.5rem;
+  --radius-card: 0.75rem;
 }
 
 @layer base {
@@ -53,9 +75,6 @@
 
   body {
     @apply bg-background text-foreground font-body antialiased;
-    /* Hairline scanline texture at very low opacity on hero surfaces only —
-       applied via the .scanlines utility below, not globally: plan 03 warns
-       against loud/animated backgrounds everywhere. */
   }
 
   h1,
@@ -63,25 +82,26 @@
   h3,
   h4 {
     @apply font-display;
+    font-weight: 800;
+    letter-spacing: 0.005em;
+    line-height: 0.95;
+  }
+
+  /* Condensed display faces need explicit tabular figures wherever numbers
+     are compared column-to-column (leaderboard points, prices), or the
+     ranking visibly ripples as digits change width. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
   }
 }
 
 @layer utilities {
-  /* Restrained "gaming cue" #1: a low-opacity scanline texture, hero
-     surfaces only (see plan 03's design principles). Pure CSS, no image
-     asset. */
-  .scanlines {
-    background-image: repeating-linear-gradient(
-      to bottom,
-      rgb(255 255 255 / 0.035) 0px,
-      rgb(255 255 255 / 0.035) 1px,
-      transparent 1px,
-      transparent 3px
-    );
-  }
-
-  /* Restrained "gaming cue" #2: chamfered (cut) corners on hero/card
-     surfaces, applied with clip-path so it composes with a border. */
+  /* The cut-corner shape. Two roles after the M11 redesign: it is the shape
+     of every primary call-to-action on the public pages (the one angular cue
+     in an otherwise rounded card system, so the main action never looks like
+     a card), and it is what /admin still uses throughout — admin keeps its
+     existing look rather than being half-migrated into a second visual
+     language. */
   .chamfer {
     clip-path: polygon(
       var(--radius-chamfer) 0%,
@@ -93,19 +113,123 @@
     );
   }
 
-  /* Focus states glow rather than outline (plan 03) — respects
-     prefers-reduced-motion via the transition being cut to 0 below. */
+  /* Focus states glow rather than outline — switched off by the
+     reduced-motion block below along with everything else. */
   .focus-glow:focus-visible {
     outline: none;
     box-shadow: 0 0 0 3px var(--color-background), 0 0 0 5px var(--color-accent-blue), 0 0 16px 2px
       rgb(65 153 231 / 0.55);
   }
+
+  /* --- The signature: holographic foil ------------------------------------
+   *
+   * A collectible-card foil whose highlight tracks the pointer. `--mx`/`--my`
+   * are written by `useTilt` (src/lib/useTilt.ts); the defaults below mean the
+   * effect degrades to a static centred sheen with no JS, no pointer, or
+   * reduced motion — it never disappears entirely, so the card still reads as
+   * foiled on a touch device.
+   *
+   * `color-dodge` over a near-black card is what makes this look like light
+   * catching a surface rather than a rainbow gradient pasted on top.
+   */
+  .holo-foil::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+    mix-blend-mode: color-dodge;
+    opacity: var(--foil, 0.3);
+    transition: opacity 0.3s ease;
+    background:
+      radial-gradient(60% 60% at var(--mx, 50%) var(--my, 50%), rgb(255 255 255 / 0.5), transparent 60%),
+      repeating-linear-gradient(
+        115deg,
+        rgb(65 153 231 / 0.55) 0%,
+        rgb(138 251 204 / 0.55) 12%,
+        rgb(255 253 84 / 0.5) 24%,
+        rgb(234 50 35 / 0.5) 36%,
+        rgb(65 153 231 / 0.55) 48%
+      );
+    background-size: auto, 220% 220%;
+    background-position: 0 0, calc(var(--mx, 50%) * -1 + 100%) calc(var(--my, 50%) * -1 + 100%);
+  }
+
+  /* Fine diagonal texture so the foil has a surface to sit on rather than
+     floating over flat colour. */
+  .holo-foil::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0.5;
+    background: repeating-linear-gradient(65deg, rgb(255 255 255 / 0.05) 0 1px, transparent 1px 5px);
+  }
+
+  .holo-foil:hover {
+    --foil: 0.55;
+  }
+
+  /* The cheap version, for the many small cards (ads, screenshots, ranked
+     rows) where a full foil would be noise: a single shine that sweeps
+     across once on hover. */
+  .shine {
+    position: relative;
+    overflow: hidden;
+  }
+  .shine::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(115deg, transparent 30%, rgb(255 255 255 / 0.16) 48%, transparent 62%);
+  }
+  .shine:hover::before {
+    opacity: 1;
+    animation: shine-sweep 0.8s ease-out;
+  }
+  @keyframes shine-sweep {
+    to {
+      transform: translateX(100%);
+    }
+  }
+
+  /* Entry motion, used once per section rather than per element — an
+     orchestrated reveal, not scattered effects. */
+  .rise {
+    animation: rise 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+  }
+
+  .float {
+    animation: float 6s ease-in-out infinite;
+  }
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0) rotate(0deg);
+    }
+    50% {
+      transform: translateY(-8px) rotate(1.5deg);
+    }
+  }
 }
 
-/* Motion is functional only (page transitions, image loads) — never
-   decorative, and switched off entirely for anyone who asked for less
-   motion. Do this once, globally, rather than trusting every component to
-   remember the media query. */
+/* Motion is functional only (page transitions, image loads, the foil) —
+ * never load-bearing for meaning, and switched off entirely for anyone who
+ * asked for less motion. Done once, globally, rather than trusting every
+ * component to remember the media query. `useTilt` checks the same query in
+ * JS so it never even attaches its listeners.
+ */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

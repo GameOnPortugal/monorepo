@@ -36,28 +36,27 @@ export function HallOfFame() {
     description: "As screenshots vencedoras da semana na comunidade Game On Portugal.",
     path: "/screenshots/hall-of-fame",
   });
-
   return (
-    <div className="mx-auto max-w-2xl px-4 py-16 text-center">
-      <p className="text-xs font-semibold tracking-[0.3em] text-white/50 uppercase">Hall of Fame</p>
-      <h1 className="mt-4 font-display text-3xl">Ainda a construir o histórico</h1>
-      <p className="mt-4 text-white/70">
+    <div className="mx-auto max-w-2xl px-4 py-24 text-center">
+      <p className="font-mono text-[11px] tracking-[0.22em] text-accent-mint uppercase">Hall of Fame · Screenshots</p>
+      <h1 className="mt-5 font-display text-5xl font-extrabold uppercase">Ainda a construir o histórico</h1>
+      <p className="mt-5 leading-relaxed text-white/65">
         Todas as semanas, a screenshot com mais reações 🏆 no canal do Discord é anunciada como vencedora — mas essa
         escolha ainda não fica gravada em lado nenhum, por isso esta página ainda não tem um histórico para mostrar.
       </p>
-      <p className="mt-2 text-white/70">
+      <p className="mt-3 leading-relaxed text-white/65">
         Para veres a vencedora mais recente (e participares na próxima), entra no Discord.
       </p>
       <a
         href={DISCORD_INVITE}
         target="_blank"
         rel="noreferrer"
-        className="focus-glow chamfer mt-8 inline-block bg-accent-blue px-6 py-3 font-semibold text-background transition-opacity hover:opacity-90"
+        className="focus-glow chamfer mt-9 inline-block bg-accent-yellow px-6 py-3.5 font-bold text-background transition-transform hover:-translate-y-0.5"
       >
         Entrar no Discord
       </a>
       <div className="mt-6">
-        <Link to="/screenshots" className="focus-glow text-sm text-white/60 hover:text-white">
+        <Link to="/screenshots" className="focus-glow rounded font-mono text-xs text-white/50 hover:text-white">
           ← Ver a galeria de screenshots
         </Link>
       </div>

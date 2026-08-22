@@ -1,23 +1,41 @@
 import { useEffect } from "react";
-import type { Screenshot } from "../lib/api/client";
 import { normalizePlatform } from "../lib/normalize";
 import { PlatformBadge } from "./PlatformBadge";
 
 /**
- * Full-screen viewer for the screenshots gallery (M8.8). Keyboard-navigable
- * (Esc closes, arrow keys move) and closes on backdrop click. No transition
- * animation — plan 03's "motion is functional only" plus the global
- * `prefers-reduced-motion` override in index.css already covers this: a
- * plain instant show/hide needs no extra handling for reduced motion,
- * unlike a slide/fade would.
+ * Full-screen viewer for the screenshots gallery (M8.8) and the marketplace
+ * detail gallery (M11).
+ *
+ * The item shape is structural rather than `Screenshot`, so an ad's image
+ * array can be viewed with the same component instead of a second, nearly
+ * identical overlay. `Screenshot` satisfies it as-is.
+ *
+ * Keyboard-navigable (Esc closes, arrows move) and closes on backdrop click.
+ * No enter/exit transition — plan 03's "motion is functional only" plus the
+ * global `prefers-reduced-motion` override already covers this, and a plain
+ * instant show/hide needs no extra handling for reduced motion the way a
+ * slide or fade would.
+ *
+ * Body scroll is locked while open: without it, arrow keys and the wheel
+ * scroll the page behind the overlay, so closing it drops you somewhere else.
  */
+export interface LightboxItem {
+  id: string;
+  name: string | null;
+  imageUrl: string | null;
+  platform?: string | null;
+  createdAt?: string;
+}
+
+const DATE_FORMAT = new Intl.DateTimeFormat("pt-PT", { day: "numeric", month: "long", year: "numeric" });
+
 export function Lightbox({
   items,
   index,
   onClose,
   onNavigate,
 }: {
-  items: Screenshot[];
+  items: LightboxItem[];
   index: number;
   onClose: () => void;
   onNavigate: (nextIndex: number) => void;
@@ -31,42 +49,59 @@ export function Lightbox({
       if (event.key === "ArrowLeft") onNavigate((index - 1 + items.length) % items.length);
     }
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
   }, [index, items.length, onClose, onNavigate]);
 
   if (!current) return null;
-  const platform = normalizePlatform(current.platform);
+
+  const platform = current.platform !== undefined ? normalizePlatform(current.platform) : null;
+  const date = current.createdAt ? new Date(current.createdAt) : null;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/95 p-4"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/96 p-4 backdrop-blur-sm"
       onClick={onClose}
       role="dialog"
       aria-modal
+      aria-label={current.name ?? "Imagem"}
     >
-      <button
-        type="button"
-        onClick={onClose}
-        className="focus-glow absolute top-4 right-4 chamfer border border-surface-border px-3 py-1.5 text-sm text-white/80 hover:text-white"
-        aria-label="Fechar"
-      >
-        Fechar ✕
-      </button>
+      <div className="absolute top-4 right-4 left-4 flex items-center justify-between">
+        <span className="tabular font-mono text-xs text-white/45">
+          {index + 1} / {items.length}
+        </span>
+        <button
+          type="button"
+          onClick={onClose}
+          className="focus-glow rounded-lg border border-surface-border bg-surface/80 px-3 py-1.5 font-mono text-xs text-white/75 transition-colors hover:text-white"
+        >
+          Fechar ✕
+        </button>
+      </div>
 
-      <div className="flex max-h-full max-w-4xl flex-col items-center gap-3" onClick={(e) => e.stopPropagation()}>
+      <div className="flex max-h-full max-w-5xl flex-col items-center gap-4" onClick={(event) => event.stopPropagation()}>
         {current.imageUrl ? (
           <img
             src={current.imageUrl}
-            alt={current.name ?? "Screenshot"}
-            className="max-h-[75vh] max-w-full object-contain"
+            alt={current.name ?? "Imagem"}
+            className="max-h-[76vh] max-w-full rounded-lg object-contain"
           />
         ) : (
-          <div className="flex h-64 w-full items-center justify-center bg-surface text-white/40">Sem imagem</div>
+          <div className="flex h-64 w-full items-center justify-center rounded-lg bg-surface text-white/40">
+            Sem imagem
+          </div>
         )}
 
-        <div className="flex flex-wrap items-center justify-center gap-3 text-sm text-white/70">
-          {current.name && <span>{current.name}</span>}
+        <div className="flex flex-wrap items-center justify-center gap-3 text-sm">
+          {current.name && <span className="font-semibold">{current.name}</span>}
           {platform && <PlatformBadge platform={platform} />}
+          {date && <span className="font-mono text-xs text-white/40">{DATE_FORMAT.format(date)}</span>}
         </div>
       </div>
 
@@ -74,22 +109,22 @@ export function Lightbox({
         <>
           <button
             type="button"
-            onClick={(e) => {
-              e.stopPropagation();
+            onClick={(event) => {
+              event.stopPropagation();
               onNavigate((index - 1 + items.length) % items.length);
             }}
-            className="focus-glow absolute left-2 top-1/2 -translate-y-1/2 chamfer border border-surface-border bg-background/60 px-3 py-4 text-lg text-white/80 hover:text-white sm:left-6"
+            className="focus-glow absolute top-1/2 left-2 -translate-y-1/2 rounded-lg border border-surface-border bg-surface/70 px-3 py-4 text-lg text-white/75 transition-colors hover:text-white sm:left-6"
             aria-label="Anterior"
           >
             ‹
           </button>
           <button
             type="button"
-            onClick={(e) => {
-              e.stopPropagation();
+            onClick={(event) => {
+              event.stopPropagation();
               onNavigate((index + 1) % items.length);
             }}
-            className="focus-glow absolute right-2 top-1/2 -translate-y-1/2 chamfer border border-surface-border bg-background/60 px-3 py-4 text-lg text-white/80 hover:text-white sm:right-6"
+            className="focus-glow absolute top-1/2 right-2 -translate-y-1/2 rounded-lg border border-surface-border bg-surface/70 px-3 py-4 text-lg text-white/75 transition-colors hover:text-white sm:right-6"
             aria-label="Seguinte"
           >
             ›

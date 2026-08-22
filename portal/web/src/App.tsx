@@ -3,6 +3,7 @@ import { Layout } from "./components/Layout";
 import { AdminAuthProvider } from "./lib/AdminAuthContext";
 import { ComoParticipar } from "./pages/ComoParticipar";
 import { HallOfFame } from "./pages/HallOfFame";
+import { HunterDetail } from "./pages/HunterDetail";
 import { Home } from "./pages/Home";
 import { Marketplace } from "./pages/Marketplace";
 import { MarketplaceDetail } from "./pages/MarketplaceDetail";
@@ -44,6 +45,9 @@ export default function App() {
         <Route path="screenshots" element={<Screenshots />} />
         <Route path="screenshots/hall-of-fame" element={<HallOfFame />} />
         <Route path="trophies" element={<Trophies />} />
+        {/* M11 — one hunter's own platinum list. Placed after the
+            index route so "/trophies" still resolves to the board. */}
+        <Route path="trophies/:psnProfile" element={<HunterDetail />} />
         <Route path="como-participar" element={<ComoParticipar />} />
         <Route path="privacy" element={<Privacy />} />
         <Route path="*" element={<NotFound />} />

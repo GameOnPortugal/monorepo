@@ -1,10 +1,11 @@
-import { PLATFORMS } from "../lib/platforms";
 import type { PlatformTag } from "../lib/normalize";
+import { PLATFORMS } from "../lib/platforms";
 
 /**
- * The one component every future marketplace/gallery/leaderboard row reuses
- * for a platform tag. Text is always near-black on the accent fill — see
- * src/lib/platforms.ts for the AA contrast table that rules out white text.
+ * The one component every marketplace/gallery/leaderboard row reuses for a
+ * platform tag. Text is always near-black on the accent fill — see
+ * src/lib/platforms.ts for the AA contrast table that rules out white text on
+ * every one of the four accents.
  *
  * Also accepts `normalizePlatform()`'s residual `"other"` bucket (M8.4) —
  * deliberately rendered *without* one of the four brand accents (plan 03:
@@ -12,11 +13,15 @@ import type { PlatformTag } from "../lib/normalize";
  * something specific; a fifth, made-up colour for "everything else" would
  * dilute that). It gets a plain muted outline instead.
  */
-export function PlatformBadge({ platform }: { platform: PlatformTag }) {
+export function PlatformBadge({ platform, size = "sm" }: { platform: PlatformTag; size?: "sm" | "md" }) {
+  const sizing = size === "md" ? "px-2.5 py-1 text-[11px]" : "px-2 py-0.5 text-[10px]";
+
   if (platform === "other") {
     return (
-      <span className="chamfer inline-flex items-center border border-surface-border px-2 py-0.5 text-xs font-semibold text-white/70">
-        Outra plataforma
+      <span
+        className={`inline-flex items-center rounded-md border border-surface-border font-mono tracking-wide text-white/60 ${sizing}`}
+      >
+        Outra
       </span>
     );
   }
@@ -25,7 +30,7 @@ export function PlatformBadge({ platform }: { platform: PlatformTag }) {
 
   return (
     <span
-      className="chamfer inline-flex items-center px-2 py-0.5 text-xs font-semibold text-background"
+      className={`inline-flex items-center rounded-md font-mono font-semibold tracking-wide text-background ${sizing}`}
       style={{ backgroundColor: meta.colorVar }}
     >
       {meta.label}
