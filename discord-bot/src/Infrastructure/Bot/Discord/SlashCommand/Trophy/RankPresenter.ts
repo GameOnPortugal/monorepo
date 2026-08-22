@@ -4,6 +4,8 @@ import type { RankPage } from '../../../../../Domain/Trophy/RankPage';
 import type { UserPosition } from '../../../../../Domain/Trophy/UserPosition';
 import type { RankType } from '../../../../../Application/Query/Trophy/GetRank/GetRank';
 import { formatRankPositionEmoji } from './RankEmoji.ts';
+import { messages, type BotMessages } from '../../../../../Domain/Bot/I18n/messages';
+import type { BotLocale } from '../../../../../Domain/Bot/I18n/BotLocale';
 
 /** `trophies:page:<type>:<page>:<pageSize>:<month>:<year>` — see `TrophyComponentHandler`. */
 export const RANK_NAMESPACE = 'trophies';
@@ -21,41 +23,52 @@ const NOT_APPLICABLE = '-';
  * differently depending on how it was reached.
  */
 export class RankPresenter {
-    private formatNumber(num: number): string {
-        return num.toLocaleString('pt-PT');
+    private formatNumber(num: number, locale: BotLocale): string {
+        return num.toLocaleString(messages(locale).intlLocale);
     }
 
-    private formatRankTitle(type: RankType): string {
+    private formatRankTitle(m: BotMessages['trophy'], type: RankType): string {
         switch (type) {
             case 'monthly':
-                return '📅 Ranking Mensal de Troféus';
+                return m.monthlyRankTitle;
             case 'creation':
-                return '🎮 Ranking de Troféus Desde Sempre';
+                return m.creationRankTitle;
             case 'lifetime':
-                return '🏆 Ranking Vitalício de Troféus';
+                return m.lifetimeRankTitle;
             case 'user':
-                return '📊 Ranking de Troféus';
+                return m.userRankTitle;
             default:
-                return 'Ranking de Troféus';
+                return m.genericRankTitle;
         }
     }
 
-    private formatMonthYear(date: Date): string {
-        return date.toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' });
+    private formatMonthYear(date: Date, locale: BotLocale): string {
+        return date.toLocaleDateString(messages(locale).intlLocale, {
+            month: 'long',
+            year: 'numeric',
+        });
     }
 
-    public buildRankingEmbed(rankPage: RankPage, type: RankType, date?: Date): EmbedBuilder {
+    public buildRankingEmbed(
+        rankPage: RankPage,
+        type: RankType,
+        date?: Date,
+        locale: BotLocale = 'pt',
+    ): EmbedBuilder {
+        const m = messages(locale).trophy;
         const embed = new EmbedBuilder()
             .setColor(0x00ff00)
-            .setTitle(this.formatRankTitle(type))
+            .setTitle(this.formatRankTitle(m, type))
             .setTimestamp();
 
         if (type === 'monthly' && date) {
-            embed.setTitle(`${this.formatRankTitle(type)} — ${this.formatMonthYear(date)}`);
+            embed.setTitle(
+                `${this.formatRankTitle(m, type)} — ${this.formatMonthYear(date, locale)}`,
+            );
         }
 
         if (rankPage.data.length === 0) {
-            embed.setDescription('Sem troféus registados para este período.');
+            embed.setDescription(m.noTrophiesForPeriod);
         } else {
             const firstRow = (rankPage.page - 1) * rankPage.pageSize;
             embed.setDescription(
@@ -65,7 +78,10 @@ export class RankPresenter {
                         const mention = rank.userId ? ` (<@${rank.userId}>)` : '';
                         return (
                             `${formatRankPositionEmoji(position)} **#${position}** ${rank.psnProfile}${mention}\n` +
-                            `Pontos: ${this.formatNumber(rank.points)} | Troféus: ${this.formatNumber(rank.num_trophies)}`
+                            m.pointsAndTrophies(
+                                this.formatNumber(rank.points, locale),
+                                this.formatNumber(rank.num_trophies, locale),
+                            )
                         );
                     })
                     .join('\n\n'),
@@ -73,48 +89,61 @@ export class RankPresenter {
         }
 
         embed.setFooter({
-            text: `Página ${rankPage.page} de ${rankPage.totalPages} • ${this.formatNumber(rankPage.totalCount)} jogador(es) no ranking`,
+            text: m.rankFooter(
+                rankPage.page,
+                rankPage.totalPages,
+                this.formatNumber(rankPage.totalCount, locale),
+            ),
         });
 
         return embed;
     }
 
-    public buildUserPositionEmbed(data: UserPosition, targetUser: string): EmbedBuilder {
+    public buildUserPositionEmbed(
+        data: UserPosition,
+        targetUser: string,
+        locale: BotLocale = 'pt',
+    ): EmbedBuilder {
+        const m = messages(locale).trophy;
+        const position = (index: 0 | 1 | 2, whenEmpty: string): string =>
+            data.ranks[index].position > 0
+                ? m.positionLine(
+                      formatRankPositionEmoji(data.ranks[index].position),
+                      data.ranks[index].position,
+                      this.formatNumber(data.ranks[index].points, locale),
+                      this.formatNumber(data.ranks[index].trophies, locale),
+                  )
+                : whenEmpty;
+
         return new EmbedBuilder()
             .setColor(0x00ff00)
-            .setTitle(`📊 Ranking de ${targetUser}`)
+            .setTitle(m.userRankingTitle(targetUser))
             .addFields(
                 {
-                    name: '📅 Rank Mensal',
-                    value:
-                        data.ranks[0].position > 0
-                            ? `${formatRankPositionEmoji(data.ranks[0].position)} #${data.ranks[0].position}\nPontos: ${this.formatNumber(data.ranks[0].points)}\nTroféus: ${this.formatNumber(data.ranks[0].trophies)}`
-                            : 'Sem troféus este mês',
+                    name: m.monthlyRankField,
+                    value: position(0, m.noTrophiesThisMonth),
                     inline: true,
                 },
                 {
-                    name: '🎮 Desde Sempre',
-                    value:
-                        data.ranks[1].position > 0
-                            ? `${formatRankPositionEmoji(data.ranks[1].position)} #${data.ranks[1].position}\nPontos: ${this.formatNumber(data.ranks[1].points)}\nTroféus: ${this.formatNumber(data.ranks[1].trophies)}`
-                            : 'Sem troféus registados',
+                    name: m.creationRankField,
+                    value: position(1, m.noTrophiesRecorded),
                     inline: true,
                 },
                 {
-                    name: '🏆 Vitalício',
-                    value:
-                        data.ranks[2].position > 0
-                            ? `${formatRankPositionEmoji(data.ranks[2].position)} #${data.ranks[2].position}\nPontos: ${this.formatNumber(data.ranks[2].points)}\nTroféus: ${this.formatNumber(data.ranks[2].trophies)}`
-                            : 'Sem troféus registados',
+                    name: m.lifetimeRankField,
+                    value: position(2, m.noTrophiesRecorded),
                     inline: true,
                 },
                 {
-                    name: '📊 Totais',
-                    value: `Pontos totais: ${this.formatNumber(data.totalPoints)}\nTroféus totais: ${this.formatNumber(data.totalTrophies)}`,
+                    name: m.totalsField,
+                    value: m.totalsLine(
+                        this.formatNumber(data.totalPoints, locale),
+                        this.formatNumber(data.totalTrophies, locale),
+                    ),
                     inline: false,
                 },
             )
-            .setFooter({ text: 'Ranking de Troféus' })
+            .setFooter({ text: m.rankFooterLabel })
             .setTimestamp();
     }
 
@@ -136,7 +165,9 @@ export class RankPresenter {
         rankPage: RankPage,
         month?: number,
         year?: number,
+        locale: BotLocale = 'pt',
     ): ActionRowBuilder<ButtonBuilder> {
+        const common = messages(locale).common;
         const monthArg = type === 'monthly' && month ? String(month) : NOT_APPLICABLE;
         const yearArg = type === 'monthly' && year ? String(year) : NOT_APPLICABLE;
 
@@ -155,7 +186,7 @@ export class RankPresenter {
                     yearArg,
                 ),
             )
-            .setLabel('◀ Anterior')
+            .setLabel(common.previousButton)
             .setStyle(ButtonStyle.Secondary)
             .setDisabled(rankPage.page <= 1);
 
@@ -171,7 +202,7 @@ export class RankPresenter {
                     yearArg,
                 ),
             )
-            .setLabel('Próxima ▶')
+            .setLabel(common.nextButton)
             .setStyle(ButtonStyle.Secondary)
             .setDisabled(rankPage.page >= rankPage.totalPages);
 

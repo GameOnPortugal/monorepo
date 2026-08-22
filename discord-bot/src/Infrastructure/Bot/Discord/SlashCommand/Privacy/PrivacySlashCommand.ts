@@ -4,7 +4,6 @@ import type { SlashCommandContext } from '../../../../../Domain/Bot/SlashCommand
 import {
     ApplicationIntegrationType,
     InteractionContextType,
-    Locale,
     MessageFlags,
     SlashCommandBuilder,
     type SlashCommandSubcommandsOnlyBuilder,
@@ -15,12 +14,8 @@ import { OptOutSubcommand } from './OptOutSubcommand';
 import { OptInSubcommand } from './OptInSubcommand';
 import { DeleteDataSubcommand } from './DeleteDataSubcommand';
 import { safeReply } from '../../../../../Domain/Bot/safeReply';
-
-// Same convention as MarketplaceSlashCommand.ts: PortugueseBR is the closest
-// Discord locale enum entry to pt-PT (Discord has no separate pt-PT value),
-// used only for `setDescriptionLocalizations` — every reply string below is
-// still written in pt-PT directly.
-const PT_LOCALE = Locale.PortugueseBR;
+import { messagesFor } from '../../../../../Domain/Bot/I18n/messages';
+import { PT_LOCALE } from '../../../../../Domain/Bot/I18n/BotLocale';
 
 /**
  * M9.7 — a member's self-service privacy controls: opt out of / back into
@@ -113,7 +108,9 @@ export class PrivacySlashCommand implements SlashCommandHandler {
                     break;
                 default:
                     await context.interaction.reply({
-                        content: `Subcomando desconhecido: ${subcommand}`,
+                        content: messagesFor(context.interaction).common.unknownSubcommand(
+                            subcommand,
+                        ),
                         flags: MessageFlags.Ephemeral,
                     });
             }
@@ -124,7 +121,7 @@ export class PrivacySlashCommand implements SlashCommandHandler {
             });
 
             await safeReply(context.interaction, {
-                content: 'Ocorreu um erro ao processar o comando.',
+                content: messagesFor(context.interaction).common.commandError,
                 flags: MessageFlags.Ephemeral,
             });
         }

@@ -15,6 +15,7 @@ import type { GuildClient } from '../../../../../Domain/Community/GuildClient';
 import { CommunityChannels } from '../../../../../Domain/Community/CommunityChannels';
 import { DiscordChannels, DISCORD_GUILD_ID } from '../../../../Community/Discord/DiscordChannels';
 import { AdImageUploader } from '../../../../Media/AdImageUploader';
+import { messagesFor } from '../../../../../Domain/Bot/I18n/messages';
 
 /**
  * `/marketplace wanted` (M5.7) — restores an old-bot feature (feature-gap
@@ -48,6 +49,9 @@ export class WantedSubcommand {
         const warranty = interaction.options.getString('warranty') ?? '';
         const description = interaction.options.getString('description') ?? '';
         const image = interaction.options.getAttachment('image');
+        // Same split as SellSubcommand: the member's confirmations follow
+        // their Discord language, the posted listing stays pt-PT.
+        const m = messagesFor(interaction).marketplace;
 
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -59,13 +63,13 @@ export class WantedSubcommand {
         );
         if (activeCount >= MAX_ACTIVE_ADS_PER_USER) {
             await interaction.editReply({
-                content: `Já tens ${MAX_ACTIVE_ADS_PER_USER} anúncios activos — o limite por membro. Apaga (\`/marketplace delete\`) ou marca um como vendido (\`/marketplace sold\`) antes de criar um novo.`,
+                content: m.activeAdLimitReached(MAX_ACTIVE_ADS_PER_USER),
             });
             return;
         }
 
         if (image && !image.contentType?.startsWith('image/')) {
-            await interaction.editReply({ content: 'O ficheiro tem de ser uma imagem.' });
+            await interaction.editReply({ content: m.attachmentMustBeImage });
             return;
         }
 
@@ -86,7 +90,7 @@ export class WantedSubcommand {
                     authorId: interaction.user.id,
                 });
                 await interaction.editReply({
-                    content: `Não foi possível processar a imagem. Tenta novamente sem imagem ou com outro ficheiro. (ref: ${correlationId})`,
+                    content: m.imageUploadFailed(correlationId),
                 });
                 return;
             }
@@ -126,7 +130,7 @@ export class WantedSubcommand {
                 authorId: interaction.user.id,
             });
             await interaction.editReply({
-                content: `Não foi possível publicar o teu anúncio de procura. Tenta novamente. (ref: ${correlationId})`,
+                content: m.wantedPostFailed(correlationId),
             });
             return;
         }
@@ -158,7 +162,7 @@ export class WantedSubcommand {
                 authorId: interaction.user.id,
             });
             await interaction.followUp({
-                content: `O teu anúncio foi publicado, mas houve um erro ao guardá-lo — pode não aparecer em /marketplace list nem ser possível apagá-lo. Contacta um moderador. (ref: ${correlationId})`,
+                content: m.postedButNotSaved(correlationId),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -166,7 +170,7 @@ export class WantedSubcommand {
 
         const listingUrl = `https://discord.com/channels/${DISCORD_GUILD_ID}/${DiscordChannels.MARKETPLACE}/${messageId}`;
         await interaction.editReply({
-            content: `✅ O teu anúncio de procura foi publicado: ${listingUrl}`,
+            content: m.wantedPublished(listingUrl),
         });
     }
 }

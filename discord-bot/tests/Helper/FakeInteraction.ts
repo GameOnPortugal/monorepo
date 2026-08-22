@@ -29,6 +29,14 @@ export default class FakeInteraction {
     /** When set, the next call to editReply() throws this instead of posting. */
     public failNextEditReplyWith: Error | undefined = undefined;
 
+    /**
+     * Discord's user-locale tag, the input `Domain/Bot/I18n/BotLocale.ts`
+     * resolves into a message catalogue. Defaults to `pt-BR` — the only
+     * Portuguese tag Discord has, and what a member of this community
+     * running Discord in Portuguese actually sends. Pass `en-GB` (or any
+     * other non-`pt` tag) to exercise the English catalogue.
+     */
+    public readonly locale: string;
     public readonly user: { id: string; username: string };
     public readonly guildId: string;
     public readonly guild: { id: string } | null;
@@ -70,7 +78,9 @@ export default class FakeInteraction {
         // `isGuildAdmin()` (Domain/Bot/AdminCheck.ts) knows how to read;
         // '0' is "no permissions", matching a regular member.
         permissions = '0',
+        locale = 'pt-BR',
     ) {
+        this.locale = locale;
         this.user = { id: userId, username };
         this.channelId = channelId;
         this.guildId = guildId;

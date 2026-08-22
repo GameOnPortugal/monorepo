@@ -9,6 +9,7 @@ import { ProfileNotFound } from '../../../../../Application/Query/Trophy/GetProf
 import { replyPrivately } from '../../../../../Domain/Bot/safeReply';
 import type { TrophySource } from '../../../../../Domain/Trophy/TrophySource';
 import type { TrophyProfile } from '../../../../../Domain/Trophy/TrophyProfile';
+import { messagesFor } from '../../../../../Domain/Bot/I18n/messages';
 
 @injectable()
 export class CheckTrophyProfileSubcommand {
@@ -21,6 +22,10 @@ export class CheckTrophyProfileSubcommand {
 
     public async handle(context: SlashCommandContext): Promise<void> {
         const targetUser = context.interaction.options.getUser('user') ?? context.interaction.user;
+        // Only the *private* paths below are localised. The success path is
+        // a public embed (public defer, see below) — pt-PT for everyone, per
+        // Domain/Bot/I18n/messages.ts.
+        const m = messagesFor(context.interaction).trophy;
 
         // Public defer: a trophy profile check is worth showing off, so the
         // success path stays public (no `flags`). The not-found/error paths
@@ -74,8 +79,8 @@ export class CheckTrophyProfileSubcommand {
                 await replyPrivately(context.interaction, {
                     content:
                         targetUser.id === context.interaction.user.id
-                            ? '❌ Ainda não registaste o teu perfil PSN. Usa `/trophy create` para o registar.'
-                            : '❌ Este utilizador ainda não registou o perfil PSN.',
+                            ? m.profileNotFoundOwn
+                            : m.profileNotFoundOther,
                 });
                 return;
             }
@@ -86,7 +91,7 @@ export class CheckTrophyProfileSubcommand {
             });
 
             await replyPrivately(context.interaction, {
-                content: '⚠️ Ocorreu um erro ao obter o perfil PSN.',
+                content: m.profileFetchError,
             });
         }
     }

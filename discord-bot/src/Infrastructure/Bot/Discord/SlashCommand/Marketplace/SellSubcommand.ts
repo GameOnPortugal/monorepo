@@ -15,6 +15,7 @@ import type { GuildClient } from '../../../../../Domain/Community/GuildClient';
 import { CommunityChannels } from '../../../../../Domain/Community/CommunityChannels';
 import { DiscordChannels, DISCORD_GUILD_ID } from '../../../../Community/Discord/DiscordChannels';
 import { AdImageUploader } from '../../../../Media/AdImageUploader';
+import { messagesFor } from '../../../../../Domain/Bot/I18n/messages';
 
 @injectable()
 export class SellSubcommand {
@@ -36,6 +37,11 @@ export class SellSubcommand {
         const warranty = interaction.options.getString('warranty') ?? '';
         const description = interaction.options.getString('description') ?? '';
         const image = interaction.options.getAttachment('image');
+        // The seller's own confirmations/errors follow their Discord
+        // language; the listing itself (renderAdListing, below) stays pt-PT
+        // because #anuncios is read by the whole community, not by one
+        // member. See Domain/Bot/I18n/messages.ts.
+        const m = messagesFor(interaction).marketplace;
 
         // Post-then-persist (M0.1), now routed through the GuildClient port to
         // the marketplace channel (M5.1) instead of `interaction.reply()` —
@@ -55,13 +61,13 @@ export class SellSubcommand {
         );
         if (activeCount >= MAX_ACTIVE_ADS_PER_USER) {
             await interaction.editReply({
-                content: `Já tens ${MAX_ACTIVE_ADS_PER_USER} anúncios activos — o limite por membro. Apaga (\`/marketplace delete\`) ou marca um como vendido (\`/marketplace sold\`) antes de criar um novo.`,
+                content: m.activeAdLimitReached(MAX_ACTIVE_ADS_PER_USER),
             });
             return;
         }
 
         if (image && !image.contentType?.startsWith('image/')) {
-            await interaction.editReply({ content: 'O ficheiro tem de ser uma imagem.' });
+            await interaction.editReply({ content: m.attachmentMustBeImage });
             return;
         }
 
@@ -85,9 +91,7 @@ export class SellSubcommand {
                     correlationId,
                     authorId: interaction.user.id,
                 });
-                await interaction.editReply({
-                    content: `Não foi possível processar a imagem. Tenta novamente sem imagem ou com outro ficheiro. (ref: ${correlationId})`,
-                });
+                await interaction.editReply({ content: m.imageUploadFailed(correlationId) });
                 return;
             }
         }
@@ -131,9 +135,7 @@ export class SellSubcommand {
                 correlationId,
                 authorId: interaction.user.id,
             });
-            await interaction.editReply({
-                content: `Não foi possível publicar o teu anúncio. Tenta novamente. (ref: ${correlationId})`,
-            });
+            await interaction.editReply({ content: m.postFailed(correlationId) });
             return;
         }
 
@@ -164,15 +166,13 @@ export class SellSubcommand {
                 authorId: interaction.user.id,
             });
             await interaction.followUp({
-                content: `O teu anúncio foi publicado, mas houve um erro ao guardá-lo — pode não aparecer em /marketplace list nem ser possível apagá-lo. Contacta um moderador. (ref: ${correlationId})`,
+                content: m.postedButNotSaved(correlationId),
                 flags: MessageFlags.Ephemeral,
             });
             return;
         }
 
         const listingUrl = `https://discord.com/channels/${DISCORD_GUILD_ID}/${DiscordChannels.MARKETPLACE}/${messageId}`;
-        await interaction.editReply({
-            content: `✅ O teu anúncio foi publicado: ${listingUrl}`,
-        });
+        await interaction.editReply({ content: m.adPublished(listingUrl) });
     }
 }

@@ -3,6 +3,7 @@ import { TYPES } from '../../../DependencyInjection/types.ts';
 import type Logger from '../../../../Application/Logger/Logger.ts';
 import CommandHandlerManager from '../../../CommandHandler/CommandHandlerManager.ts';
 import { GetScreenshots } from '../../../../Application/Query/Screenshot/GetScreenshots/GetScreenshots.ts';
+import { messagesFor } from '../../../../Domain/Bot/I18n/messages';
 import type { Screenshot } from '../../../../Domain/Screenshot/Screenshot.ts';
 import { toChoices, type AutocompleteHandler } from '../../../../Domain/Bot/AutocompleteHandler.ts';
 import type { AutocompleteInteractionContext } from '../../../../Domain/Bot/InteractionContext.ts';
@@ -46,9 +47,13 @@ export class ScreenshotAutocompleteHandler implements AutocompleteHandler {
             new GetScreenshots(interaction.user.id),
         );
 
+        // See MarketplaceAutocompleteHandler: suggestions are per-member.
+        const unnamed = messagesFor(interaction).common.unnamed;
+
         const query = focused.value.trim().replace(/^#/, '').toLowerCase();
         const matches = screenshots.filter(
-            (screenshot) => query === '' || describe(screenshot).toLowerCase().includes(query),
+            (screenshot) =>
+                query === '' || describe(screenshot, unnamed).toLowerCase().includes(query),
         );
 
         this.logger.info('Screenshot autocomplete', {
@@ -60,7 +65,7 @@ export class ScreenshotAutocompleteHandler implements AutocompleteHandler {
         await interaction.respond(
             toChoices(
                 matches.map((screenshot) => ({
-                    name: describe(screenshot),
+                    name: describe(screenshot, unnamed),
                     value: screenshot.id.toString(),
                 })),
             ),
@@ -68,8 +73,8 @@ export class ScreenshotAutocompleteHandler implements AutocompleteHandler {
     }
 }
 
-function describe(screenshot: Screenshot): string {
-    const parts = [screenshot.name ?? 'Sem nome'];
+function describe(screenshot: Screenshot, unnamed: string): string {
+    const parts = [screenshot.name ?? unnamed];
     if (screenshot.platform) {
         parts.push(`[${screenshot.platform}]`);
     }

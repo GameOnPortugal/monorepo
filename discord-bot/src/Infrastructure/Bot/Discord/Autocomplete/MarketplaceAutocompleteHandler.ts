@@ -5,6 +5,7 @@ import CommandHandlerManager from '../../../CommandHandler/CommandHandlerManager
 import { ListUserAds } from '../../../../Application/Query/Marketplace/ListUserAds/ListUserAds.ts';
 import type { Ad } from '../../../../Domain/Marketplace/Ad.ts';
 import { AdStatus } from '../../../../Domain/Marketplace/AdStatus.ts';
+import { messagesFor } from '../../../../Domain/Bot/I18n/messages';
 import { toChoices, type AutocompleteHandler } from '../../../../Domain/Bot/AutocompleteHandler.ts';
 import type { AutocompleteInteractionContext } from '../../../../Domain/Bot/InteractionContext.ts';
 
@@ -51,10 +52,15 @@ export class MarketplaceAutocompleteHandler implements AutocompleteHandler {
             new ListUserAds(interaction.user.id),
         );
 
+        // Autocomplete suggestions are rendered for one member only, so the
+        // fallback label follows their Discord language like every other
+        // ephemeral surface.
+        const unnamed = messagesFor(interaction).common.unnamed;
+
         const query = focused.value.trim().toLowerCase();
         const matches = ads
             .filter((ad) => !ad.status.equals(AdStatus.deleted()))
-            .filter((ad) => query === '' || describeAd(ad).toLowerCase().includes(query));
+            .filter((ad) => query === '' || describeAd(ad, unnamed).toLowerCase().includes(query));
 
         this.logger.info('Marketplace autocomplete', {
             userId: interaction.user.id,
@@ -65,7 +71,7 @@ export class MarketplaceAutocompleteHandler implements AutocompleteHandler {
         await interaction.respond(
             toChoices(
                 matches.map((ad) => ({
-                    name: describeAd(ad),
+                    name: describeAd(ad, unnamed),
                     value: ad.id.toString(),
                 })),
             ),
@@ -79,8 +85,8 @@ export class MarketplaceAutocompleteHandler implements AutocompleteHandler {
  * 36 characters of UUID would crowd out the item name inside the 100-character
  * label budget that `toChoices` enforces.
  */
-function describeAd(ad: Ad): string {
-    const parts = [ad.name ?? 'Sem nome'];
+function describeAd(ad: Ad, unnamed: string): string {
+    const parts = [ad.name ?? unnamed];
     if (ad.price) {
         parts.push(`— ${ad.price}`);
     }

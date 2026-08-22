@@ -25,6 +25,8 @@ export default class FakeComponentInteraction {
     public readonly guild: { id: string } | null;
     public readonly member: { permissions: string } | null;
     public readonly fields: { getTextInputValue: (customId: string) => string };
+    /** See {@link FakeInteraction.locale}. Defaults to Portuguese. */
+    public readonly locale: string;
 
     private messageIdCounter = 0;
 
@@ -39,7 +41,9 @@ export default class FakeComponentInteraction {
         // how to read; '0' is "no permissions", matching a regular member.
         permissions = '0',
         modalFieldValues: Record<string, string> = {},
+        locale = 'pt-BR',
     ) {
+        this.locale = locale;
         this.customId = customId;
         this.user = { id: userId, username };
         this.channelId = channelId;

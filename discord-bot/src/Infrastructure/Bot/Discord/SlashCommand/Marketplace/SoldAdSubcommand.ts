@@ -12,6 +12,7 @@ import { AdNotActive } from '../../../../../Domain/Marketplace/AdNotActive';
 import RecordNotFound from '../../../../../Domain/RecordNotFound';
 import { InvalidId } from '../../../../../Domain/InvalidId';
 import { isGuildAdmin } from '../../../../../Domain/Bot/AdminCheck';
+import { messagesFor } from '../../../../../Domain/Bot/I18n/messages';
 
 /**
  * `/marketplace sold` (M5.6) — the slash-command twin of the `✅ Marcar
@@ -32,6 +33,7 @@ export class SoldAdSubcommand {
         const identifier = interaction.options.getString('id', true);
         const userId = interaction.user.id;
         const isAdmin = isGuildAdmin(interaction);
+        const m = messagesFor(interaction).marketplace;
 
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -40,10 +42,7 @@ export class SoldAdSubcommand {
             adId = AdId.fromString(identifier.trim());
         } catch (error) {
             if (error instanceof InvalidId) {
-                await interaction.editReply({
-                    content:
-                        'ID de anúncio inválido. Escolhe um anúncio a partir das sugestões em vez de escreveres o ID à mão.',
-                });
+                await interaction.editReply({ content: m.invalidAdId });
                 return;
             }
             throw error;
@@ -51,16 +50,16 @@ export class SoldAdSubcommand {
 
         try {
             await this.commandHandlerManager.handle(new MarkAdSold(adId, userId, isAdmin));
-            await interaction.editReply({ content: '✅ Anúncio marcado como vendido.' });
+            await interaction.editReply({ content: m.adSold });
         } catch (error) {
             if (error instanceof UnauthorizedAdAction) {
                 await interaction.editReply({
-                    content: 'Não tens permissão para marcar este anúncio como vendido.',
+                    content: m.noPermissionTo(m.actionMarkSold),
                 });
             } else if (error instanceof AdNotActive) {
-                await interaction.editReply({ content: 'Este anúncio já não está activo.' });
+                await interaction.editReply({ content: m.adNotActive });
             } else if (error instanceof RecordNotFound) {
-                await interaction.editReply({ content: 'Anúncio não encontrado.' });
+                await interaction.editReply({ content: m.adNotFound });
             } else {
                 const correlationId = randomUUID();
                 this.logger.error('Error marking ad sold', {
@@ -69,9 +68,7 @@ export class SoldAdSubcommand {
                     adId: adId.toString(),
                     userId,
                 });
-                await interaction.editReply({
-                    content: `Ocorreu um erro ao marcar o anúncio como vendido. Tenta novamente. (ref: ${correlationId})`,
-                });
+                await interaction.editReply({ content: m.soldError(correlationId) });
             }
         }
     }

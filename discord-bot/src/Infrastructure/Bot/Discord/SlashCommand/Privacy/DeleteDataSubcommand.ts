@@ -7,8 +7,17 @@ import CommandHandlerManager from '../../../../CommandHandler/CommandHandlerMana
 import { DeleteMemberData } from '../../../../../Application/Write/Privacy/DeleteMemberData/DeleteMemberData';
 import type { DeleteMemberDataResult } from '../../../../../Application/Write/Privacy/DeleteMemberData/DeleteMemberDataResult';
 import { safeReply } from '../../../../../Domain/Bot/safeReply';
+import { messagesFor } from '../../../../../Domain/Bot/I18n/messages';
 
-/** Exact text a member must type to confirm the irreversible erasure. */
+/**
+ * Exact text a member must type to confirm the irreversible erasure.
+ *
+ * Deliberately **not** localised, even though the surrounding copy is: the
+ * confirmation is a fixed token, and accepting a second spelling would mean
+ * two ways to trigger an irreversible delete. The instruction telling the
+ * member what to type *is* localised, so an English-speaking member is told
+ * to type `APAGAR` in English.
+ */
 const CONFIRMATION_PHRASE = 'APAGAR';
 
 @injectable()
@@ -26,13 +35,11 @@ export class DeleteDataSubcommand {
     public async handle(context: SlashCommandContext): Promise<void> {
         const discordId = context.interaction.user.id;
         const confirmation = context.interaction.options.getString('confirmar', true);
+        const m = messagesFor(context.interaction).privacy;
 
         if (confirmation !== CONFIRMATION_PHRASE) {
             await context.interaction.reply({
-                content:
-                    `⚠️ Para confirmares, escreve exatamente \`${CONFIRMATION_PHRASE}\` na opção ` +
-                    '`confirmar`. Esta ação apaga permanentemente os teus anúncios, screenshots ' +
-                    'e perfil de troféus — não pode ser desfeita.',
+                content: m.confirmationRequired(CONFIRMATION_PHRASE),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -46,13 +53,13 @@ export class DeleteDataSubcommand {
             );
 
             await context.interaction.editReply({
-                content:
-                    '🗑️ Os teus dados foram apagados permanentemente: ' +
-                    `${result.adsDeleted} anúncio(s), ${result.screenshotsDeleted} screenshot(s)` +
-                    (result.trophyProfileDeleted
-                        ? ` e o teu perfil de troféus (${result.trophiesDeleted} troféu(s)).`
-                        : '.') +
-                    ' Se voltares a usar o bot, o teu histórico começa do zero.',
+                content: m.dataDeleted(
+                    result.adsDeleted,
+                    result.screenshotsDeleted,
+                    result.trophyProfileDeleted
+                        ? m.trophyProfileAlsoDeleted(result.trophiesDeleted)
+                        : m.nothingElseDeleted,
+                ),
             });
 
             this.logger.info('Member data erased via /privacy delete-data', {
@@ -66,9 +73,7 @@ export class DeleteDataSubcommand {
             });
 
             await safeReply(context.interaction, {
-                content:
-                    'Ocorreu um erro ao apagar os teus dados. Tenta novamente ou contacta um ' +
-                    'moderador.',
+                content: m.deleteError,
                 flags: MessageFlags.Ephemeral,
             });
         }
