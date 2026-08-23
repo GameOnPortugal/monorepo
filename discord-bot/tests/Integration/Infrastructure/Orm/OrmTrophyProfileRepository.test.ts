@@ -58,7 +58,14 @@ describe('OrmTrophyProfileRepository — findAllNonExcluded', () => {
     });
 
     test('markSynced stamps lastSyncedAt and touches nothing else', async () => {
-        const profile = await createTrophyProfile(undefined, 'user-5', 'ToSync', false, true, false);
+        const profile = await createTrophyProfile(
+            undefined,
+            'user-5',
+            'ToSync',
+            false,
+            true,
+            false,
+        );
         expect(profile.lastSyncedAt).toBeNull();
 
         const syncedAt = new Date('2026-08-23T10:00:00.000Z');

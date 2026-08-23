@@ -77,7 +77,7 @@ describe('CheckTrophyProfileSubcommand Integration Test', () => {
         expect(rankField.value).toContain('12');
     });
 
-    it('shows the sync stamp, not the row\'s updatedAt, in the dates field', async () => {
+    it("shows the sync stamp, not the row's updatedAt, in the dates field", async () => {
         const userId = '444444444444444444';
         const lastSyncedAt = new Date('2026-08-22T09:30:00.000Z');
         await createTrophyProfile(
