@@ -50,9 +50,16 @@ export interface PublicWinner {
  * today), and the page shows them as a single gallery.
  */
 export async function listWinners(limit: number): Promise<PublicWinner[]> {
+  // `take` cannot be applied to the query above: a winner near the top of
+  // `weekStart desc` order can still be dropped by `publicScreenshotsWhere`
+  // below (deleted screenshot, opted-out author), and taking `limit` rows
+  // before that filter runs would let a hidden recent week silently displace
+  // an older, still-visible one instead of just not appearing. The full
+  // history is at most one row per week since 2021 (137 today, see the
+  // module doc comment), so fetching it all and slicing after filtering is
+  // cheap.
   const winners = await prisma.screenshotWinner.findMany({
     orderBy: { weekStart: "desc" },
-    take: limit,
   });
 
   if (winners.length === 0) return [];
@@ -64,28 +71,30 @@ export async function listWinners(limit: number): Promise<PublicWinner[]> {
   const byId = new Map(screenshots.map((screenshot) => [screenshot.id, screenshot]));
   const authors = await loadAuthors(screenshots.map((screenshot) => screenshot.author_id));
 
-  return winners.flatMap((winner) => {
-    const screenshot = byId.get(winner.screenshotId);
-    if (!screenshot) return [];
+  return winners
+    .flatMap((winner) => {
+      const screenshot = byId.get(winner.screenshotId);
+      if (!screenshot) return [];
 
-    return [
-      {
-        weekStart: winner.weekStart,
-        weekEnd: winner.weekEnd,
-        voteCount: winner.voteCount,
-        source: winner.source,
-        screenshot: {
-          id: screenshot.id,
-          name: screenshot.name,
-          platform: screenshot.plataform,
-          imageUrl: screenshot.image,
-          createdAt: screenshot.createdAt,
-          messageUrl: messageUrl(screenshot.channel_id, screenshot.message_id),
+      return [
+        {
+          weekStart: winner.weekStart,
+          weekEnd: winner.weekEnd,
+          voteCount: winner.voteCount,
+          source: winner.source,
+          screenshot: {
+            id: screenshot.id,
+            name: screenshot.name,
+            platform: screenshot.plataform,
+            imageUrl: screenshot.image,
+            createdAt: screenshot.createdAt,
+            messageUrl: messageUrl(screenshot.channel_id, screenshot.message_id),
+          },
+          author: (screenshot.author_id ? authors.get(screenshot.author_id) : undefined) ?? null,
         },
-        author: (screenshot.author_id ? authors.get(screenshot.author_id) : undefined) ?? null,
-      },
-    ];
-  });
+      ];
+    })
+    .slice(0, limit);
 }
 
 export async function countWinners(): Promise<number> {
