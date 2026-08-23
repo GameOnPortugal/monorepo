@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/GameOnPortugal/monorepo/compare/discord-bot-v1.5.0...discord-bot-v1.6.0) (2026-08-23)
+
+
+### Features
+
+* **bot:** track trophy profile sync progress with lastSyncedAt ([#96](https://github.com/GameOnPortugal/monorepo/issues/96)) ([ecfd126](https://github.com/GameOnPortugal/monorepo/commit/ecfd1262a42d17bbb3d309cd8e22c0c514b09eb0))
+
 ## [1.5.0](https://github.com/GameOnPortugal/monorepo/compare/discord-bot-v1.4.1...discord-bot-v1.5.0) (2026-08-23)
 
 
