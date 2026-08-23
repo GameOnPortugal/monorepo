@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/GameOnPortugal/monorepo/compare/discord-bot-v1.4.1...discord-bot-v1.5.0) (2026-08-23)
+
+
+### Features
+
+* **bot:** add Portuguese localizations to all slash commands ([#91](https://github.com/GameOnPortugal/monorepo/issues/91)) ([4aa3808](https://github.com/GameOnPortugal/monorepo/commit/4aa3808542d06171439b0ce3b2771c895262afbf))
+
 ## [1.4.1](https://github.com/GameOnPortugal/monorepo/compare/discord-bot-v1.4.0...discord-bot-v1.4.1) (2026-08-22)
 
 
