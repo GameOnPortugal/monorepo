@@ -33,6 +33,12 @@ export interface TrophyProfileRepository {
      * excluded (auto-moderation flag, or manual) simply stops appearing
      * here on the next run, which is also why the sync job never needs to
      * "un-consider" a profile explicitly.
+     *
+     * Ordered by `lastSyncedAt` ascending (never-synced first, then
+     * longest-stale) so a run whose work-limit budget runs out before a
+     * full pass spends it on the profiles most overdue, rather than always
+     * re-considering the same prefix in whatever order the table returns
+     * them.
      */
     findAllNonExcluded(): Promise<TrophyProfile[]>;
 }

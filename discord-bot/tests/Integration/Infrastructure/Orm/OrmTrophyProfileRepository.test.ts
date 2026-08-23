@@ -48,6 +48,44 @@ describe('OrmTrophyProfileRepository — findAllNonExcluded', () => {
         expect(ids).toHaveLength(1);
     });
 
+    test('orders never-synced profiles first, then oldest-synced, so a budget-limited run makes progress', async () => {
+        const recentlySynced = await createTrophyProfile(
+            undefined,
+            'user-8',
+            'RecentlySynced',
+            false,
+            false,
+            false,
+            new Date('2026-08-23T09:00:00.000Z'),
+        );
+        const neverSynced = await createTrophyProfile(
+            undefined,
+            'user-9',
+            'NeverSynced',
+            false,
+            false,
+            false,
+            null,
+        );
+        const staleSynced = await createTrophyProfile(
+            undefined,
+            'user-10',
+            'StaleSynced',
+            false,
+            false,
+            false,
+            new Date('2026-08-20T09:00:00.000Z'),
+        );
+
+        const result = await trophyProfileRepository.findAllNonExcluded();
+
+        expect(result.map((profile) => profile.id.toString())).toEqual([
+            neverSynced.id.toString(),
+            staleSynced.id.toString(),
+            recentlySynced.id.toString(),
+        ]);
+    });
+
     test('returns an empty array when every profile is excluded', async () => {
         await createTrophyProfile(undefined, 'user-3', 'Excluded1', false, false, true);
         await createTrophyProfile(undefined, 'user-4', 'Excluded2', true, false, true);

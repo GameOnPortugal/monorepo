@@ -95,8 +95,16 @@ export class OrmTrophyProfileRepository implements TrophyProfileRepository {
         // (OrmTrophyRepository's ranking queries) — a NULL isExcluded row is
         // treated as excluded by both, so the two never disagree about which
         // profiles are "live".
+        //
+        // `orderBy: lastSyncedAt asc` is what makes that column actually
+        // steer the crawl rather than merely record it: MySQL sorts NULL
+        // first in ascending order, so never-synced profiles lead, then the
+        // longest-stale ones — exactly the set `TrophiesSyncJob.run()`'s
+        // work-limit budget should spend on first when a pass can't cover
+        // every profile in one run.
         const trophyProfiles = await this.prismaClient.trophyProfile.findMany({
             where: { isExcluded: false },
+            orderBy: { lastSyncedAt: 'asc' },
         });
 
         return trophyProfiles.map((trophyProfile) =>
