@@ -193,8 +193,12 @@ export default class WeekScreenshotWinner implements ConsoleCommand {
         // An unrecognised command posted in front of the community is worse
         // than not awarding XP. Bring it back only once that bot's presence
         // is confirmed.
+        let announcementMessageId: string;
         try {
-            await this.guildClient.sendMessage(CommunityChannels.SCREENSHOTS, announcement);
+            announcementMessageId = await this.guildClient.sendMessage(
+                CommunityChannels.SCREENSHOTS,
+                announcement,
+            );
             await this.guildClient.sendMessage(CommunityChannels.SCREENSHOTS, banner);
             this.logger.info('Winner announcement sent successfully', winnerInfo);
         } catch (error: any) {
@@ -219,7 +223,7 @@ export default class WeekScreenshotWinner implements ConsoleCommand {
                     window.end,
                     result.winner.reactionCount,
                     result.winner.messageUrl,
-                    null,
+                    announcementMessageId,
                     'announced',
                 ),
             );
