@@ -52,9 +52,9 @@ function weekLabel(start: string, end: string): string {
  * and never written down, so the database held no history to query. That is
  * fixed at the source — `WeekScreenshotWinner` now records the week it
  * announces, and `screenshots:backfill-winners` recovered the archive by
- * parsing announcements still sitting in `#screenshots` (178 found back to
- * April 2021, 137 of them still resolving to a surviving screenshot row,
- * verified against production 2026-08-22).
+ * parsing announcements still sitting in `#screenshots` — 139 found, 137 of
+ * them resolving to a surviving screenshot row, giving an archive that runs
+ * from January 2022 to October 2024 (backfilled in production 2026-08-23).
  *
  * **Two honesty affordances**, both deliberate and both worth keeping:
  *
