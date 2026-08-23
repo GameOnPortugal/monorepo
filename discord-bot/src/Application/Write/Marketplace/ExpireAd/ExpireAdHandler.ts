@@ -39,7 +39,11 @@ export class ExpireAdHandler implements CommandHandler<ExpireAd> {
         // above doesn't catch it. Re-read the deadline against now, off the
         // freshly-fetched row, before deleting a message a bump just posted
         // for an ad that is genuinely no longer overdue.
-        if (command.reason === 'past-expiry' && ad.expiresAt !== null && ad.expiresAt > new Date()) {
+        if (
+            command.reason === 'past-expiry' &&
+            ad.expiresAt !== null &&
+            ad.expiresAt > new Date()
+        ) {
             this.logger.info('Ad no longer past its deadline — skipping expire', {
                 id: command.id.toString(),
                 reason: command.reason,
