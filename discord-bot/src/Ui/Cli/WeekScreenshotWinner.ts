@@ -19,6 +19,7 @@ import {
     nextContestOpeningDay,
     type WeekWindow,
 } from '../../Domain/Screenshot/ScreenshotWeekWindow';
+import { RecordWeeklyWinner } from '../../Application/Write/Screenshot/RecordWeeklyWinner/RecordWeeklyWinner';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -192,13 +193,45 @@ export default class WeekScreenshotWinner implements ConsoleCommand {
         // An unrecognised command posted in front of the community is worse
         // than not awarding XP. Bring it back only once that bot's presence
         // is confirmed.
+        let announcementMessageId: string;
         try {
-            await this.guildClient.sendMessage(CommunityChannels.SCREENSHOTS, announcement);
+            announcementMessageId = await this.guildClient.sendMessage(
+                CommunityChannels.SCREENSHOTS,
+                announcement,
+            );
             await this.guildClient.sendMessage(CommunityChannels.SCREENSHOTS, banner);
             this.logger.info('Winner announcement sent successfully', winnerInfo);
         } catch (error: any) {
             this.logger.error('Failed to send winner announcement', { error: error.message });
             return 1;
+        }
+
+        // M10.7 — persist what was just announced, so the portal's Hall of
+        // Fame has a history instead of a placeholder. Deliberately *after*
+        // the announcement and outside its try/catch: the announcement is
+        // the contest, and a database hiccup must not turn a week that was
+        // genuinely announced to the community into a failed run that a
+        // retry would announce a second time. A row missed here is
+        // recoverable — `screenshots:backfill-winners` reads it straight back
+        // out of the message that was posted.
+        try {
+            await this.commandHandlerManager.handle(
+                new RecordWeeklyWinner(
+                    result.winner.screenshot.id.toString(),
+                    result.winner.screenshot.authorId,
+                    window.start,
+                    window.end,
+                    result.winner.reactionCount,
+                    result.winner.messageUrl,
+                    announcementMessageId,
+                    'announced',
+                ),
+            );
+        } catch (error: any) {
+            this.logger.error('Announced the winner but failed to record it', {
+                ...winnerInfo,
+                error: error.message,
+            });
         }
 
         return 0;

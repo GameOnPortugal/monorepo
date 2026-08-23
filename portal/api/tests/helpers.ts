@@ -26,6 +26,10 @@ export async function cleanupByIdPrefix(prefix: string): Promise<void> {
   // M9.7 — tests that seed an opted-out author key `PrivacySetting.discordId`
   // with the same prefix as everything else, so one cleanup call catches it.
   await prisma.privacySetting.deleteMany({ where: { discordId: { startsWith: prefix } } });
+  // M10.4/M10.7 — the same prefix keys the cached author profile and any
+  // winner row a test seeds, so one cleanup call still catches everything.
+  await prisma.discordProfile.deleteMany({ where: { discordId: { startsWith: prefix } } });
+  await prisma.screenshotWinner.deleteMany({ where: { screenshotId: { startsWith: prefix } } });
 }
 
 /**

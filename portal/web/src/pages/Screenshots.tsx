@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { LazyImage } from "../components/LazyImage";
+import { AuthorCredit } from "../components/AuthorCredit";
 import { Lightbox } from "../components/Lightbox";
+import { WinnerBadge } from "../components/WinnerBadge";
 import { HelpLink, PageHeader } from "../components/PageHeader";
 import { PlatformBadge } from "../components/PlatformBadge";
 import { ApiError, EmptyState, SkeletonRow } from "../components/StateViews";
@@ -39,11 +41,15 @@ const PLATFORM_LABEL: Record<PlatformTag, string> = {
  * a set of counted chips rather than a bare dropdown, since there are only
  * five buckets and a visible count is the useful part.
  *
- * What is deliberately absent: **who posted each screenshot.** `screenshots`
- * stores `author_id`, a raw Discord id, and portal-api never exposes it
- * (privacy decision 5 — portal/api/src/repositories/visibility.ts). Showing
- * an uploader name or Discord avatar needs both that decision reversed and a
- * Discord token the portal does not hold. See the note in HunterDetail.tsx.
+ * M10.5/M10.8 — screenshots are now **credited**, which the header note here
+ * used to say was impossible. It was, for two reasons that have both since
+ * been fixed rather than argued away: nothing on the other side of
+ * `screenshots.author_id` held a name (the bot now caches one per member —
+ * `discord_profiles`), and an avatar would have meant hot-linking Discord's
+ * CDN (the bot now re-hosts it to MinIO, keyed by avatar hash so no public
+ * URL carries a member's snowflake). `author_id`/`channel_id`/`message_id`
+ * are still never exposed; what arrives here is a name, a re-hosted avatar
+ * and a derived permalink. Winners of a contest week carry a badge.
  */
 export function Screenshots() {
   useDocumentHead({
@@ -237,6 +243,17 @@ export function Screenshots() {
                       className="aspect-[4/3] w-full overflow-hidden bg-surface transition-transform duration-500 group-hover:scale-[1.06]"
                       onClick={() => setLightboxIndex(index)}
                     />
+                    {/* Outside the hover overlay: a winner badge is the one
+                        thing about a tile worth seeing without hovering, and
+                        on a touch device there is no hover at all. */}
+                    {shot.winner && (
+                      <span className="pointer-events-none absolute top-2 left-2">
+                        <WinnerBadge voteCount={shot.winner.voteCount} />
+                      </span>
+                    )}
+                    {/* `pointer-events-none` on the overlay, re-enabled on the
+                        credit alone: the tile itself opens the lightbox, and
+                        the author's permalink must stay clickable inside it. */}
                     <div className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-1 bg-gradient-to-t from-background/95 via-background/70 to-transparent px-3 pt-10 pb-3 opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100">
                       <p className="line-clamp-1 text-xs font-semibold">{shot.name ?? "Sem título"}</p>
                       <p className="mt-1.5 flex items-center gap-2">
@@ -245,6 +262,11 @@ export function Screenshots() {
                           {new Date(shot.createdAt).getFullYear()}
                         </span>
                       </p>
+                      {shot.author && (
+                        <span className="pointer-events-auto mt-1.5 flex">
+                          <AuthorCredit author={shot.author} messageUrl={shot.messageUrl} />
+                        </span>
+                      )}
                     </div>
                   </li>
                 );

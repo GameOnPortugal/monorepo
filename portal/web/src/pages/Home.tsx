@@ -265,9 +265,18 @@ function ScreenshotsPreview() {
             alt={shot.name ?? "Screenshot"}
             className="aspect-[4/3] w-full overflow-hidden bg-surface transition-transform duration-500 group-hover:scale-[1.07]"
           />
-          {shot.name && (
+          {/* M10.5 — the name of whoever took it, under the title. The whole
+              tile is a Link to /screenshots here, so the credit is plain text
+              rather than AuthorCredit's own permalink link — a link inside a
+              link is invalid HTML and unusable with a keyboard. */}
+          {(shot.name || shot.author) && (
             <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-background/95 to-transparent px-3 pt-8 pb-2.5 text-xs font-medium">
-              <span className="line-clamp-1">{shot.name}</span>
+              {shot.name && <span className="line-clamp-1">{shot.name}</span>}
+              {shot.author && (
+                <span className="mt-0.5 line-clamp-1 text-[10px] font-normal text-white/50">
+                  {shot.author.name}
+                </span>
+              )}
             </span>
           )}
         </Link>

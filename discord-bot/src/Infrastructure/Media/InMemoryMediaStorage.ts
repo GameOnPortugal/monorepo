@@ -10,7 +10,11 @@ export class InMemoryMediaStorage implements MediaStorage {
 
     async put(object: MediaObject): Promise<string> {
         this.objects.set(object.key, object);
-        return `memory://${object.key}`;
+        return this.publicUrlFor(object.key);
+    }
+
+    publicUrlFor(key: string): string {
+        return `memory://${key}`;
     }
 
     async exists(key: string): Promise<boolean> {

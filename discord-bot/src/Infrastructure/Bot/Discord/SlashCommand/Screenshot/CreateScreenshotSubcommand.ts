@@ -9,6 +9,7 @@ import { CreateScreenshot } from '../../../../../Application/Write/Screenshot/Cr
 import { ScreenshotAlreadyExist } from '../../../../../Application/Write/Screenshot/CreateScreenshot/ScreenshotAlreadyExist.ts';
 import { DiscordEmoji } from '../../../../Community/Discord/DiscordEmoji.ts';
 import { safeReply } from '../../../../../Domain/Bot/safeReply.ts';
+import { SyncDiscordProfile } from '../../../../../Application/Write/Profile/SyncDiscordProfile/SyncDiscordProfile.ts';
 import { messagesFor } from '../../../../../Domain/Bot/I18n/messages.ts';
 
 @injectable()
@@ -114,6 +115,31 @@ export class CreateScreenshotSubcommand {
             } catch (reactionError) {
                 this.logger.error('Failed to add trophy reaction', { error: reactionError });
                 // Continue execution even if reaction fails
+            }
+
+            // M10.4 — cache who posted this, so the portal can credit them.
+            // The interaction already carries everything the profile needs,
+            // so this costs no extra Discord call for the name — only the
+            // avatar re-host, and only when their picture has changed.
+            //
+            // Never fatal: the screenshot is submitted and posted by this
+            // point, and a member should not see their submission fail
+            // because a picture could not be cached. Missing profiles are
+            // picked up by DiscordProfilesSyncJob within a day anyway.
+            try {
+                await this.commandHandlerManager.handle(
+                    new SyncDiscordProfile(interaction.user.id, {
+                        id: interaction.user.id,
+                        username: interaction.user.username,
+                        displayName: interaction.user.globalName ?? null,
+                        avatarHash: interaction.user.avatar ?? null,
+                    }),
+                );
+            } catch (profileError) {
+                this.logger.error('Failed to cache the submitter Discord profile', {
+                    error: profileError,
+                    userId: interaction.user.id,
+                });
             }
 
             this.logger.info('Screenshot submitted successfully', {

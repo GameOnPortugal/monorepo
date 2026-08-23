@@ -32,11 +32,13 @@ const MONTH_FORMAT = new Intl.DateTimeFormat("pt-PT", { month: "short", year: "n
  *     mean scraping psnprofiles.com per page view, from the web tier, against
  *     a site the bot deliberately throttles to one request per second. The
  *     monogram tile is the honest stand-in until the bot persists an avatar.
- *   - **A Discord name or avatar.** That needs the raw Discord id, which
- *     portal-api never exposes by design (privacy decision 5 — see
- *     portal/api/src/repositories/visibility.ts), and a bot token portal-api
- *     does not hold. Both are decisions to take deliberately, not to slip in
- *     behind an avatar.
+ *   - **A Discord name or avatar.** The portal *does* have these now for
+ *     screenshot authors (M10.5 — `discord_profiles`, populated by the bot),
+ *     but not here: a `trophyprofiles` row's `userId` is not exposed by
+ *     portal-api, and more to the point a *PSN* profile page crediting
+ *     someone's *Discord* identity would be asserting a link between two
+ *     accounts that the leaderboard itself does not publish. Showing it is a
+ *     decision to take deliberately, not to slip in behind an avatar.
  *
  * A profile that is excluded or has opted out 404s from the API, so this page
  * cannot be used to look up someone who chose not to be listed.

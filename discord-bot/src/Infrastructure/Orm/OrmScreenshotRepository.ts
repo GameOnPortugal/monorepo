@@ -45,6 +45,14 @@ export default class OrmScreenshotRepository implements ScreenshotRepository {
         return object !== null ? Screenshot.fromArray(object as ScreenshotArray) : null;
     }
 
+    async findByMessageId(messageId: string): Promise<Screenshot | null> {
+        const object = await this.prismaClient.screenshot.findFirst({
+            where: { message_id: messageId },
+        });
+
+        return object !== null ? Screenshot.fromArray(object as ScreenshotArray) : null;
+    }
+
     async findBy(userId: string | null): Promise<Screenshot[]> {
         // Build the where clause based on whether userId is provided
         const where = userId !== null ? { author_id: userId } : {};

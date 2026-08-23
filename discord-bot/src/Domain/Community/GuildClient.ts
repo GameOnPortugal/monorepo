@@ -1,6 +1,7 @@
 import type { CustomEmoji } from './CustomEmoji.ts';
 import type { CommunityChannels } from './CommunityChannels.ts';
 import type { DirectMessagePayload } from './DirectMessage.ts';
+import type { CommunityUser } from './CommunityUser.ts';
 
 /**
  * The subset of a Discord message the bot ever needs to read back — added
@@ -20,6 +21,14 @@ export interface CommunityMessage {
     attachmentUrls: string[];
     /** `embed.image.url` for every embed that has one, in embed order — never thumbnails. */
     embedImageUrls: string[];
+    /**
+     * Who posted it. Added for M10.7's winner backfill, which scans
+     * `#screenshots` history for past winner announcements and has to be
+     * able to tell an announcement *by a bot* from a member quoting one.
+     */
+    authorId: string;
+    /** True if `authorId` belongs to a bot account (either this bot or the old one). */
+    authorIsBot: boolean;
 }
 
 export interface ListMessagesOptions {
@@ -182,4 +191,24 @@ export interface GuildClient {
      * person left the server" and silently flag someone who hasn't.
      */
     isGuildMember(userId: string): Promise<boolean>;
+
+    /**
+     * A user's public Discord identity — handle, display name, avatar hash
+     * (M10.4). Backs both the profile written at `/screenshot` ingest and
+     * DiscordProfilesSyncJob's refresh of the 83 historical authors whose
+     * screenshots the portal has never been able to credit.
+     *
+     * `GET /users/{id}`, not `GET /guilds/{id}/members/{id}`: the user route
+     * needs no privileged intent and still answers for someone who has since
+     * left the server, which matters when the oldest screenshot here is from
+     * 2021. The trade-off is that a *per-guild nickname* is invisible to it —
+     * `displayName` is the account-level global name. That is the right
+     * choice for a public web page anyway: a guild nickname is context the
+     * member chose for inside the server.
+     *
+     * Returns `null` for Unknown User (10013) — a deleted account. Every
+     * other failure throws `ClientError`, so a rate limit can never be
+     * mistaken for "this person no longer exists" and silently blank a name.
+     */
+    fetchUser(userId: string): Promise<CommunityUser | null>;
 }

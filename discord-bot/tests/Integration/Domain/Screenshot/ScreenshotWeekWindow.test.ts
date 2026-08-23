@@ -6,6 +6,7 @@ import {
     COMMUNITY_TIMEZONE,
     computeWeekWindow,
     nextContestOpeningDay,
+    weekWindowContaining,
 } from '../../../../src/Domain/Screenshot/ScreenshotWeekWindow.ts';
 
 dayjs.extend(utc);
@@ -79,5 +80,49 @@ describe('nextContestOpeningDay', () => {
         const window = computeWeekWindow(new Date('2026-01-15T15:00:00Z'));
 
         expect(nextContestOpeningDay(window)).toEqual(lisbon('2026-01-12 00:00:00.000'));
+    });
+});
+
+/**
+ * M10.7 — the winner backfill dates a recovered contest by the winning
+ * screenshot's own `createdAt`, which needs "the week this instant is in",
+ * not `computeWeekWindow`'s "the last week that finished before this
+ * instant". The two differ by exactly one week for every day but Sunday,
+ * which is the whole reason this function exists rather than reusing the
+ * other one.
+ */
+describe('weekWindowContaining', () => {
+    test('a mid-week instant resolves to the week it is in, not the previous one', () => {
+        // Thursday 2026-01-08 — inside the Mon 05 -> Sun 11 window.
+        const window = weekWindowContaining(new Date('2026-01-08T10:00:00Z'));
+
+        expect(window.start).toEqual(lisbon('2026-01-05 00:00:00.000'));
+        expect(window.end).toEqual(lisbon('2026-01-11 23:59:59.999'));
+
+        // The distinction this function exists for.
+        expect(computeWeekWindow(new Date('2026-01-08T10:00:00Z')).start).toEqual(
+            lisbon('2025-12-29 00:00:00.000'),
+        );
+    });
+
+    test('a Sunday belongs to the week it closes, not the one it opens', () => {
+        const window = weekWindowContaining(lisbon('2026-01-11 20:00:00.000'));
+
+        expect(window.start).toEqual(lisbon('2026-01-05 00:00:00.000'));
+        expect(window.end).toEqual(lisbon('2026-01-11 23:59:59.999'));
+    });
+
+    test('a Monday opens its own week', () => {
+        const window = weekWindowContaining(lisbon('2026-01-05 00:00:00.000'));
+
+        expect(window.start).toEqual(lisbon('2026-01-05 00:00:00.000'));
+        expect(window.end).toEqual(lisbon('2026-01-11 23:59:59.999'));
+    });
+
+    test('holds across DST (WEST/UTC+1), like computeWeekWindow', () => {
+        const window = weekWindowContaining(new Date('2026-07-09T15:00:00Z')); // Thursday
+
+        expect(window.start).toEqual(lisbon('2026-07-06 00:00:00.000'));
+        expect(window.end).toEqual(lisbon('2026-07-12 23:59:59.999'));
     });
 });

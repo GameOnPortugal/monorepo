@@ -48,3 +48,24 @@ export function adPhotoMediaKey(adId: string, index: number, extension: string):
     }
     return `ads/${adId}/${index}.${normalizeMediaExtension(extension)}`;
 }
+
+/**
+ * M10.4 — a member's re-hosted Discord avatar.
+ *
+ * Keyed by Discord's **avatar hash**, never by the member's id: the key ends
+ * up inside a public URL, and the "no user IDs" rule at the top of this file
+ * is exactly about that. The hash is already unique per (member, avatar) and
+ * changes whenever they upload a new picture, so the key is stable for a
+ * re-run (`exists()` skips the download) and self-invalidating for a change
+ * (a new hash is a new object, so no cache anywhere serves the old picture).
+ *
+ * Old objects are deliberately not deleted when someone changes avatar: they
+ * cost a few KB, and deleting them would break any page still holding the
+ * previous URL. A sweep is a future job, not a correctness problem.
+ */
+export function avatarMediaKey(avatarHash: string, extension: string): string {
+    if (!/^[a-zA-Z0-9_]{1,64}$/.test(avatarHash)) {
+        throw new Error(`avatarMediaKey: unexpected avatar hash "${avatarHash}"`);
+    }
+    return `avatars/${avatarHash}.${normalizeMediaExtension(extension)}`;
+}

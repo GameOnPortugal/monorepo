@@ -15,6 +15,16 @@ export interface ScreenshotRepository {
 
     findByMd5(md5: string): Promise<Screenshot | null>;
 
+    /**
+     * The screenshot a Discord message shows, if any. Added for M10.7's
+     * winner backfill: an old announcement names its winner only by a
+     * permalink, and `message_id` is the only column that maps that back to
+     * a row. Production has 0 rows with a null `message_id` (verified
+     * 2026-08-22), so this resolves for every historical winner whose
+     * announcement survives.
+     */
+    findByMessageId(messageId: string): Promise<Screenshot | null>;
+
     findBy(userId: string | null): Promise<Screenshot[]>;
 
     /**
