@@ -32,6 +32,21 @@ export class ExpireAdHandler implements CommandHandler<ExpireAd> {
             return;
         }
 
+        // 'past-expiry' candidates are snapshotted by ads-lifecycle at the
+        // start of a run and expired one at a time afterwards — an owner
+        // can bump the ad in between, which resets `expiresAt` to a fresh
+        // 30-day window without changing `status`, so the status check
+        // above doesn't catch it. Re-read the deadline against now, off the
+        // freshly-fetched row, before deleting a message a bump just posted
+        // for an ad that is genuinely no longer overdue.
+        if (command.reason === 'past-expiry' && ad.expiresAt !== null && ad.expiresAt > new Date()) {
+            this.logger.info('Ad no longer past its deadline — skipping expire', {
+                id: command.id.toString(),
+                reason: command.reason,
+            });
+            return;
+        }
+
         // Remove the listing message (cross-cutting rule: expire, never
         // delete the row — but the channel post itself should go, matching
         // what a manual /marketplace delete already does). Skips rows with

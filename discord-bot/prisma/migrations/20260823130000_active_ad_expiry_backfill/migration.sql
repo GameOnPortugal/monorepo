@@ -33,8 +33,22 @@
 -- already carry M5.3's backfilled date). It is here for the environments
 -- where that is not true and for every row written between M5.3 and this
 -- migration.
+--
+-- `expires_at IS NULL` alone misses one more case: an ad that existed
+-- during M5.3 (so it already carries M5.3's `createdAt + 30 days` date) and
+-- was bumped by the *old* bump handler before this deploy — which updated
+-- `bumped_at` but, being the very handler this PR replaces, never touched
+-- `expires_at`. That row's stored deadline can already be in the past even
+-- though the bump means it is not idle at all, and the newly-enabled sweep
+-- would expire it on the next run. So also recompute any row whose stored
+-- deadline predates what `bumped_at`/`createdAt` would produce today — a
+-- deadline at or beyond that is already correct (new-code writes, or a
+-- renewal further out) and is left untouched.
 UPDATE `ads`
 SET `expires_at` = DATE_ADD(COALESCE(`bumped_at`, `createdAt`), INTERVAL 30 DAY)
 WHERE `status` = 'active'
   AND `deleted_at` IS NULL
-  AND `expires_at` IS NULL;
+  AND (
+    `expires_at` IS NULL
+    OR `expires_at` < DATE_ADD(COALESCE(`bumped_at`, `createdAt`), INTERVAL 30 DAY)
+  );

@@ -65,6 +65,7 @@ describe('M6.9 active-ad expiry backfill migration', () => {
         activeNoBump: randomUUID(),
         activeBumped: randomUUID(),
         activeAlreadySet: randomUUID(),
+        activeStaleAfterOldBump: randomUUID(),
         pendingRenewal: randomUUID(),
         expired: randomUUID(),
         softDeleted: randomUUID(),
@@ -75,6 +76,9 @@ describe('M6.9 active-ad expiry backfill migration', () => {
     const createdAt = new Date('2026-01-10T09:00:00Z');
     const bumpedAt = new Date('2026-03-01T09:00:00Z');
     const pendingDeadline = new Date('2026-08-24T09:00:00Z');
+    // M5.3's backfill on a row from before this deploy — createdAt + 30 days,
+    // already in the past by the time this migration runs.
+    const staleDeadline = new Date(createdAt.getTime() + 30 * DAY_MS);
 
     beforeAll(async () => {
         adminClient = new PrismaClient({ adapter: new PrismaMariaDb(baseUrl().toString()) });
@@ -124,6 +128,11 @@ describe('M6.9 active-ad expiry backfill migration', () => {
         await insert(ids.activeBumped, 'active', bumpedAt, null, null);
         // Already has a deadline — must not be moved.
         await insert(ids.activeAlreadySet, 'active', null, pendingDeadline, null);
+        // Bumped by the *old* handler before this deploy: `bumped_at` moved
+        // but `expires_at` is still M5.3's stale `createdAt + 30 days`,
+        // already in the past. Not a NULL, so the naive "only fill NULLs"
+        // clause would leave it expired-on-paper despite the recent bump.
+        await insert(ids.activeStaleAfterOldBump, 'active', bumpedAt, staleDeadline, null);
         // A 72h reply deadline; overwriting it would silently grant 30 more
         // days to someone already asked to answer within three.
         await insert(ids.pendingRenewal, 'pending_renewal', null, pendingDeadline, null);
@@ -175,6 +184,16 @@ describe('M6.9 active-ad expiry backfill migration', () => {
 
     test('an active ad that already has a deadline is left exactly where it was', async () => {
         expect(await expiresAtFor(ids.activeAlreadySet)).toEqual(pendingDeadline);
+    });
+
+    test('a stale deadline left by the old bump handler is rebased on the bump, not left in the past', async () => {
+        // Same case as `activeBumped`, except the row already had a
+        // non-NULL `expires_at` (M5.3's backfill) instead of NULL. A
+        // `WHERE expires_at IS NULL` clause alone would skip this row and
+        // leave it wrongly overdue despite the recent bump.
+        expect(await expiresAtFor(ids.activeStaleAfterOldBump)).toEqual(
+            new Date(bumpedAt.getTime() + 30 * DAY_MS),
+        );
     });
 
     test('a pending_renewal reply deadline is never overwritten', async () => {
