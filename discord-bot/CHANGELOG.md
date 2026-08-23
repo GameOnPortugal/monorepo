@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.7.0](https://github.com/GameOnPortugal/monorepo/compare/discord-bot-v1.6.0...discord-bot-v1.7.0) (2026-08-23)
+
+
+### Features
+
+* **bot:** persist screenshot author profiles and weekly winners ([#93](https://github.com/GameOnPortugal/monorepo/issues/93)) ([e0146cc](https://github.com/GameOnPortugal/monorepo/commit/e0146cc08283dc2defe40f7ec815a698091a28cf))
+
+
+### Bug Fixes
+
+* **marketplace:** expire ads past their deadline even when the DM never lands ([#97](https://github.com/GameOnPortugal/monorepo/issues/97)) ([ee925da](https://github.com/GameOnPortugal/monorepo/commit/ee925da38c58bcdf096861996a013abc086221cb))
+
 ## [1.6.0](https://github.com/GameOnPortugal/monorepo/compare/discord-bot-v1.5.0...discord-bot-v1.6.0) (2026-08-23)
 
 
