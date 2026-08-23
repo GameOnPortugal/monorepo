@@ -5,6 +5,7 @@ import { TYPES } from '../../../../src/Infrastructure/DependencyInjection/types'
 import type { TrophyProfileRepository } from '../../../../src/Domain/Trophy/TrophyProfileRepository';
 import DatabaseUtil from '../../../Helper/DatabaseUtil';
 import { createTrophyProfile } from '../../../Helper/StaticFixtures';
+import { TrophyProfile } from '../../../../src/Domain/Trophy/TrophyProfile';
 
 /**
  * M7.3: `findAllNonExcluded` is the candidate set `TrophiesSyncJob` walks
@@ -54,5 +55,79 @@ describe('OrmTrophyProfileRepository — findAllNonExcluded', () => {
         const result = await trophyProfileRepository.findAllNonExcluded();
 
         expect(result).toEqual([]);
+    });
+
+    test('markSynced stamps lastSyncedAt and touches nothing else', async () => {
+        const profile = await createTrophyProfile(undefined, 'user-5', 'ToSync', false, true, false);
+        expect(profile.lastSyncedAt).toBeNull();
+
+        const syncedAt = new Date('2026-08-23T10:00:00.000Z');
+        await trophyProfileRepository.markSynced(profile.id, syncedAt);
+
+        const reloaded = await trophyProfileRepository.get(profile.id);
+        expect(reloaded.lastSyncedAt?.toISOString()).toBe(syncedAt.toISOString());
+        // The flags this run was not asked to change must survive untouched
+        // — the reason markSynced is a narrow update and not a save().
+        expect(reloaded.hasLeft).toBe(true);
+        expect(reloaded.isBanned).toBe(false);
+        expect(reloaded.psnProfile).toBe('ToSync');
+    });
+
+    test('save() lets updatedAt advance instead of pinning it to a stale value', async () => {
+        const profile = await createTrophyProfile(undefined, 'user-6', 'ToUpdate');
+        const originalUpdatedAt = (await trophyProfileRepository.get(profile.id)).updatedAt;
+
+        // A round-trip: load, change one flag, save. The entity carries the
+        // updatedAt it was loaded with, and the repository used to write it
+        // straight back, freezing the column forever.
+        const loaded = await trophyProfileRepository.get(profile.id);
+        await trophyProfileRepository.save(
+            new TrophyProfile(
+                loaded.id,
+                loaded.userId,
+                loaded.psnProfile,
+                true,
+                loaded.hasLeft,
+                loaded.isExcluded,
+                loaded.createdAt,
+                loaded.updatedAt,
+                loaded.lastSyncedAt,
+            ),
+        );
+
+        const reloaded = await trophyProfileRepository.get(profile.id);
+        expect(reloaded.isBanned).toBe(true);
+        expect(reloaded.updatedAt.getTime()).toBeGreaterThan(originalUpdatedAt.getTime());
+    });
+
+    test('save() preserves an existing lastSyncedAt it was handed', async () => {
+        const syncedAt = new Date('2026-08-23T11:00:00.000Z');
+        const profile = await createTrophyProfile(
+            undefined,
+            'user-7',
+            'Flagged',
+            false,
+            false,
+            false,
+            syncedAt,
+        );
+
+        const loaded = await trophyProfileRepository.get(profile.id);
+        await trophyProfileRepository.save(
+            new TrophyProfile(
+                loaded.id,
+                loaded.userId,
+                loaded.psnProfile,
+                true,
+                loaded.hasLeft,
+                loaded.isExcluded,
+                loaded.createdAt,
+                loaded.updatedAt,
+                loaded.lastSyncedAt,
+            ),
+        );
+
+        const reloaded = await trophyProfileRepository.get(profile.id);
+        expect(reloaded.lastSyncedAt?.toISOString()).toBe(syncedAt.toISOString());
     });
 });

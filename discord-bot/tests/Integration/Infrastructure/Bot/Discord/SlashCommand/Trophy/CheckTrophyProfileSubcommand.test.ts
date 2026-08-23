@@ -77,6 +77,51 @@ describe('CheckTrophyProfileSubcommand Integration Test', () => {
         expect(rankField.value).toContain('12');
     });
 
+    it('shows the sync stamp, not the row\'s updatedAt, in the dates field', async () => {
+        const userId = '444444444444444444';
+        const lastSyncedAt = new Date('2026-08-22T09:30:00.000Z');
+        await createTrophyProfile(
+            undefined,
+            userId,
+            'SyncedPsnUser',
+            false,
+            false,
+            false,
+            lastSyncedAt,
+        );
+        fakeTrophySource.setRank('SyncedPsnUser', { worldRank: 10, countryRank: 2 });
+
+        const interaction = new FakeInteraction({}, userId);
+
+        await checkTrophyProfileSubcommand.handle(buildContext(interaction));
+
+        const embedJson = interaction.editReplyCalls[0].embeds[0].toJSON();
+        const datesField = embedJson.fields.find(
+            (field: { name: string }) => field.name === '📅 Datas',
+        );
+        expect(datesField.value).toContain('Última sincronização');
+        expect(datesField.value).toContain(lastSyncedAt.toLocaleDateString('pt-PT'));
+    });
+
+    it('says a profile is not yet synced rather than showing a misleading date', async () => {
+        const userId = '555555555555555555';
+        // No lastSyncedAt: exactly the state of every profile that predates
+        // TrophiesSyncJob, which is what used to render a 2022 date under a
+        // "última atualização" label.
+        await createTrophyProfile(undefined, userId, 'NeverSyncedPsnUser');
+        fakeTrophySource.setRank('NeverSyncedPsnUser', { worldRank: 10, countryRank: 2 });
+
+        const interaction = new FakeInteraction({}, userId);
+
+        await checkTrophyProfileSubcommand.handle(buildContext(interaction));
+
+        const embedJson = interaction.editReplyCalls[0].embeds[0].toJSON();
+        const datesField = embedJson.fields.find(
+            (field: { name: string }) => field.name === '📅 Datas',
+        );
+        expect(datesField.value).toContain('ainda não sincronizado');
+    });
+
     it('does not call the live TrophySource for a banned profile, and shows a banned message', async () => {
         const userId = '111111111111111111';
         await createTrophyProfile(undefined, userId, 'BannedPsnUser', true, false, false);

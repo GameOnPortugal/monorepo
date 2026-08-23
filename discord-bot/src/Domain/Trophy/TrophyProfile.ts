@@ -9,6 +9,7 @@ export interface TrophyProfileArray {
     isExcluded: boolean | null;
     createdAt: Date;
     updatedAt: Date;
+    lastSyncedAt?: Date | null;
 }
 
 export class TrophyProfile {
@@ -21,6 +22,16 @@ export class TrophyProfile {
         public readonly isExcluded: boolean | null,
         public readonly createdAt: Date,
         public readonly updatedAt: Date,
+        /**
+         * When `trophies:sync` last finished walking this profile on
+         * PSNProfiles — stamped by `TrophyProfileRepository.markSynced`, not
+         * by any of the write paths that build this entity. `null` means
+         * "never walked by the job", which is the honest state for every row
+         * that predates it. Last and defaulted so the existing positional
+         * call sites (all of which are creating a profile, and so have
+         * nothing to say about syncing) keep compiling unchanged.
+         */
+        public readonly lastSyncedAt: Date | null = null,
     ) {}
 
     public static fromArray(array: TrophyProfileArray): TrophyProfile {
@@ -33,6 +44,7 @@ export class TrophyProfile {
             array.isExcluded,
             array.createdAt,
             array.updatedAt,
+            array.lastSyncedAt ?? null,
         );
     }
 }

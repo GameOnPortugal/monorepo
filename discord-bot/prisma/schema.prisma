@@ -100,15 +100,21 @@ model Screenshot {
 }
 
 model TrophyProfile {
-  id         String     @id @default(uuid())
-  userId     String?
-  psnProfile String?
-  isBanned   Boolean?   @default(false)
-  hasLeft    Boolean?   @default(false)
-  isExcluded Boolean?   @default(false)
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
-  trophies   Trophies[]
+  id           String     @id @default(uuid())
+  userId       String?
+  psnProfile   String?
+  isBanned     Boolean?   @default(false)
+  hasLeft      Boolean?   @default(false)
+  isExcluded   Boolean?   @default(false)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  // When `trophies:sync` last finished walking this profile on PSNProfiles.
+  // Distinct from `updatedAt`, which only moves when the row itself changes
+  // (creation, or auto-moderation flagging) and so sat frozen in 2022 for
+  // every member the job had never had to flag. Nullable because every
+  // pre-existing row predates the job.
+  lastSyncedAt DateTime?
+  trophies     Trophies[]
 
   @@map("trophyprofiles")
 }

@@ -11,6 +11,17 @@ export interface TrophyProfileRepository {
 
     delete(id: TrophyProfileId): Promise<void>;
 
+    /**
+     * Stamps `lastSyncedAt` and nothing else — the one write `trophies:sync`
+     * makes for a profile it merely walked without having to moderate it.
+     *
+     * Deliberately not `save()`: this runs once per profile per run, and a
+     * whole-row upsert would make the hourly crawl rewrite every flag it
+     * happens to be holding a stale copy of, turning a bookkeeping stamp
+     * into a chance to clobber a moderation decision made in between.
+     */
+    markSynced(id: TrophyProfileId, syncedAt: Date): Promise<void>;
+
     findByUserId(userId: string): Promise<TrophyProfile | null>;
 
     findByPsnProfile(psnProfile: string): Promise<TrophyProfile | null>;
