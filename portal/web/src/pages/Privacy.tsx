@@ -30,7 +30,24 @@ export function Privacy() {
       <p className="mt-6 text-white/70">
         Este portal mostra publicamente alguns dos conteúdos que publicas no servidor de Discord da Game On
         Portugal: anúncios do marketplace, screenshots submetidas ao concurso e o teu lugar na tabela de troféus.
-        Mostramos sempre um nome de apresentação (por exemplo o teu perfil PSN) — nunca o teu ID do Discord.
+        Mostramos sempre um nome de apresentação (o teu nome no Discord, ou o teu perfil PSN na tabela de
+        troféus) — nunca o teu ID do Discord.
+      </p>
+
+      <h2 className="mt-10 font-display text-xl">As screenshots são creditadas</h2>
+      <p className="mt-3 text-white/70">
+        Desde agosto de 2026, cada screenshot na galeria e no Hall of Fame mostra quem a partilhou: o teu nome no
+        Discord, a tua foto de perfil e uma ligação para a mensagem original no servidor. É a forma de o trabalho
+        ser teu e não anónimo — e a ligação existe para que o crédito seja verificável.
+      </p>
+      <p className="mt-3 text-white/70">
+        A foto de perfil é copiada para o nosso próprio servidor de imagens (media.game-on-portugal.pt) em vez de
+        ser carregada a partir do Discord, para que nenhum endereço público contenha o teu ID. Se mudares de foto,
+        a cópia é atualizada; se removeres a tua, passa a aparecer só a inicial do teu nome.
+      </p>
+      <p className="mt-3 text-white/70">
+        Se preferires não aparecer, o <code className="text-white/90">/privacy opt-out</code> abaixo esconde
+        também o teu nome e a tua foto, junto com todo o resto do teu conteúdo.
       </p>
 
       <h2 className="mt-10 font-display text-xl">Deixar de aparecer publicamente</h2>
@@ -67,7 +84,7 @@ export function Privacy() {
       <p className="mt-3 text-white/70">
         A Game On Portugal é uma comunidade de voluntários, não uma empresa — os dados descritos acima vivem na base
         de dados do bot do Discord da comunidade e neste portal, e só são usados para o que já vês aqui: anúncios,
-        screenshots e a tabela de troféus.
+        screenshots, os créditos das screenshots e a tabela de troféus.
       </p>
 
       <a

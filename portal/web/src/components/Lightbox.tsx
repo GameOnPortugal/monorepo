@@ -1,6 +1,9 @@
 import { useEffect } from "react";
 import { normalizePlatform } from "../lib/normalize";
+import type { Author, ScreenshotWinnerBadge } from "../lib/api/client";
+import { AuthorCredit } from "./AuthorCredit";
 import { PlatformBadge } from "./PlatformBadge";
+import { WinnerBadge } from "./WinnerBadge";
 
 /**
  * Full-screen viewer for the screenshots gallery (M8.8) and the marketplace
@@ -25,6 +28,11 @@ export interface LightboxItem {
   imageUrl: string | null;
   platform?: string | null;
   createdAt?: string;
+  // M10.5/M10.8 — optional, so an ad's image array (which has no author of
+  // its own on the public shape yet) still satisfies this structurally.
+  author?: Author | null;
+  messageUrl?: string | null;
+  winner?: ScreenshotWinnerBadge | null;
 }
 
 const DATE_FORMAT = new Intl.DateTimeFormat("pt-PT", { day: "numeric", month: "long", year: "numeric" });
@@ -102,7 +110,14 @@ export function Lightbox({
           {current.name && <span className="font-semibold">{current.name}</span>}
           {platform && <PlatformBadge platform={platform} />}
           {date && <span className="font-mono text-xs text-white/40">{DATE_FORMAT.format(date)}</span>}
+          {current.winner && <WinnerBadge voteCount={current.winner.voteCount} size="md" />}
         </div>
+
+        {current.author && (
+          <div className="flex items-center justify-center">
+            <AuthorCredit author={current.author} messageUrl={current.messageUrl} size="md" />
+          </div>
+        )}
       </div>
 
       {items.length > 1 && (
