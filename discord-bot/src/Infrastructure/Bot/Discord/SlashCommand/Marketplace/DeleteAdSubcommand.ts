@@ -11,6 +11,7 @@ import { UnauthorizedAdDeletion } from '../../../../../Domain/Marketplace/Unauth
 import RecordNotFound from '../../../../../Domain/RecordNotFound';
 import { InvalidId } from '../../../../../Domain/InvalidId';
 import { isGuildAdmin } from '../../../../../Domain/Bot/AdminCheck';
+import { messagesFor } from '../../../../../Domain/Bot/I18n/messages';
 
 @injectable()
 export class DeleteAdSubcommand {
@@ -24,6 +25,10 @@ export class DeleteAdSubcommand {
         const interaction = context.interaction;
         const identifier = interaction.options.getString('id', true);
         const userId = interaction.user.id;
+        // Answered in the member's own Discord language (pt-PT by default —
+        // see Domain/Bot/I18n/BotLocale.ts). Every reply below is ephemeral,
+        // so nobody else ever reads a language that is not theirs.
+        const m = messagesFor(interaction).marketplace;
         // M5.10 — read off the interaction's live permission bits, never
         // trusted from anything the member typed. `DeleteAdHandler` still
         // re-derives *ownership* itself off the row (`ad.authorId`); this
@@ -53,10 +58,7 @@ export class DeleteAdSubcommand {
             adId = AdId.fromString(identifier.trim());
         } catch (error) {
             if (error instanceof InvalidId) {
-                await interaction.editReply({
-                    content:
-                        'ID de anúncio inválido. Escolhe um anúncio a partir das sugestões em vez de escreveres o ID à mão.',
-                });
+                await interaction.editReply({ content: m.invalidAdId });
                 return;
             }
             throw error;
@@ -64,16 +66,14 @@ export class DeleteAdSubcommand {
 
         try {
             await this.commandHandlerManager.handle(new DeleteAd(adId, userId, isAdmin));
-            await interaction.editReply({ content: '🗑️ Anúncio apagado com sucesso.' });
+            await interaction.editReply({ content: m.adDeleted });
         } catch (error) {
             if (error instanceof UnauthorizedAdDeletion) {
                 await interaction.editReply({
-                    content: 'Não tens permissão para apagar este anúncio.',
+                    content: m.noPermissionTo(m.actionDelete),
                 });
             } else if (error instanceof RecordNotFound) {
-                await interaction.editReply({
-                    content: 'Anúncio não encontrado.',
-                });
+                await interaction.editReply({ content: m.adNotFound });
             } else {
                 const correlationId = randomUUID();
                 this.logger.error('Error deleting ad', {
@@ -82,9 +82,7 @@ export class DeleteAdSubcommand {
                     adId: adId.toString(),
                     userId,
                 });
-                await interaction.editReply({
-                    content: `Ocorreu um erro ao apagar o anúncio. Tenta novamente. (ref: ${correlationId})`,
-                });
+                await interaction.editReply({ content: m.deleteError(correlationId) });
             }
         }
     }

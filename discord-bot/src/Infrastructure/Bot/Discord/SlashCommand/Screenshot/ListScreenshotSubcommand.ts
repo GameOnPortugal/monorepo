@@ -6,6 +6,7 @@ import { GetScreenshots } from '../../../../../Application/Query/Screenshot/GetS
 import { EmbedBuilder, MessageFlags, type ChatInputCommandInteraction } from 'discord.js';
 import { safeReply } from '../../../../../Domain/Bot/safeReply.ts';
 import { capFields } from '../../../../../Domain/Bot/embedLimits.ts';
+import { messagesFor } from '../../../../../Domain/Bot/I18n/messages.ts';
 import type { Screenshot } from '../../../../../Domain/Screenshot/Screenshot.ts';
 
 /** `/screenshot list`'s own display limit — smaller than Discord's 25-field cap. */
@@ -25,6 +26,11 @@ export class ListScreenshotSubcommand {
         // is ephemeral either way, so the flag is safe to fix at defer time.
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
+        // Ephemeral for the whole command, so the whole embed — not just the
+        // error paths — is rendered in the asking member's Discord language.
+        const catalogue = messagesFor(interaction);
+        const m = catalogue.screenshot;
+
         try {
             // Get the target user (if specified) or default to the command user
             const targetUser = interaction.options.getUser('user') || interaction.user;
@@ -37,8 +43,8 @@ export class ListScreenshotSubcommand {
 
             if (screenshots.length === 0) {
                 const message = isOwnScreenshots
-                    ? `🔍 **Your Screenshots**\n\nYou haven't submitted any screenshots yet. Use \`/screenshot create\` to submit one!`
-                    : `🔍 **${targetUser.username}'s Screenshots**\n\nThis user hasn't submitted any screenshots yet.`;
+                    ? m.noneOfYourOwn
+                    : m.noneForUser(targetUser.username);
 
                 await interaction.editReply({ content: message });
                 return;
@@ -46,11 +52,11 @@ export class ListScreenshotSubcommand {
 
             // Create an embed to display the screenshots
             const title = isOwnScreenshots
-                ? '🔍 Your Screenshots'
-                : `🔍 ${targetUser.username}'s Screenshots`;
+                ? m.yourScreenshotsTitle
+                : m.userScreenshotsTitle(targetUser.username);
             const description = isOwnScreenshots
-                ? `You have submitted ${screenshots.length} screenshot(s).`
-                : `${targetUser.username} has submitted ${screenshots.length} screenshot(s).`;
+                ? m.yourScreenshotsCount(screenshots.length)
+                : m.userScreenshotsCount(targetUser.username, screenshots.length);
 
             const embed = new EmbedBuilder()
                 .setTitle(title)
@@ -63,11 +69,15 @@ export class ListScreenshotSubcommand {
                 (screenshot: Screenshot, index: number) => {
                     const platform = screenshot.platform
                         ? screenshot.platform.charAt(0).toUpperCase() + screenshot.platform.slice(1)
-                        : 'Unknown';
+                        : m.unknownPlatform;
 
                     return {
-                        name: `#${index + 1} - ${screenshot.name || 'Unnamed'}`,
-                        value: `ID: ${screenshot.id.toString()}\nPlatform: ${platform}\nSubmitted: ${screenshot.createdAt.toLocaleDateString()}`,
+                        name: `#${index + 1} - ${screenshot.name || m.unnamed}`,
+                        value: m.entryLine(
+                            screenshot.id.toString(),
+                            platform,
+                            screenshot.createdAt.toLocaleDateString(catalogue.intlLocale),
+                        ),
                     };
                 },
                 title.length + description.length,
@@ -78,7 +88,7 @@ export class ListScreenshotSubcommand {
             // Add a note if there are more screenshots than shown
             if (omittedCount > 0) {
                 embed.setFooter({
-                    text: `Showing ${fields.length} of ${screenshots.length} screenshots.`,
+                    text: m.listFooter(fields.length, screenshots.length),
                 });
             }
 
@@ -96,7 +106,7 @@ export class ListScreenshotSubcommand {
             });
 
             await safeReply(interaction, {
-                content: 'There was an error retrieving the screenshots. Please try again later.',
+                content: m.listError,
                 flags: MessageFlags.Ephemeral,
             });
         }

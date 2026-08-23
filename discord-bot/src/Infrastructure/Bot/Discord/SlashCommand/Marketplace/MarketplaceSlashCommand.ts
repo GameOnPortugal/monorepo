@@ -4,7 +4,6 @@ import type { SlashCommandContext } from '../../../../../Domain/Bot/SlashCommand
 import {
     ApplicationIntegrationType,
     InteractionContextType,
-    Locale,
     MessageFlags,
     SlashCommandBuilder,
     type SlashCommandSubcommandsOnlyBuilder,
@@ -19,19 +18,8 @@ import { DeleteAdSubcommand } from './DeleteAdSubcommand';
 import { SoldAdSubcommand } from './SoldAdSubcommand';
 import { BumpAdSubcommand } from './BumpAdSubcommand';
 import { EditAdSubcommand } from './EditAdSubcommand';
-
-/**
- * M5.4's pt-PT localisation entry, everywhere a `.setDescriptionLocalizations()`
- * call below needs one. Discord's supported locale list
- * (`discord-api-types`' `Locale` enum) has **no `pt-PT`** — only
- * `Locale.PortugueseBR` (`pt-BR`) exists — so this is the closest official
- * key available, not a claim that the copy underneath it is Brazilian
- * Portuguese. The actual strings are written for the pt-PT community this
- * bot serves, same as every other user-facing string in this file and its
- * subcommands; only the locale *tag* Discord will match a pt-BR client
- * against is borrowed.
- */
-const PT_LOCALE = Locale.PortugueseBR;
+import { PT_LOCALE } from '../../../../../Domain/Bot/I18n/BotLocale';
+import { messagesFor } from '../../../../../Domain/Bot/I18n/messages';
 
 @injectable()
 export class MarketplaceSlashCommand implements SlashCommandHandler {
@@ -522,7 +510,7 @@ export class MarketplaceSlashCommand implements SlashCommandHandler {
             default:
                 this.logger.error('Unknown subcommand', { subcommand });
                 await context.interaction.reply({
-                    content: 'Comando desconhecido.',
+                    content: messagesFor(context.interaction).common.unknownSubcommand(subcommand),
                     flags: MessageFlags.Ephemeral,
                 });
         }

@@ -74,8 +74,10 @@ describe('ScreenshotSlashCommand', () => {
         // would post this message publicly instead of ephemerally.
         expect(method).toBe('reply');
         expect(payload).toMatchObject({ flags: MessageFlags.Ephemeral });
+        // pt-PT: this fake carries no `locale`, which resolves to the
+        // community default (Domain/Bot/I18n/BotLocale.ts).
         expect((payload as { content: string }).content).toContain(
-            'error processing your screenshot command',
+            'Ocorreu um erro ao processar o comando de screenshots',
         );
     });
 

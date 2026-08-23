@@ -15,6 +15,7 @@ import { AdId } from '../../../../../Domain/Marketplace/AdId';
 import RecordNotFound from '../../../../../Domain/RecordNotFound';
 import { InvalidId } from '../../../../../Domain/InvalidId';
 import { buildCustomId } from '../../../../../Domain/Bot/CustomId';
+import { messagesFor } from '../../../../../Domain/Bot/I18n/messages';
 
 /**
  * `/marketplace edit` (M5.6) opens a modal pre-filled with the ad's current
@@ -42,6 +43,7 @@ export class EditAdSubcommand {
     public async handle(context: SlashCommandContext): Promise<void> {
         const interaction = context.interaction;
         const identifier = interaction.options.getString('id', true);
+        const m = messagesFor(interaction).marketplace;
 
         let adId: AdId;
         try {
@@ -49,8 +51,7 @@ export class EditAdSubcommand {
         } catch (error) {
             if (error instanceof InvalidId) {
                 await interaction.reply({
-                    content:
-                        'ID de anúncio inválido. Escolhe um anúncio a partir das sugestões em vez de escreveres o ID à mão.',
+                    content: m.invalidAdId,
                     flags: MessageFlags.Ephemeral,
                 });
                 return;
@@ -63,7 +64,7 @@ export class EditAdSubcommand {
 
             if (ad.authorId !== interaction.user.id) {
                 await interaction.reply({
-                    content: 'Não tens permissão para editar este anúncio.',
+                    content: m.noPermissionTo(m.actionEdit),
                     flags: MessageFlags.Ephemeral,
                 });
                 return;
@@ -71,12 +72,12 @@ export class EditAdSubcommand {
 
             const modal = new ModalBuilder()
                 .setCustomId(buildCustomId('mkt', 'edit-submit', adId.toString()))
-                .setTitle('Editar anúncio')
+                .setTitle(m.editModalTitle)
                 .addComponents(
                     new ActionRowBuilder<TextInputBuilder>().addComponents(
                         new TextInputBuilder()
                             .setCustomId('price')
-                            .setLabel('Preço')
+                            .setLabel(m.editModalPriceLabel)
                             .setStyle(TextInputStyle.Short)
                             .setRequired(true)
                             .setValue(ad.price ?? ''),
@@ -84,7 +85,7 @@ export class EditAdSubcommand {
                     new ActionRowBuilder<TextInputBuilder>().addComponents(
                         new TextInputBuilder()
                             .setCustomId('description')
-                            .setLabel('Descrição')
+                            .setLabel(m.editModalDescriptionLabel)
                             .setStyle(TextInputStyle.Paragraph)
                             .setRequired(false)
                             .setValue(ad.description ?? ''),
@@ -95,7 +96,7 @@ export class EditAdSubcommand {
         } catch (error) {
             if (error instanceof RecordNotFound) {
                 await interaction.reply({
-                    content: 'Anúncio não encontrado.',
+                    content: m.adNotFound,
                     flags: MessageFlags.Ephemeral,
                 });
                 return;
@@ -103,7 +104,7 @@ export class EditAdSubcommand {
 
             this.logger.error('Error opening the edit modal', { error, adId: adId.toString() });
             await interaction.reply({
-                content: 'Ocorreu um erro ao abrir o formulário de edição. Tenta novamente.',
+                content: m.editModalError,
                 flags: MessageFlags.Ephemeral,
             });
         }

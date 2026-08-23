@@ -32,6 +32,8 @@ import {
     SEARCH_PAGE_ACTION,
 } from '../../SlashCommand/Marketplace/AdListPresenter';
 import { SearchCriteriaStore } from './SearchCriteriaStore';
+import { messagesFor } from '../../../../../Domain/Bot/I18n/messages';
+import { localeOf } from '../../../../../Domain/Bot/I18n/BotLocale';
 
 /**
  * The `mkt` namespace (M4.7's first real consumer): the three listing
@@ -69,6 +71,11 @@ export class MarketplaceComponentHandler implements ComponentHandler {
     async handle(context: ComponentInteractionContext | ModalInteractionContext): Promise<void> {
         const { interaction } = context;
         const parsed = parseCustomId(interaction.customId);
+        // Every reply this handler sends is ephemeral (or a follow-up to an
+        // ephemeral defer), so it is answered in the clicking member's own
+        // Discord language — even when the button lives on a public,
+        // pt-PT-only listing. See Domain/Bot/I18n/messages.ts.
+        const m = messagesFor(interaction).marketplace;
 
         // BotExecutor already validated this before routing here — kept
         // defensive rather than assumed, since a handler must never crash on
@@ -101,7 +108,7 @@ export class MarketplaceComponentHandler implements ComponentHandler {
         } catch (error) {
             if (error instanceof InvalidId) {
                 await safeReply(interaction, {
-                    content: 'ID de anúncio inválido.',
+                    content: m.invalidAdIdShort,
                     flags: MessageFlags.Ephemeral,
                 });
                 return;
@@ -134,7 +141,7 @@ export class MarketplaceComponentHandler implements ComponentHandler {
             default:
                 this.logger.warn('Unknown mkt component action', { action: parsed.action });
                 await safeReply(interaction, {
-                    content: 'Esta ação já não está disponível.',
+                    content: m.actionUnavailable,
                     flags: MessageFlags.Ephemeral,
                 });
         }
@@ -153,10 +160,11 @@ export class MarketplaceComponentHandler implements ComponentHandler {
         args: string[],
     ): Promise<void> {
         const [targetUserId, pageArg, pageSizeArg] = args;
+        const locale = localeOf(interaction);
+        const m = messagesFor(interaction).marketplace;
         if (!targetUserId) {
             await safeReply(interaction, {
-                content:
-                    '⚠️ Este botão de paginação já não é válido. Corre `/marketplace list` outra vez.',
+                content: m.listPaginationExpired,
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -170,12 +178,15 @@ export class MarketplaceComponentHandler implements ComponentHandler {
                 new ListUserAdsPage(targetUserId, page, pageSize),
             );
             const embed = this.presenter.buildAdListEmbed({
-                title: `Anúncios de ${interaction.user.id === targetUserId ? interaction.user.username : targetUserId}`,
-                description: `${adPage.totalCount} anúncio${adPage.totalCount === 1 ? '' : 's'} encontrado${adPage.totalCount === 1 ? '' : 's'}`,
+                title: m.adsOfUserTitle(
+                    interaction.user.id === targetUserId ? interaction.user.username : targetUserId,
+                ),
+                description: m.adsFound(adPage.totalCount),
                 adPage,
                 guildId: interaction.guildId,
+                locale,
             });
-            const row = this.presenter.buildListPaginationRow(targetUserId, adPage);
+            const row = this.presenter.buildListPaginationRow(targetUserId, adPage, locale);
 
             await (interaction as ButtonInteraction).update({ embeds: [embed], components: [row] });
         } catch (error) {
@@ -185,7 +196,7 @@ export class MarketplaceComponentHandler implements ComponentHandler {
                 userId: interaction.user.id,
             });
             await safeReply(interaction, {
-                content: '⚠️ Ocorreu um erro ao mudar de página. Tenta novamente.',
+                content: messagesFor(interaction).common.paginationError,
                 flags: MessageFlags.Ephemeral,
             });
         }
@@ -204,10 +215,12 @@ export class MarketplaceComponentHandler implements ComponentHandler {
     ): Promise<void> {
         const [token, pageArg] = args;
         const stored = token ? this.searchCriteriaStore.get(token) : null;
+        const locale = localeOf(interaction);
+        const m = messagesFor(interaction).marketplace;
 
         if (!stored) {
             await safeReply(interaction, {
-                content: '⚠️ Esta pesquisa expirou. Corre `/marketplace search` outra vez.',
+                content: m.searchExpired,
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -220,13 +233,14 @@ export class MarketplaceComponentHandler implements ComponentHandler {
                 new SearchAds(stored.criteria, page, stored.pageSize),
             );
             const embed = this.presenter.buildAdListEmbed({
-                title: '🔎 Resultados da pesquisa',
-                description: `${adPage.totalCount} anúncio${adPage.totalCount === 1 ? '' : 's'} activo${adPage.totalCount === 1 ? '' : 's'} encontrado${adPage.totalCount === 1 ? '' : 's'}`,
+                title: m.searchResultsTitle,
+                description: m.activeAdsFound(adPage.totalCount),
                 adPage,
                 guildId: interaction.guildId,
                 showOwner: true,
+                locale,
             });
-            const row = this.presenter.buildSearchPaginationRow(token as string, adPage);
+            const row = this.presenter.buildSearchPaginationRow(token as string, adPage, locale);
 
             await (interaction as ButtonInteraction).update({ embeds: [embed], components: [row] });
         } catch (error) {
@@ -236,7 +250,7 @@ export class MarketplaceComponentHandler implements ComponentHandler {
                 userId: interaction.user.id,
             });
             await safeReply(interaction, {
-                content: '⚠️ Ocorreu um erro ao mudar de página. Tenta novamente.',
+                content: messagesFor(interaction).common.paginationError,
                 flags: MessageFlags.Ephemeral,
             });
         }
@@ -246,17 +260,19 @@ export class MarketplaceComponentHandler implements ComponentHandler {
         interaction: ButtonInteraction | AnySelectMenuInteraction,
         adId: AdId,
     ): Promise<void> {
+        const m = messagesFor(interaction).marketplace;
+
         try {
             const ad = await this.commandHandlerManager.handle(new GetAd(adId));
             const profileUrl = `https://discord.com/users/${ad.authorId}`;
             await interaction.reply({
-                content: `💬 Contacta o vendedor pelo perfil: ${profileUrl}`,
+                content: m.contactSeller(profileUrl),
                 flags: MessageFlags.Ephemeral,
             });
         } catch (error) {
             if (error instanceof RecordNotFound) {
                 await interaction.reply({
-                    content: 'Este anúncio já não existe.',
+                    content: m.adGone,
                     flags: MessageFlags.Ephemeral,
                 });
                 return;
@@ -270,6 +286,7 @@ export class MarketplaceComponentHandler implements ComponentHandler {
         adId: AdId,
     ): Promise<void> {
         const isAdmin = isGuildAdmin(interaction);
+        const m = messagesFor(interaction).marketplace;
         await interaction.deferUpdate();
 
         try {
@@ -277,16 +294,11 @@ export class MarketplaceComponentHandler implements ComponentHandler {
                 new MarkAdSold(adId, interaction.user.id, isAdmin),
             );
             await interaction.followUp({
-                content: '✅ Anúncio marcado como vendido.',
+                content: m.adSold,
                 flags: MessageFlags.Ephemeral,
             });
         } catch (error) {
-            await this.followUpWithError(
-                interaction,
-                error,
-                adId,
-                'marcar este anúncio como vendido',
-            );
+            await this.followUpWithError(interaction, error, adId, m.actionMarkSold);
         }
     }
 
@@ -294,6 +306,7 @@ export class MarketplaceComponentHandler implements ComponentHandler {
         interaction: ButtonInteraction | AnySelectMenuInteraction,
         adId: AdId,
     ): Promise<void> {
+        const m = messagesFor(interaction).marketplace;
         await interaction.deferUpdate();
 
         try {
@@ -301,18 +314,18 @@ export class MarketplaceComponentHandler implements ComponentHandler {
                 new BumpAd(adId, interaction.user.id, DiscordChannels.MARKETPLACE),
             );
             await interaction.followUp({
-                content: '🔄 Anúncio renovado.',
+                content: m.adBumped,
                 flags: MessageFlags.Ephemeral,
             });
         } catch (error) {
             if (error instanceof AdBumpRateLimited) {
                 await interaction.followUp({
-                    content: `Só podes renovar este anúncio uma vez a cada 72 horas. Tenta novamente daqui a ${formatHoursRemaining(error.nextEligibleAt)}.`,
+                    content: m.bumpRateLimited(formatHoursRemaining(error.nextEligibleAt)),
                     flags: MessageFlags.Ephemeral,
                 });
                 return;
             }
-            await this.followUpWithError(interaction, error, adId, 'renovar este anúncio');
+            await this.followUpWithError(interaction, error, adId, m.actionBump);
         }
     }
 
@@ -320,6 +333,7 @@ export class MarketplaceComponentHandler implements ComponentHandler {
         const { interaction } = context;
         const price = interaction.fields.getTextInputValue('price');
         const description = interaction.fields.getTextInputValue('description');
+        const m = messagesFor(interaction).marketplace;
 
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -327,16 +341,16 @@ export class MarketplaceComponentHandler implements ComponentHandler {
             await this.commandHandlerManager.handle(
                 new EditAd(adId, interaction.user.id, price, description),
             );
-            await interaction.editReply({ content: '✏️ Anúncio actualizado.' });
+            await interaction.editReply({ content: m.adUpdated });
         } catch (error) {
             if (error instanceof UnauthorizedAdAction) {
                 await interaction.editReply({
-                    content: 'Não tens permissão para editar este anúncio.',
+                    content: m.noPermissionTo(m.actionEdit),
                 });
             } else if (error instanceof AdNotActive) {
-                await interaction.editReply({ content: 'Este anúncio já não está activo.' });
+                await interaction.editReply({ content: m.adNotActive });
             } else if (error instanceof RecordNotFound) {
-                await interaction.editReply({ content: 'Anúncio não encontrado.' });
+                await interaction.editReply({ content: m.adNotFound });
             } else {
                 const correlationId = randomUUID();
                 this.logger.error('Error editing ad', {
@@ -345,9 +359,7 @@ export class MarketplaceComponentHandler implements ComponentHandler {
                     adId: adId.toString(),
                     userId: interaction.user.id,
                 });
-                await interaction.editReply({
-                    content: `Ocorreu um erro ao editar o anúncio. Tenta novamente. (ref: ${correlationId})`,
-                });
+                await interaction.editReply({ content: m.editError(correlationId) });
             }
         }
     }
@@ -363,19 +375,21 @@ export class MarketplaceComponentHandler implements ComponentHandler {
         adId: AdId,
         actionDescription: string,
     ): Promise<void> {
+        const m = messagesFor(interaction).marketplace;
+
         if (error instanceof UnauthorizedAdAction) {
             await interaction.followUp({
-                content: `Não tens permissão para ${actionDescription}.`,
+                content: m.noPermissionTo(actionDescription),
                 flags: MessageFlags.Ephemeral,
             });
         } else if (error instanceof AdNotActive) {
             await interaction.followUp({
-                content: 'Este anúncio já não está activo.',
+                content: m.adNotActive,
                 flags: MessageFlags.Ephemeral,
             });
         } else if (error instanceof RecordNotFound) {
             await interaction.followUp({
-                content: 'Este anúncio já não existe.',
+                content: m.adGone,
                 flags: MessageFlags.Ephemeral,
             });
         } else {
@@ -387,7 +401,7 @@ export class MarketplaceComponentHandler implements ComponentHandler {
                 userId: interaction.user.id,
             });
             await interaction.followUp({
-                content: `Ocorreu um erro. Tenta novamente. (ref: ${correlationId})`,
+                content: m.genericError(correlationId),
                 flags: MessageFlags.Ephemeral,
             });
         }

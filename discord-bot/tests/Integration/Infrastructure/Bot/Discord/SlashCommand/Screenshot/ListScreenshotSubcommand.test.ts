@@ -60,6 +60,6 @@ describe('ListScreenshotSubcommand Integration Test', () => {
 
         expect(fields.length).toBeLessThanOrEqual(10);
         expect(fields).toHaveLength(10);
-        expect(embeds[0].data.footer?.text).toContain('10 of 15');
+        expect(embeds[0].data.footer?.text).toContain('10 de 15');
     });
 });

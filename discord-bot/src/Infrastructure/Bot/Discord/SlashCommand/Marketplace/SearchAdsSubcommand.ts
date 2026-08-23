@@ -9,6 +9,8 @@ import type { AdSearchCriteria } from '../../../../../Domain/Marketplace/AdSearc
 import { safeReply } from '../../../../../Domain/Bot/safeReply';
 import { AdListPresenter } from './AdListPresenter';
 import { SearchCriteriaStore } from '../../Component/Marketplace/SearchCriteriaStore';
+import { messagesFor } from '../../../../../Domain/Bot/I18n/messages';
+import { localeOf } from '../../../../../Domain/Bot/I18n/BotLocale';
 
 const PAGE_SIZE = 10;
 
@@ -30,6 +32,7 @@ export class SearchAdsSubcommand {
 
     public async handle(context: SlashCommandContext): Promise<void> {
         const interaction = context.interaction;
+        const m = messagesFor(interaction).marketplace;
 
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -53,27 +56,30 @@ export class SearchAdsSubcommand {
             );
 
             if (adPage.totalCount === 0) {
-                await interaction.editReply({
-                    content: 'Não foram encontrados anúncios com esses critérios.',
-                });
+                await interaction.editReply({ content: m.searchNoResults });
                 return;
             }
 
             const token = this.searchCriteriaStore.put(criteria, PAGE_SIZE);
             const embed = this.presenter.buildAdListEmbed({
-                title: '🔎 Resultados da pesquisa',
-                description: `${adPage.totalCount} anúncio${adPage.totalCount === 1 ? '' : 's'} activo${adPage.totalCount === 1 ? '' : 's'} encontrado${adPage.totalCount === 1 ? '' : 's'}`,
+                title: m.searchResultsTitle,
+                description: m.activeAdsFound(adPage.totalCount),
                 adPage,
                 guildId: interaction.guildId,
                 showOwner: true,
+                locale: localeOf(interaction),
             });
-            const row = this.presenter.buildSearchPaginationRow(token, adPage);
+            const row = this.presenter.buildSearchPaginationRow(
+                token,
+                adPage,
+                localeOf(interaction),
+            );
 
             await interaction.editReply({ embeds: [embed], components: [row] });
         } catch (error) {
             this.logger.error('Error searching ads', { error });
             await safeReply(interaction, {
-                content: 'Ocorreu um erro ao pesquisar anúncios. Tenta novamente.',
+                content: m.searchError,
                 flags: MessageFlags.Ephemeral,
             });
         }
