@@ -7,6 +7,10 @@ import { parsePriceCents } from '../../../../Domain/Marketplace/AdPrice';
 import type { AdRepository } from '../../../../Domain/Marketplace/AdRepository';
 import { TYPES } from '../../../../Infrastructure/DependencyInjection/types';
 import type Logger from '../../../Logger/Logger';
+import {
+    AD_LIFECYCLE_MAX_AGE_DAYS,
+    addDays,
+} from '../../../../Domain/Marketplace/AdLifecyclePolicy';
 
 @injectable()
 export class CreateAdHandler implements CommandHandler<CreateAd> {
@@ -27,6 +31,12 @@ export class CreateAdHandler implements CommandHandler<CreateAd> {
         // `command.images` (M5.11) is already durable by the time it gets
         // here — see CreateAd.ts's doc comment for why the re-host has to
         // happen before this handler runs, not inside it.
+
+        // One `now` for all three timestamps: an ad created at 23:59:59.9
+        // should not have `createdAt` and `expires_at` land a tenth of a
+        // second apart on different days' worth of arithmetic.
+        const now = new Date();
+
         const ad = new Ad(
             command.id,
             command.name,
@@ -40,11 +50,20 @@ export class CreateAdHandler implements CommandHandler<CreateAd> {
             command.warranty,
             command.description,
             command.adType,
-            new Date(),
-            new Date(),
+            now,
+            now,
             AdStatus.active(),
             parsePriceCents(command.price),
             command.images,
+            null,
+            // The 30-day deadline is set here, at creation, rather than left
+            // NULL until something prompts the owner (M6.9). Two reasons:
+            // the portal renders this column publicly as "Expira", so a NULL
+            // means the listing shows no expiry at all while the ad quietly
+            // lives forever; and `ads:lifecycle`'s backstop can only expire
+            // what has a deadline to be past. Renewing or bumping pushes it
+            // out again — this is a ceiling on neglect, not on the ad.
+            addDays(now, AD_LIFECYCLE_MAX_AGE_DAYS),
         );
 
         // Save the ad using the repository

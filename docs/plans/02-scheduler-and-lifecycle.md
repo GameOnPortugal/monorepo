@@ -223,3 +223,21 @@ how the scheduler breakage went unnoticed for sixteen months.
    days of small, unremarkable batches. Operators: run
    `bun run:command jobs:run ads-lifecycle --dry-run` and read the counts before
    ever enabling the schedule for real.
+9. **The 30-day expiry is a hard backstop, not just a DM (M6.9, 2026-08-23).**
+   This *revises decision 7*: `expires_at` is now meaningful on `active` rows
+   too, not only while `pending_renewal`. Decision 3 always said "30-day
+   expiry", but M6.5 shipped only the 14-day-idle prompt, which means every
+   route to expiry ran through a DM the owner has to actually receive. Ads
+   whose owner has closed DMs, left the guild, or whose send throws were
+   counted `skipped` and retried the next day, forever — there was no exit.
+   Production found it: five ads whose `expires_at` passed on **2025-05-10**
+   were still listed on 2026-08-23, one owner, DMs closed, `ads-lifecycle`
+   dutifully reporting `changed: 0, skipped: 5, recipientsDmClosed: 1` every
+   morning. Now `CreateAd`/`RenewAd`/`BumpAd` all set `expires_at` to 30 days
+   out, and `ads:lifecycle` expires anything `active` that is past it
+   directly, with no DM, ahead of the prompt stage. The courtesy path is
+   untouched and still runs first in practice (prompt at day 14, settled by
+   day 17) — this only bites the cases where nobody could be reached. What
+   decision 7 said about `pending_renewal` still holds exactly: while in that
+   status the column is the 72h reply deadline, and neither the backstop nor
+   its backfill migration touches those rows.

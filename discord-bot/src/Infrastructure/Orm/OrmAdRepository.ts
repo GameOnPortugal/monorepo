@@ -219,6 +219,25 @@ export class OrmAdRepository implements AdRepository {
         return ads.map((ad) => Ad.fromArray(ad as AdArray));
     }
 
+    async findPastExpiry(now: Date, limit: number): Promise<Ad[]> {
+        const ads = await this.prismaClient.ad.findMany({
+            where: {
+                status: AdStatus.active().toString(),
+                deleted_at: null,
+                // `not: null` matters: an `active` row with no `expires_at`
+                // has no deadline to be past, and MySQL comparisons against
+                // NULL are unknown anyway — spelling it out keeps the
+                // intent (and the `ads_status_expires_at_idx` index usage)
+                // obvious to the next reader.
+                expires_at: { not: null, lte: now },
+            },
+            orderBy: { expires_at: 'asc' },
+            take: limit,
+        });
+
+        return ads.map((ad) => Ad.fromArray(ad as AdArray));
+    }
+
     async findAllActive(limit: number): Promise<Ad[]> {
         const ads = await this.prismaClient.ad.findMany({
             where: {

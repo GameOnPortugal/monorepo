@@ -10,6 +10,10 @@ import { TYPES } from '../../../../Infrastructure/DependencyInjection/types';
 import type Logger from '../../../Logger/Logger';
 import type { GuildClient } from '../../../../Domain/Community/GuildClient';
 import { CommunityChannels } from '../../../../Domain/Community/CommunityChannels';
+import {
+    AD_LIFECYCLE_MAX_AGE_DAYS,
+    addDays,
+} from '../../../../Domain/Marketplace/AdLifecyclePolicy';
 
 /**
  * pt-PT repost content (cross-cutting rule 1). Deliberately not reused from
@@ -79,12 +83,15 @@ export class RenewAdHandler implements CommandHandler<RenewAd> {
                 channelId: command.channelId,
                 messageId: newMessageId,
                 bumpedAt: now,
-                // Cleared, not extended by a fixed window: an actively
-                // renewed ad is exactly as fresh as one created today — the
-                // idle clock (bumped_at) is what drives the next 14-day
-                // prompt, `expires_at` has no meaning again until the ad
-                // re-enters `pending_renewal`.
-                expiresAt: null,
+                // Pushed out a full window, not cleared (M6.9 revises the
+                // original "expires_at has no meaning while active"): a
+                // renewed ad is exactly as fresh as one created today, and
+                // one created today gets 30 days. Clearing it instead left
+                // the row with no deadline at all, which is how an ad could
+                // outlive every deadline it was ever given — the idle clock
+                // (bumped_at) still drives the 14-day prompt, this is only
+                // the backstop underneath it.
+                expiresAt: addDays(now, AD_LIFECYCLE_MAX_AGE_DAYS),
             }),
         );
 

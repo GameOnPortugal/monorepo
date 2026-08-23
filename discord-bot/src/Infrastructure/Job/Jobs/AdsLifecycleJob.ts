@@ -47,6 +47,7 @@ const MAX_NEW_PROMPT_RECIPIENTS_PER_RUN = 5;
 
 interface LifecycleDetails {
     expiredOrphaned: number;
+    expiredPastExpiry: number;
     expiredNoResponse: number;
     prompted: number;
     recipientsDmed: number;
@@ -125,6 +126,7 @@ export class AdsLifecycleJob implements Job {
 
         const details: LifecycleDetails = {
             expiredOrphaned: 0,
+            expiredPastExpiry: 0,
             expiredNoResponse: 0,
             prompted: 0,
             recipientsDmed: 0,
@@ -134,8 +136,8 @@ export class AdsLifecycleJob implements Job {
 
         const expireOne = async (
             ad: Ad,
-            reason: 'orphaned-no-message' | 'no-response',
-            detailKey: 'expiredOrphaned' | 'expiredNoResponse',
+            reason: 'orphaned-no-message' | 'past-expiry' | 'no-response',
+            detailKey: 'expiredOrphaned' | 'expiredPastExpiry' | 'expiredNoResponse',
         ): Promise<void> => {
             considered++;
 
@@ -167,6 +169,13 @@ export class AdsLifecycleJob implements Job {
 
         for (const ad of candidates.orphaned) {
             await expireOne(ad, 'orphaned-no-message', 'expiredOrphaned');
+        }
+        // The 30-day backstop (M6.9), before the DM stage on purpose: these
+        // ads are already over their deadline, so nobody should be asked to
+        // renew one in the same run that ends it. The query handler has
+        // already removed them from `idle` for the same reason.
+        for (const ad of candidates.pastExpiry) {
+            await expireOne(ad, 'past-expiry', 'expiredPastExpiry');
         }
         for (const ad of candidates.awaitingExpiry) {
             await expireOne(ad, 'no-response', 'expiredNoResponse');
