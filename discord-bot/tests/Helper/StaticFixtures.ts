@@ -54,6 +54,7 @@ export const createTrophyProfile = async (
     isBanned?: boolean,
     hasLeft?: boolean,
     isExcluded?: boolean,
+    lastSyncedAt?: Date | null,
 ): Promise<TrophyProfile> => {
     const trophyProfile = new TrophyProfile(
         id ?? TrophyProfileId.generate(),
@@ -64,6 +65,9 @@ export const createTrophyProfile = async (
         isExcluded ?? false,
         new Date(),
         new Date(),
+        // Defaults to null, matching a profile `trophies:sync` has never
+        // walked — which is what a freshly created profile actually is.
+        lastSyncedAt ?? null,
     );
 
     await myContainer

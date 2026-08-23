@@ -566,6 +566,21 @@ export class TrophiesSyncJob implements Job {
             announcementBudget,
         );
 
+        // Reached only by a profile whose walk ran to completion: the two
+        // moderation paths above return early (a flagged profile was
+        // moderated, not synced), and a throw anywhere in between propagates
+        // to run()'s catch, which counts it `failed`. So `lastSyncedAt`
+        // means "the job last got all the way through this profile", which
+        // is the question `/trophy check` is really asking. Note a walk cut
+        // short by an exhausted `budget` still counts: the job did look at
+        // the profile, and catch-up mode re-walks from the newest trophy
+        // next run regardless.
+        //
+        // Skipped under --dry-run, like every other write in this job.
+        if (!context.dryRun) {
+            await this.trophyProfileRepository.markSynced(profile.id, new Date());
+        }
+
         return { changed, skipped, failed };
     }
 
@@ -700,6 +715,10 @@ export class TrophiesSyncJob implements Job {
             flags.isExcluded ?? profile.isExcluded,
             profile.createdAt,
             new Date(),
+            // Carried through explicitly: `save()` writes this column, and
+            // the constructor defaults it to null, so omitting it here would
+            // silently clear the sync stamp every time a profile is flagged.
+            profile.lastSyncedAt,
         );
 
         await this.trophyProfileRepository.save(updated);

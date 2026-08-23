@@ -58,7 +58,7 @@ export class CheckTrophyProfileSubcommand {
                         name: '📅 Datas',
                         value: [
                             `🆕 Registado: ${profile.createdAt.toLocaleDateString('pt-PT')}`,
-                            `🔄 Última atualização: ${profile.updatedAt.toLocaleDateString('pt-PT')}`,
+                            `🔄 Última sincronização: ${formatLastSynced(profile.lastSyncedAt)}`,
                         ].join('\n'),
                         inline: true,
                     },
@@ -141,4 +141,26 @@ export class CheckTrophyProfileSubcommand {
             return '⚠️ Não foi possível obter o rank em tempo real neste momento.';
         }
     }
+}
+
+/**
+ * This line used to render `profile.updatedAt`, which sounds like "when we
+ * last checked your trophies" but is really "when this row was last
+ * written" — and the row is only written on creation or auto-moderation.
+ * A member who had never been flagged therefore saw a date from whenever the
+ * legacy bot last touched them (2022, for most of the community), which read
+ * as the bot having quietly stopped tracking them. `lastSyncedAt` is stamped
+ * by `TrophiesSyncJob` on every completed walk, so it answers the question
+ * the label implies.
+ *
+ * `null` is not an error state: it is every profile the job has not yet
+ * walked — all of them before this shipped, and any new profile until the
+ * next hourly run — so it gets a plain "not yet" rather than a warning.
+ */
+function formatLastSynced(lastSyncedAt: Date | null): string {
+    if (lastSyncedAt === null) {
+        return 'ainda não sincronizado';
+    }
+
+    return lastSyncedAt.toLocaleDateString('pt-PT');
 }
