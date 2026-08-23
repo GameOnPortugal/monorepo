@@ -13,13 +13,18 @@ export class OrmTrophyProfileRepository implements TrophyProfileRepository {
     async save(trophyProfile: TrophyProfile): Promise<void> {
         await this.prismaClient.trophyProfile.upsert({
             where: { id: trophyProfile.id.toString() },
+            // `updatedAt` is deliberately absent here: Prisma's `@updatedAt`
+            // only auto-stamps a field the payload does not mention, so
+            // passing the entity's own (just-loaded, therefore stale) value
+            // back would pin the column forever — which is exactly how it
+            // came to read 2022 on profiles that had been written since.
             update: {
                 userId: trophyProfile.userId,
                 psnProfile: trophyProfile.psnProfile,
                 isBanned: trophyProfile.isBanned,
                 hasLeft: trophyProfile.hasLeft,
                 isExcluded: trophyProfile.isExcluded,
-                updatedAt: trophyProfile.updatedAt,
+                lastSyncedAt: trophyProfile.lastSyncedAt,
             },
             create: {
                 id: trophyProfile.id.toString(),
@@ -30,6 +35,7 @@ export class OrmTrophyProfileRepository implements TrophyProfileRepository {
                 isExcluded: trophyProfile.isExcluded,
                 createdAt: trophyProfile.createdAt,
                 updatedAt: trophyProfile.updatedAt,
+                lastSyncedAt: trophyProfile.lastSyncedAt,
             },
         });
     }
@@ -49,6 +55,13 @@ export class OrmTrophyProfileRepository implements TrophyProfileRepository {
     async delete(id: TrophyProfileId): Promise<void> {
         await this.prismaClient.trophyProfile.delete({
             where: { id: id.toString() },
+        });
+    }
+
+    async markSynced(id: TrophyProfileId, syncedAt: Date): Promise<void> {
+        await this.prismaClient.trophyProfile.update({
+            where: { id: id.toString() },
+            data: { lastSyncedAt: syncedAt },
         });
     }
 
@@ -82,8 +95,16 @@ export class OrmTrophyProfileRepository implements TrophyProfileRepository {
         // (OrmTrophyRepository's ranking queries) — a NULL isExcluded row is
         // treated as excluded by both, so the two never disagree about which
         // profiles are "live".
+        //
+        // `orderBy: lastSyncedAt asc` is what makes that column actually
+        // steer the crawl rather than merely record it: MySQL sorts NULL
+        // first in ascending order, so never-synced profiles lead, then the
+        // longest-stale ones — exactly the set `TrophiesSyncJob.run()`'s
+        // work-limit budget should spend on first when a pass can't cover
+        // every profile in one run.
         const trophyProfiles = await this.prismaClient.trophyProfile.findMany({
             where: { isExcluded: false },
+            orderBy: { lastSyncedAt: 'asc' },
         });
 
         return trophyProfiles.map((trophyProfile) =>

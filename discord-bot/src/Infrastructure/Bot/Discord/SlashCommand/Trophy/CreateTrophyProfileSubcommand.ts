@@ -9,6 +9,7 @@ import { TrophyProfileId } from '../../../../../Domain/Trophy/TrophyProfileId';
 import { ProfileAlreadyExists } from '../../../../../Application/Write/Trophy/CreateProfile/ProfileAlreadyExists';
 import { safeReply } from '../../../../../Domain/Bot/safeReply';
 import { extractPsnProfileFromUrl } from '../../../../../Domain/Trophy/PsnProfileUrl';
+import { messagesFor } from '../../../../../Domain/Bot/I18n/messages';
 
 @injectable()
 export class CreateTrophyProfileSubcommand {
@@ -24,6 +25,7 @@ export class CreateTrophyProfileSubcommand {
 
     public async handle(context: SlashCommandContext): Promise<void> {
         const psnprofilesUrl = context.interaction.options.getString('psnprofiles_url', true);
+        const m = messagesFor(context.interaction).trophy;
 
         // M7.5: accepts both a bare profile URL
         // (https://psnprofiles.com/username) and a 6-segment trophy URL
@@ -33,10 +35,7 @@ export class CreateTrophyProfileSubcommand {
 
         if (!psnProfile) {
             await context.interaction.reply({
-                content:
-                    'URL do PSNProfiles inválido. Indica um URL de perfil válido ' +
-                    '(ex: https://psnprofiles.com/username) ou de um troféu ' +
-                    '(ex: https://psnprofiles.com/trophies/123-jogo/username).',
+                content: m.invalidPsnUrl,
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -57,22 +56,20 @@ export class CreateTrophyProfileSubcommand {
             await this.commandHandlerManager.handle(command);
 
             await context.interaction.editReply({
-                content: `Perfil PSN registado com sucesso: ${psnProfile}`,
+                content: m.profileRegistered(psnProfile),
             });
         } catch (error) {
             if (error instanceof ProfileAlreadyExists) {
                 if (error.userId === context.interaction.user.id) {
                     await safeReply(context.interaction, {
-                        content: 'Já tens este perfil PSN registado.',
+                        content: m.profileAlreadyYours,
                         flags: MessageFlags.Ephemeral,
                     });
                     return;
                 }
 
                 await safeReply(context.interaction, {
-                    content:
-                        'Este perfil PSN já foi registado por outra pessoa. Se achas que isto é ' +
-                        'um erro, contacta um administrador.',
+                    content: m.profileTakenByOther,
                     flags: MessageFlags.Ephemeral,
                 });
                 return;
@@ -85,7 +82,7 @@ export class CreateTrophyProfileSubcommand {
             });
 
             await safeReply(context.interaction, {
-                content: 'Ocorreu um erro ao registar o teu perfil PSN.',
+                content: m.createError,
                 flags: MessageFlags.Ephemeral,
             });
         }

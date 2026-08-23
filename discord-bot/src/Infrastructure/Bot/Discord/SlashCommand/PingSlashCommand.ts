@@ -8,6 +8,7 @@ import {
     InteractionContextType,
     SlashCommandBuilder,
 } from 'discord.js';
+import { PT_LOCALE } from '../../../../Domain/Bot/I18n/BotLocale.ts';
 
 @injectable()
 export class PingSlashCommand implements SlashCommandHandler {
@@ -25,6 +26,7 @@ export class PingSlashCommand implements SlashCommandHandler {
             new SlashCommandBuilder()
                 .setName('ping')
                 .setDescription('Replies with a pong!')
+                .setDescriptionLocalizations({ [PT_LOCALE]: 'Responde com um pong!' })
                 .setContexts(InteractionContextType.Guild) // M1.10/M4.3 — not invokable in DMs.
                 .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
                 // Open to every member — this is not an admin command. Explicit

@@ -13,6 +13,8 @@ import type { RankPage } from '../../../../../Domain/Trophy/RankPage';
 import type { UserPosition } from '../../../../../Domain/Trophy/UserPosition';
 import { safeReply } from '../../../../../Domain/Bot/safeReply';
 import { RankPresenter } from './RankPresenter.ts';
+import { messagesFor } from '../../../../../Domain/Bot/I18n/messages';
+import { localeOf } from '../../../../../Domain/Bot/I18n/BotLocale';
 
 function isRankPage(result: RankPage | UserPosition): result is RankPage {
     return 'data' in result;
@@ -54,6 +56,10 @@ export class RankSubcommand {
         // can take longer than the 3s interaction-ack window.
         await context.interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
+        // `/trophy rank` is ephemeral end to end, so the leaderboard itself
+        // is rendered in the asking member's Discord language.
+        const locale = localeOf(context.interaction);
+
         try {
             const type = context.interaction.options.getString('type', true) as RankType;
             // `limit` is now a page *size*, not a hard cap on the whole
@@ -88,12 +94,14 @@ export class RankSubcommand {
                     result,
                     type,
                     type === 'monthly' ? date : undefined,
+                    locale,
                 );
                 const row = this.presenter.buildPaginationRow(
                     type,
                     result,
                     type === 'monthly' ? date.getMonth() + 1 : undefined,
                     type === 'monthly' ? date.getFullYear() : undefined,
+                    locale,
                 );
 
                 await context.interaction.editReply({
@@ -106,6 +114,7 @@ export class RankSubcommand {
             const embed = this.presenter.buildUserPositionEmbed(
                 result,
                 targetUser?.username ?? 'Unknown',
+                locale,
             );
 
             await context.interaction.editReply({
@@ -118,8 +127,7 @@ export class RankSubcommand {
             });
 
             await safeReply(context.interaction, {
-                content:
-                    '⚠️ Ocorreu um erro ao obter o ranking de troféus. Tenta novamente mais tarde.',
+                content: messagesFor(context.interaction).trophy.rankError,
                 flags: MessageFlags.Ephemeral,
             });
         }

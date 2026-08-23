@@ -9,6 +9,7 @@ import { ProfileNotFound } from '../../../../../Application/Query/Trophy/GetProf
 import { replyPrivately } from '../../../../../Domain/Bot/safeReply';
 import type { TrophySource } from '../../../../../Domain/Trophy/TrophySource';
 import type { TrophyProfile } from '../../../../../Domain/Trophy/TrophyProfile';
+import { messagesFor } from '../../../../../Domain/Bot/I18n/messages';
 
 @injectable()
 export class CheckTrophyProfileSubcommand {
@@ -21,6 +22,10 @@ export class CheckTrophyProfileSubcommand {
 
     public async handle(context: SlashCommandContext): Promise<void> {
         const targetUser = context.interaction.options.getUser('user') ?? context.interaction.user;
+        // Only the *private* paths below are localised. The success path is
+        // a public embed (public defer, see below) — pt-PT for everyone, per
+        // Domain/Bot/I18n/messages.ts.
+        const m = messagesFor(context.interaction).trophy;
 
         // Public defer: a trophy profile check is worth showing off, so the
         // success path stays public (no `flags`). The not-found/error paths
@@ -53,7 +58,7 @@ export class CheckTrophyProfileSubcommand {
                         name: '📅 Datas',
                         value: [
                             `🆕 Registado: ${profile.createdAt.toLocaleDateString('pt-PT')}`,
-                            `🔄 Última atualização: ${profile.updatedAt.toLocaleDateString('pt-PT')}`,
+                            `🔄 Última sincronização: ${formatLastSynced(profile.lastSyncedAt)}`,
                         ].join('\n'),
                         inline: true,
                     },
@@ -74,8 +79,8 @@ export class CheckTrophyProfileSubcommand {
                 await replyPrivately(context.interaction, {
                     content:
                         targetUser.id === context.interaction.user.id
-                            ? '❌ Ainda não registaste o teu perfil PSN. Usa `/trophy create` para o registar.'
-                            : '❌ Este utilizador ainda não registou o perfil PSN.',
+                            ? m.profileNotFoundOwn
+                            : m.profileNotFoundOther,
                 });
                 return;
             }
@@ -86,7 +91,7 @@ export class CheckTrophyProfileSubcommand {
             });
 
             await replyPrivately(context.interaction, {
-                content: '⚠️ Ocorreu um erro ao obter o perfil PSN.',
+                content: m.profileFetchError,
             });
         }
     }
@@ -136,4 +141,26 @@ export class CheckTrophyProfileSubcommand {
             return '⚠️ Não foi possível obter o rank em tempo real neste momento.';
         }
     }
+}
+
+/**
+ * This line used to render `profile.updatedAt`, which sounds like "when we
+ * last checked your trophies" but is really "when this row was last
+ * written" — and the row is only written on creation or auto-moderation.
+ * A member who had never been flagged therefore saw a date from whenever the
+ * legacy bot last touched them (2022, for most of the community), which read
+ * as the bot having quietly stopped tracking them. `lastSyncedAt` is stamped
+ * by `TrophiesSyncJob` on every completed walk, so it answers the question
+ * the label implies.
+ *
+ * `null` is not an error state: it is every profile the job has not yet
+ * walked — all of them before this shipped, and any new profile until the
+ * next hourly run — so it gets a plain "not yet" rather than a warning.
+ */
+function formatLastSynced(lastSyncedAt: Date | null): string {
+    if (lastSyncedAt === null) {
+        return 'ainda não sincronizado';
+    }
+
+    return lastSyncedAt.toLocaleDateString('pt-PT');
 }

@@ -14,6 +14,7 @@ import RecordNotFound from '../../../../../Domain/RecordNotFound';
 import { InvalidId } from '../../../../../Domain/InvalidId';
 import { DiscordChannels } from '../../../../Community/Discord/DiscordChannels';
 import { formatHoursRemaining } from './formatHoursRemaining';
+import { messagesFor } from '../../../../../Domain/Bot/I18n/messages';
 
 /**
  * `/marketplace bump` (M5.6) — the slash-command twin of the `🔄 Renovar`
@@ -32,6 +33,7 @@ export class BumpAdSubcommand {
         const interaction = context.interaction;
         const identifier = interaction.options.getString('id', true);
         const userId = interaction.user.id;
+        const m = messagesFor(interaction).marketplace;
 
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -40,10 +42,7 @@ export class BumpAdSubcommand {
             adId = AdId.fromString(identifier.trim());
         } catch (error) {
             if (error instanceof InvalidId) {
-                await interaction.editReply({
-                    content:
-                        'ID de anúncio inválido. Escolhe um anúncio a partir das sugestões em vez de escreveres o ID à mão.',
-                });
+                await interaction.editReply({ content: m.invalidAdId });
                 return;
             }
             throw error;
@@ -53,20 +52,20 @@ export class BumpAdSubcommand {
             await this.commandHandlerManager.handle(
                 new BumpAd(adId, userId, DiscordChannels.MARKETPLACE),
             );
-            await interaction.editReply({ content: '🔄 Anúncio renovado.' });
+            await interaction.editReply({ content: m.adBumped });
         } catch (error) {
             if (error instanceof UnauthorizedAdAction) {
                 await interaction.editReply({
-                    content: 'Não tens permissão para renovar este anúncio.',
+                    content: m.noPermissionTo(m.actionBump),
                 });
             } else if (error instanceof AdNotActive) {
-                await interaction.editReply({ content: 'Este anúncio já não está activo.' });
+                await interaction.editReply({ content: m.adNotActive });
             } else if (error instanceof AdBumpRateLimited) {
                 await interaction.editReply({
-                    content: `Só podes renovar este anúncio uma vez a cada 72 horas. Tenta novamente daqui a ${formatHoursRemaining(error.nextEligibleAt)}.`,
+                    content: m.bumpRateLimited(formatHoursRemaining(error.nextEligibleAt)),
                 });
             } else if (error instanceof RecordNotFound) {
-                await interaction.editReply({ content: 'Anúncio não encontrado.' });
+                await interaction.editReply({ content: m.adNotFound });
             } else {
                 const correlationId = randomUUID();
                 this.logger.error('Error bumping ad', {
@@ -75,9 +74,7 @@ export class BumpAdSubcommand {
                     adId: adId.toString(),
                     userId,
                 });
-                await interaction.editReply({
-                    content: `Ocorreu um erro ao renovar o anúncio. Tenta novamente. (ref: ${correlationId})`,
-                });
+                await interaction.editReply({ content: m.bumpError(correlationId) });
             }
         }
     }

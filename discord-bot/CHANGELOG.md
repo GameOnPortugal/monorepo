@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.5.0](https://github.com/GameOnPortugal/monorepo/compare/discord-bot-v1.4.1...discord-bot-v1.5.0) (2026-08-23)
+
+
+### Features
+
+* **bot:** add Portuguese localizations to all slash commands ([#91](https://github.com/GameOnPortugal/monorepo/issues/91)) ([4aa3808](https://github.com/GameOnPortugal/monorepo/commit/4aa3808542d06171439b0ce3b2771c895262afbf))
+
+## [1.4.1](https://github.com/GameOnPortugal/monorepo/compare/discord-bot-v1.4.0...discord-bot-v1.4.1) (2026-08-22)
+
+
+### Bug Fixes
+
+* **infra:** make the trophy crawl survive a deploy, and stop it starving profiles ([#90](https://github.com/GameOnPortugal/monorepo/issues/90)) ([c3974a0](https://github.com/GameOnPortugal/monorepo/commit/c3974a0f190039816173c4fbd7e26e9be54f1125))
+
 ## [1.4.0](https://github.com/GameOnPortugal/monorepo/compare/discord-bot-v1.3.1...discord-bot-v1.4.0) (2026-08-22)
 
 

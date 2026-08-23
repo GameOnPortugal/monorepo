@@ -10,6 +10,7 @@ import { ScreenshotAlreadyExist } from '../../../../../Application/Write/Screens
 import { DiscordEmoji } from '../../../../Community/Discord/DiscordEmoji.ts';
 import { safeReply } from '../../../../../Domain/Bot/safeReply.ts';
 import { SyncDiscordProfile } from '../../../../../Application/Write/Profile/SyncDiscordProfile/SyncDiscordProfile.ts';
+import { messagesFor } from '../../../../../Domain/Bot/I18n/messages.ts';
 
 @injectable()
 export class CreateScreenshotSubcommand {
@@ -23,11 +24,16 @@ export class CreateScreenshotSubcommand {
         const image = interaction.options.getAttachment('image');
         const name = interaction.options.getString('name');
         const platform = interaction.options.getString('platform');
+        // The submitter's private validation/error replies follow their
+        // Discord language. The submission post itself is public (see the
+        // deferReply() below — no Ephemeral flag), so it stays pt-PT like
+        // every other message the whole channel reads.
+        const m = messagesFor(interaction).screenshot;
 
         // Validate required data
         if (!image || !name || !platform) {
             await interaction.reply({
-                content: 'Error: Missing required information for the screenshot.',
+                content: m.missingInformation,
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -36,7 +42,7 @@ export class CreateScreenshotSubcommand {
         // Validate image
         if (!image.contentType?.startsWith('image/')) {
             await interaction.reply({
-                content: 'Error: The attachment must be an image.',
+                content: m.attachmentMustBeImage,
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -60,12 +66,14 @@ export class CreateScreenshotSubcommand {
         let message;
         try {
             message = await interaction.editReply({
+                // Public message -> pt-PT, deliberately not routed through
+                // the message catalogue. See Domain/Bot/I18n/messages.ts.
                 content:
-                    `📸 **Screenshot Submitted!**\n\n` +
+                    `📸 **Screenshot submetida!**\n\n` +
                     `ID: #${screenshotId.toString()}\n` +
-                    `Author: ${interaction.user.username}\n` +
-                    `Name: ${escapeMarkdown(name)}\n` +
-                    `Platform: ${platform.charAt(0).toUpperCase() + platform.slice(1)}`,
+                    `Autor: ${interaction.user.username}\n` +
+                    `Nome: ${escapeMarkdown(name)}\n` +
+                    `Plataforma: ${platform.charAt(0).toUpperCase() + platform.slice(1)}`,
                 files: [image.url],
                 allowedMentions: { parse: [] },
             });
@@ -77,7 +85,7 @@ export class CreateScreenshotSubcommand {
                 userId: interaction.user.id,
             });
             await safeReply(interaction, {
-                content: `There was an error submitting your screenshot. Please try again. (ref: ${correlationId})`,
+                content: m.submitFailed(correlationId),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -151,7 +159,7 @@ export class CreateScreenshotSubcommand {
             // Check for specific error types
             if (error instanceof ScreenshotAlreadyExist) {
                 await safeReply(interaction, {
-                    content: '⚠️ Error: This screenshot has already been submitted.',
+                    content: m.alreadySubmitted,
                     flags: MessageFlags.Ephemeral,
                 });
                 return;
@@ -169,7 +177,7 @@ export class CreateScreenshotSubcommand {
                 userId: interaction.user.id,
             });
             await safeReply(interaction, {
-                content: `Your screenshot was posted, but something went wrong saving it — it may not count for the contest. Please contact a moderator. (ref: ${correlationId})`,
+                content: m.postedButNotSaved(correlationId),
                 flags: MessageFlags.Ephemeral,
             });
         }

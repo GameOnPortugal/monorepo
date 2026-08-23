@@ -16,6 +16,8 @@ import {
     RANK_NAMESPACE,
     RANK_PAGE_ACTION,
 } from '../SlashCommand/Trophy/RankPresenter.ts';
+import { messagesFor } from '../../../../Domain/Bot/I18n/messages.ts';
+import { localeOf } from '../../../../Domain/Bot/I18n/BotLocale.ts';
 
 const RANK_TYPES: ReadonlySet<string> = new Set<RankType>(['monthly', 'creation', 'lifetime']);
 const DEFAULT_PAGE_SIZE = 10;
@@ -68,6 +70,9 @@ export class TrophyComponentHandler implements ComponentHandler {
 
         const { interaction } = context;
         const decoded = this.decode(interaction.customId);
+        // The message these buttons live on is `/trophy rank`'s ephemeral
+        // reply, so the re-render follows the clicking member's language.
+        const locale = localeOf(interaction);
 
         if (!decoded) {
             this.logger.warn('Malformed trophies pagination custom ID', {
@@ -75,8 +80,7 @@ export class TrophyComponentHandler implements ComponentHandler {
                 userId: interaction.user.id,
             });
             await safeReply(interaction, {
-                content:
-                    '⚠️ Este botão de paginação já não é válido. Corre `/trophy rank` outra vez.',
+                content: messagesFor(interaction).trophy.rankPaginationExpired,
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -107,12 +111,13 @@ export class TrophyComponentHandler implements ComponentHandler {
                     ? new Date(decoded.year, decoded.month - 1)
                     : undefined;
 
-            const embed = this.presenter.buildRankingEmbed(result, decoded.type, date);
+            const embed = this.presenter.buildRankingEmbed(result, decoded.type, date, locale);
             const row = this.presenter.buildPaginationRow(
                 decoded.type,
                 result,
                 decoded.month,
                 decoded.year,
+                locale,
             );
 
             await interaction.update({ embeds: [embed], components: [row] });
@@ -124,7 +129,7 @@ export class TrophyComponentHandler implements ComponentHandler {
             });
 
             await safeReply(interaction, {
-                content: '⚠️ Ocorreu um erro ao mudar de página. Tenta novamente.',
+                content: messagesFor(interaction).common.paginationError,
                 flags: MessageFlags.Ephemeral,
             });
         }

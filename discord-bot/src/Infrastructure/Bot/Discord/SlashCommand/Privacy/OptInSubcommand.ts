@@ -6,6 +6,7 @@ import type Logger from '../../../../../Application/Logger/Logger';
 import CommandHandlerManager from '../../../../CommandHandler/CommandHandlerManager';
 import { SetPrivacyOptOut } from '../../../../../Application/Write/Privacy/SetPrivacyOptOut/SetPrivacyOptOut';
 import { safeReply } from '../../../../../Domain/Bot/safeReply';
+import { messagesFor } from '../../../../../Domain/Bot/I18n/messages';
 
 @injectable()
 export class OptInSubcommand {
@@ -21,15 +22,13 @@ export class OptInSubcommand {
 
     public async handle(context: SlashCommandContext): Promise<void> {
         const discordId = context.interaction.user.id;
+        const m = messagesFor(context.interaction).privacy;
 
         try {
             await this.commandHandlerManager.handle(new SetPrivacyOptOut(discordId, false));
 
             await context.interaction.reply({
-                content:
-                    '✅ Voltaste a aparecer publicamente no portal — os teus anúncios, ' +
-                    'screenshots e perfil de troféus voltam a ser visíveis em ' +
-                    'game-on-portugal.pt.',
+                content: m.optedIn,
                 flags: MessageFlags.Ephemeral,
             });
         } catch (error) {
@@ -39,7 +38,7 @@ export class OptInSubcommand {
             });
 
             await safeReply(context.interaction, {
-                content: 'Ocorreu um erro ao processar o teu pedido. Tenta novamente.',
+                content: m.error,
                 flags: MessageFlags.Ephemeral,
             });
         }

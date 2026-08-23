@@ -7,6 +7,8 @@ import { ListUserAdsPage } from '../../../../../Application/Query/Marketplace/Li
 import CommandHandlerManager from '../../../../CommandHandler/CommandHandlerManager.ts';
 import { safeReply } from '../../../../../Domain/Bot/safeReply.ts';
 import { AdListPresenter } from './AdListPresenter';
+import { messagesFor } from '../../../../../Domain/Bot/I18n/messages';
+import { localeOf } from '../../../../../Domain/Bot/I18n/BotLocale';
 
 const PAGE_SIZE = 10;
 
@@ -31,6 +33,7 @@ export class ListAdsSubcommand {
 
     public async handle(context: SlashCommandContext): Promise<void> {
         const targetUser = context.interaction.options.getUser('user') ?? context.interaction.user;
+        const m = messagesFor(context.interaction).marketplace;
 
         // Ephemeral for the whole command (M5.8 settles `/marketplace list`
         // as ephemeral going forward), so every path below — including the
@@ -46,26 +49,31 @@ export class ListAdsSubcommand {
                 await context.interaction.editReply({
                     content:
                         targetUser.id === context.interaction.user.id
-                            ? 'Não tens nenhum anúncio activo.'
-                            : 'Este utilizador não tem nenhum anúncio activo.',
+                            ? m.noAdsOfYourOwn
+                            : m.noAdsForUser,
                 });
                 return;
             }
 
-            const title = `Anúncios de ${targetUser.username}`;
+            const title = m.adsOfUserTitle(targetUser.username);
             const embed = this.presenter.buildAdListEmbed({
                 title,
-                description: `${adPage.totalCount} anúncio${adPage.totalCount === 1 ? '' : 's'} encontrado${adPage.totalCount === 1 ? '' : 's'}`,
+                description: m.adsFound(adPage.totalCount),
                 adPage,
                 guildId: context.interaction.guildId,
+                locale: localeOf(context.interaction),
             });
-            const row = this.presenter.buildListPaginationRow(targetUser.id, adPage);
+            const row = this.presenter.buildListPaginationRow(
+                targetUser.id,
+                adPage,
+                localeOf(context.interaction),
+            );
 
             await context.interaction.editReply({ embeds: [embed], components: [row] });
         } catch (error) {
             this.logger.error('Error listing ads', { error });
             await safeReply(context.interaction, {
-                content: 'Ocorreu um erro ao obter os anúncios. Tenta novamente.',
+                content: m.listError,
                 flags: MessageFlags.Ephemeral,
             });
         }

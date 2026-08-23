@@ -72,9 +72,12 @@ describe('TrophiesSyncJob', () => {
         await ormClient.$disconnect();
     });
 
-    test('exposes a stable name and the every-10-minutes schedule', () => {
+    test('exposes a stable name and the hourly schedule', () => {
         expect(job.name).toBe('trophies:sync');
-        expect(job.schedule).toBe('*/10 * * * *');
+        // Hourly, not every 10 minutes: a full pass takes ~16 minutes at the
+        // crawler's 6s spacing, so a 10-minute schedule meant the job was
+        // effectively always running. See TrophiesSyncJob's comment.
+        expect(job.schedule).toBe('0 * * * *');
     });
 
     test('catch-up mode: creates newer trophies and stops at the first already-claimed one', async () => {
@@ -112,6 +115,7 @@ describe('TrophiesSyncJob', () => {
         const stored = await trophyProfileRepository.get(profile.id);
         expect(stored.isBanned).toBe(false);
         expect(stored.isExcluded).toBe(false);
+        expect(stored.lastSyncedAt).toBeNull();
     });
 
     test('a --dry-run flag change is also not written', async () => {
@@ -123,6 +127,66 @@ describe('TrophiesSyncJob', () => {
         const stored = await trophyProfileRepository.get(profile.id);
         expect(stored.isBanned).toBe(false);
         expect(stored.isExcluded).toBe(false);
+    });
+
+    test('stamps lastSyncedAt on a profile it walked to completion', async () => {
+        const profile = await createTrophyProfile(undefined, 'user-sync-1', 'StampedUser');
+        trophySource.setTrophyPages('StampedUser', [['url-s']]);
+        trophySource.setTrophyData('url-s', { percentage: 5, completionDate: new Date() });
+        const before = Date.now();
+
+        await job.run(context());
+
+        const stored = await trophyProfileRepository.get(profile.id);
+        expect(stored.lastSyncedAt).not.toBeNull();
+        expect(stored.lastSyncedAt!.getTime()).toBeGreaterThanOrEqual(before - 1000);
+    });
+
+    test('stamps lastSyncedAt even when the walk found nothing new', async () => {
+        // The steady state, and the whole point of the column: a member with
+        // no new platinum still wants to see the bot checked on them today,
+        // not a date from whenever their row was last written.
+        const profile = await createTrophyProfile(undefined, 'user-sync-2', 'QuietUser');
+        trophySource.setTrophyPages('QuietUser', [[]]);
+
+        const result = await job.run(context());
+
+        expect(result.changed).toBe(0);
+        const stored = await trophyProfileRepository.get(profile.id);
+        expect(stored.lastSyncedAt).not.toBeNull();
+    });
+
+    test('does not stamp lastSyncedAt on a profile it flagged instead of walking', async () => {
+        const profile = await createTrophyProfile(undefined, 'user-sync-3', 'NoRankUser');
+        trophySource.setNoRank('NoRankUser');
+
+        await job.run(context());
+
+        const stored = await trophyProfileRepository.get(profile.id);
+        expect(stored.isBanned).toBe(true);
+        expect(stored.lastSyncedAt).toBeNull();
+    });
+
+    test('flagging a profile preserves a lastSyncedAt stamped by an earlier run', async () => {
+        const syncedAt = new Date('2026-08-20T08:00:00.000Z');
+        const profile = await createTrophyProfile(
+            undefined,
+            'user-sync-4',
+            'LaterBannedUser',
+            false,
+            false,
+            false,
+            syncedAt,
+        );
+        trophySource.setNoRank('LaterBannedUser');
+
+        await job.run(context());
+
+        const stored = await trophyProfileRepository.get(profile.id);
+        expect(stored.isBanned).toBe(true);
+        // writeFlags goes through save(), which writes this column — the
+        // stamp must survive being moderated.
+        expect(stored.lastSyncedAt?.toISOString()).toBe(syncedAt.toISOString());
     });
 
     test('respects the work limit: later profiles are skipped, not silently dropped', async () => {

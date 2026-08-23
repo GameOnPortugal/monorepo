@@ -6,6 +6,7 @@ import type Logger from '../../../../../Application/Logger/Logger';
 import CommandHandlerManager from '../../../../CommandHandler/CommandHandlerManager';
 import { SetPrivacyOptOut } from '../../../../../Application/Write/Privacy/SetPrivacyOptOut/SetPrivacyOptOut';
 import { safeReply } from '../../../../../Domain/Bot/safeReply';
+import { messagesFor } from '../../../../../Domain/Bot/I18n/messages';
 
 @injectable()
 export class OptOutSubcommand {
@@ -21,16 +22,13 @@ export class OptOutSubcommand {
 
     public async handle(context: SlashCommandContext): Promise<void> {
         const discordId = context.interaction.user.id;
+        const m = messagesFor(context.interaction).privacy;
 
         try {
             await this.commandHandlerManager.handle(new SetPrivacyOptOut(discordId, true));
 
             await context.interaction.reply({
-                content:
-                    '✅ Deixaste de aparecer publicamente no portal — os teus anúncios, ' +
-                    'screenshots e perfil de troféus deixam de ser visíveis em ' +
-                    'game-on-portugal.pt. Continuas a poder usar o bot normalmente no ' +
-                    'servidor. Podes voltar a aparecer a qualquer momento com `/privacy opt-in`.',
+                content: m.optedOut,
                 flags: MessageFlags.Ephemeral,
             });
         } catch (error) {
@@ -40,7 +38,7 @@ export class OptOutSubcommand {
             });
 
             await safeReply(context.interaction, {
-                content: 'Ocorreu um erro ao processar o teu pedido. Tenta novamente.',
+                content: m.error,
                 flags: MessageFlags.Ephemeral,
             });
         }

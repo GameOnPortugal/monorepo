@@ -519,10 +519,30 @@ for M10.7's backfill.
 
 These are not milestones. They are constraints on every PR in every milestone.
 
-1. **pt-PT for all user-facing copy.** Command and subcommand *names* stay
-   English — they are already registered with Discord and English verbs are the
-   platform convention — but everything a member **reads** is Portuguese. The
-   rewrite's English is a regression, not a decision anyone made.
+1. **pt-PT for all user-facing copy — English only where Discord tells us the
+   member asked for it.** Command and subcommand *names* stay English (they are
+   already registered with Discord and English verbs are the platform
+   convention); their descriptions carry `setDescriptionLocalizations({ 'pt-BR': … })`
+   so Discord renders them in Portuguese itself. Everything else splits on who
+   reads it:
+   - **Public** — a posted `📖anuncios` listing, a screenshot-contest post, the
+     public `/trophy check` embed, a lifecycle DM, a job report — is **always
+     pt-PT**. There is no single member to pick a language for, and rendering
+     one channel in two languages is worse than either alone.
+   - **Per-member** — anything ephemeral, any private follow-up, an
+     autocomplete label, an embed inside someone's own `/marketplace list` page
+     — goes through the two-language catalogue in
+     `discord-bot/src/Domain/Bot/I18n/messages.ts`, keyed off
+     `interaction.locale`: `pt-*` → pt-PT, anything else → English, **absent →
+     pt-PT** (never English; this is a Portuguese community and an unknown
+     locale must not silently switch anyone).
+
+   Note the limit of the signal: `interaction.locale` is the language a member
+   set *in their Discord client*, not their nationality. There is no country
+   field on an interaction. A Portuguese member running Discord in English gets
+   English — which is the intended trade, since that member demonstrably reads
+   it. Adding a string means adding it to `pt` first; `en` is type-derived from
+   it, so a half-translated key does not compile.
 2. **Soft-delete, never hard-delete.** The old bot destroyed rows on expiry,
    which is why nothing can be reconstructed.
 3. **Never store a Discord CDN URL as the durable copy of an image.** They are

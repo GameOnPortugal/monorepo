@@ -9,6 +9,7 @@ import { InvalidId } from '../../../../../Domain/InvalidId.ts';
 import RecordNotFound from '../../../../../Domain/RecordNotFound.ts';
 import { NotAuthorized } from '../../../../../Application/Write/Screenshot/DeleteScreenshot/NotAuthorized.ts';
 import { safeReply } from '../../../../../Domain/Bot/safeReply.ts';
+import { messagesFor } from '../../../../../Domain/Bot/I18n/messages.ts';
 
 @injectable()
 export class DeleteScreenshotSubcommand {
@@ -23,6 +24,7 @@ export class DeleteScreenshotSubcommand {
         const cleanId = screenshotIdString.startsWith('#')
             ? screenshotIdString.substring(1)
             : screenshotIdString;
+        const m = messagesFor(interaction).screenshot;
 
         try {
             const screenshotId = ScreenshotId.fromString(cleanId);
@@ -31,7 +33,7 @@ export class DeleteScreenshotSubcommand {
             );
 
             await interaction.reply({
-                content: `✅ Screenshot #${cleanId} has been deleted successfully.`,
+                content: m.deleted(cleanId),
                 flags: MessageFlags.Ephemeral,
             });
 
@@ -48,7 +50,7 @@ export class DeleteScreenshotSubcommand {
 
             if (error instanceof InvalidId) {
                 await safeReply(interaction, {
-                    content: `⚠️ Error: Invalid screenshot ID format.`,
+                    content: m.invalidId,
                     flags: MessageFlags.Ephemeral,
                 });
                 return;
@@ -56,7 +58,7 @@ export class DeleteScreenshotSubcommand {
 
             if (error instanceof RecordNotFound) {
                 await safeReply(interaction, {
-                    content: `⚠️ Error: Screenshot with ID #${cleanId} was not found.`,
+                    content: m.notFound(cleanId),
                     flags: MessageFlags.Ephemeral,
                 });
                 return;
@@ -64,14 +66,14 @@ export class DeleteScreenshotSubcommand {
 
             if (error instanceof NotAuthorized) {
                 await safeReply(interaction, {
-                    content: `⛔ Error: You are not authorized to delete this screenshot.`,
+                    content: m.notAuthorized,
                     flags: MessageFlags.Ephemeral,
                 });
                 return;
             }
 
             await safeReply(interaction, {
-                content: 'There was an error deleting the screenshot. Please try again later.',
+                content: m.deleteError,
                 flags: MessageFlags.Ephemeral,
             });
         }

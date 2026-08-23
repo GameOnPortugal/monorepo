@@ -27,6 +27,7 @@ import type {
     ModalInteractionContext,
 } from '../../../Domain/Bot/InteractionContext.ts';
 import { safeReply } from '../../../Domain/Bot/safeReply.ts';
+import { messagesFor } from '../../../Domain/Bot/I18n/messages.ts';
 import {
     hashCommandSet,
     resolveCommandRegistrationTarget,
@@ -184,7 +185,7 @@ export class DiscordBot implements Bot {
         } catch (error: any) {
             this.logger.error('error happened', { error });
             await safeReply(interaction, {
-                content: 'There was an error while executing this command!',
+                content: messagesFor(interaction).common.executionError,
                 flags: MessageFlags.Ephemeral,
             });
         }
@@ -207,8 +208,7 @@ export class DiscordBot implements Bot {
                 // stale button in a public channel should not produce a
                 // public error message for everyone reading it.
                 await safeReply(interaction, {
-                    content:
-                        'Este botão já não está disponível. Corre o comando outra vez para obter uma versão actualizada.',
+                    content: messagesFor(interaction).common.staleComponent,
                     flags: MessageFlags.Ephemeral,
                 });
             }
@@ -218,7 +218,7 @@ export class DiscordBot implements Bot {
                 customId: interaction.customId,
             });
             await safeReply(interaction, {
-                content: 'Ocorreu um erro ao processar esta acção.',
+                content: messagesFor(interaction).common.interactionError,
                 flags: MessageFlags.Ephemeral,
             });
         }

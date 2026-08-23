@@ -281,12 +281,22 @@ interface NewTrophyAnnouncement {
 @injectable()
 export class TrophiesSyncJob implements Job {
     public readonly name = 'trophies:sync';
-    // Matches the old bot's `@every 10m` cadence (scheduler/config.ini,
-    // commented out there — this is the first time it actually runs).
-    // Whether this schedule is actually registered with the JobRunner is
-    // gated by TROPHIES_SYNC_ENABLED in inversify.config.ts, not here — see
-    // this class's doc comment.
-    public readonly schedule = '*/10 * * * *';
+    // Hourly, not the old bot's `@every 10m`.
+    //
+    // A full pass over the community takes ~16 minutes: every profile costs
+    // at least two PSNProfiles fetches, and the crawler spaces requests 6s
+    // apart because sustained volume is exactly what makes Cloudflare start
+    // issuing challenges that never clear. On a 10-minute schedule a run
+    // would therefore still be in flight when the next one came due, and the
+    // job would crawl a site with no public API continuously, around the
+    // clock — roughly 14,000 requests a day to re-learn facts that change a
+    // few times a week. Overlap protection would prevent damage, but
+    // "permanently running" is not a cadence anyone chose.
+    //
+    // Trophy standings do not need ten-minute latency; hourly leaves the
+    // crawler idle most of the time, which is both politer and less likely
+    // to trip the bot protection this whole feature depends on.
+    public readonly schedule = '0 * * * *';
 
     constructor(
         @inject(TYPES.TrophyProfileRepository)
@@ -556,6 +566,21 @@ export class TrophiesSyncJob implements Job {
             announcementBudget,
         );
 
+        // Reached only by a profile whose walk ran to completion: the two
+        // moderation paths above return early (a flagged profile was
+        // moderated, not synced), and a throw anywhere in between propagates
+        // to run()'s catch, which counts it `failed`. So `lastSyncedAt`
+        // means "the job last got all the way through this profile", which
+        // is the question `/trophy check` is really asking. Note a walk cut
+        // short by an exhausted `budget` still counts: the job did look at
+        // the profile, and catch-up mode re-walks from the newest trophy
+        // next run regardless.
+        //
+        // Skipped under --dry-run, like every other write in this job.
+        if (!context.dryRun) {
+            await this.trophyProfileRepository.markSynced(profile.id, new Date());
+        }
+
         return { changed, skipped, failed };
     }
 
@@ -690,6 +715,10 @@ export class TrophiesSyncJob implements Job {
             flags.isExcluded ?? profile.isExcluded,
             profile.createdAt,
             new Date(),
+            // Carried through explicitly: `save()` writes this column, and
+            // the constructor defaults it to null, so omitting it here would
+            // silently clear the sync stamp every time a profile is flagged.
+            profile.lastSyncedAt,
         );
 
         await this.trophyProfileRepository.save(updated);
