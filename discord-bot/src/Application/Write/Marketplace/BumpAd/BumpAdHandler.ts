@@ -6,6 +6,10 @@ import { UnauthorizedAdAction } from '../../../../Domain/Marketplace/Unauthorize
 import { AdNotActive } from '../../../../Domain/Marketplace/AdNotActive';
 import { AdBumpRateLimited } from '../../../../Domain/Marketplace/AdBumpRateLimited';
 import { canBumpNow, nextBumpEligibleAt } from '../../../../Domain/Marketplace/AdBumpPolicy';
+import {
+    AD_LIFECYCLE_MAX_AGE_DAYS,
+    addDays,
+} from '../../../../Domain/Marketplace/AdLifecyclePolicy';
 import { renderAdListing } from '../../../../Domain/Marketplace/AdListingRenderer';
 import type { AdRepository } from '../../../../Domain/Marketplace/AdRepository';
 import { TYPES } from '../../../../Infrastructure/DependencyInjection/types';
@@ -68,6 +72,12 @@ export class BumpAdHandler implements CommandHandler<BumpAd> {
                 channelId: command.channelId,
                 messageId: newMessageId,
                 bumpedAt: now,
+                // A bump is the owner saying "still available", so it resets
+                // the 30-day backstop the same way a renewal does (M6.9) —
+                // otherwise an ad bumped every week would still hit its
+                // original creation-time deadline and expire underneath
+                // someone who has been actively tending it.
+                expiresAt: addDays(now, AD_LIFECYCLE_MAX_AGE_DAYS),
             }),
         );
 

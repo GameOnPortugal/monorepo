@@ -74,7 +74,13 @@ describe('CreateAdHandler Integration Test', () => {
         expect(ad.priceCents).toBe(10000);
         expect(ad.images).toEqual([]);
         expect(ad.bumpedAt).toBeNull();
-        expect(ad.expiresAt).toBeNull();
+        // M6.9 — a new ad gets its 30-day deadline immediately rather than
+        // NULL. NULL was the shape that let an ad outlive every deadline it
+        // was given: nothing enforced it, and `ads:lifecycle`'s backstop can
+        // only expire a row that has one.
+        expect(ad.expiresAt).not.toBeNull();
+        const thirtyDaysOut = ad.createdAt.getTime() + 30 * 24 * 60 * 60 * 1000;
+        expect(Math.abs(ad.expiresAt!.getTime() - thirtyDaysOut)).toBeLessThan(1000);
         expect(ad.soldAt).toBeNull();
         expect(ad.deletedAt).toBeNull();
     });

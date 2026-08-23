@@ -12,6 +12,7 @@ import type Command from '../../../../Domain/Command/Command.ts';
 export class ExpireAd implements Command {
     constructor(
         public readonly id: AdId,
-        public readonly reason: 'orphaned-no-message' | 'no-response' | 'message-vanished',
+        public readonly reason:
+            'orphaned-no-message' | 'past-expiry' | 'no-response' | 'message-vanished',
     ) {}
 }

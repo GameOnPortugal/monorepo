@@ -175,6 +175,108 @@ describe('FindAdsDueForLifecycleActionHandler Integration Test', () => {
         ]);
     });
 
+    it('an active ad past its own expires_at is bucketed pastExpiry, not idle', async () => {
+        // The production shape this whole backstop exists for: `expires_at`
+        // long gone, owner unreachable, ad still listed months later.
+        const overdue = await createAd(
+            undefined,
+            'Overdue',
+            undefined,
+            undefined,
+            'msg-overdue',
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            daysAgo(400),
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            daysAgo(300),
+        );
+
+        const candidates: AdLifecycleCandidates = await commandHandlerManager.handle(
+            new FindAdsDueForLifecycleAction(now, 200),
+        );
+
+        expect(candidates.pastExpiry.map((ad) => ad.id.toString())).toEqual([
+            overdue.id.toString(),
+        ]);
+        // Not also queued for a DM — nobody should be asked to renew an ad
+        // the same run is about to end.
+        expect(candidates.idle.map((ad) => ad.id.toString())).not.toContain(overdue.id.toString());
+    });
+
+    it('an active ad whose expires_at is still ahead is left alone by the backstop', async () => {
+        const fresh = await createAd(
+            undefined,
+            'Still within its window',
+            undefined,
+            undefined,
+            'msg-fresh',
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            daysAgo(20),
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000),
+        );
+
+        const candidates: AdLifecycleCandidates = await commandHandlerManager.handle(
+            new FindAdsDueForLifecycleAction(now, 200),
+        );
+
+        expect(candidates.pastExpiry).toHaveLength(0);
+        // Idle for 20 days, so it is still due the ordinary 14-day prompt —
+        // the backstop narrows nothing it should not.
+        expect(candidates.idle.map((ad) => ad.id.toString())).toEqual([fresh.id.toString()]);
+    });
+
+    it('an orphaned ad that is also past expiry is claimed once, by the orphaned bucket', async () => {
+        const both = await createAd(
+            undefined,
+            'Orphan and overdue',
+            undefined,
+            undefined,
+            '',
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            daysAgo(400),
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            daysAgo(300),
+        );
+
+        const candidates: AdLifecycleCandidates = await commandHandlerManager.handle(
+            new FindAdsDueForLifecycleAction(now, 200),
+        );
+
+        expect(candidates.orphaned.map((ad) => ad.id.toString())).toEqual([both.id.toString()]);
+        expect(candidates.pastExpiry).toHaveLength(0);
+        expect(candidates.idle).toHaveLength(0);
+    });
+
     it('respects limitPerBucket', async () => {
         for (let i = 0; i < 5; i++) {
             await createAd(

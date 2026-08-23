@@ -115,6 +115,81 @@ describe('ExpireAdHandler Integration Test', () => {
         expect(guildClient.deletedMessages).toEqual([]);
     });
 
+    it('skips a past-expiry expire when the ad was bumped after the candidate was snapshotted', async () => {
+        // ads-lifecycle finds this ad while it's overdue, then — before the
+        // command actually runs — the owner bumps it, which pushes
+        // `expiresAt` 30 days out without changing `status`. The handler
+        // must re-check the deadline itself rather than trust the stale
+        // 'past-expiry' reason.
+        const channelId = '818447274266591243';
+        const messageId = 'fresh-bump-message';
+        guildClient.registerMessage(messageId);
+
+        const freshDeadline = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+        const ad = await createAd(
+            undefined,
+            'Bumped Just In Time',
+            undefined,
+            channelId,
+            messageId,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            AdStatus.active(),
+            undefined,
+            undefined,
+            new Date(),
+            freshDeadline,
+        );
+
+        await commandHandlerManager.handle(new ExpireAd(ad.id, 'past-expiry'));
+
+        expect(guildClient.deletedMessages).toEqual([]);
+        const stillThere = await adRepository.get(ad.id);
+        expect(stillThere.status.toString()).toBe('active');
+    });
+
+    it('still expires a past-expiry ad whose deadline is genuinely still in the past', async () => {
+        const channelId = '818447274266591243';
+        const messageId = 'genuinely-overdue-message';
+        guildClient.registerMessage(messageId);
+
+        const overdueDeadline = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const ad = await createAd(
+            undefined,
+            'Genuinely Overdue',
+            undefined,
+            channelId,
+            messageId,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            AdStatus.active(),
+            undefined,
+            undefined,
+            undefined,
+            overdueDeadline,
+        );
+
+        await commandHandlerManager.handle(new ExpireAd(ad.id, 'past-expiry'));
+
+        expect(guildClient.deletedMessages).toEqual([{ channelId, messageId }]);
+        const stillThere = await adRepository.get(ad.id);
+        expect(stillThere.status.toString()).toBe('expired');
+    });
+
     it('throws RecordNotFound for an unknown or soft-deleted ad', async () => {
         await expect(
             commandHandlerManager.handle(new ExpireAd(AdId.generate(), 'message-vanished')),

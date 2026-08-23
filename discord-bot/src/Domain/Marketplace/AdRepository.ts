@@ -78,6 +78,23 @@ export interface AdRepository {
     findAwaitingResponse(now: Date, limit: number): Promise<Ad[]>;
 
     /**
+     * `active` ads whose own `expires_at` is at or before `now` — the hard
+     * backstop from `AD_LIFECYCLE_MAX_AGE_DAYS`. Unlike `findIdleActive`,
+     * which only nominates an ad for a *DM*, everything this returns is
+     * expired outright: the deadline stored on the row has passed, and no
+     * further courtesy step is owed.
+     *
+     * Deliberately not filtered on `message_id` — an orphaned row past its
+     * expiry belongs here just as much as a healthy one, and
+     * `FindAdsDueForLifecycleActionHandler` de-duplicates the overlap with
+     * `findOrphanedActive` so neither is counted twice.
+     *
+     * Ordered oldest-expiry-first so a work-limited run clears the longest
+     * overdue backlog before anything that only just tipped over.
+     */
+    findPastExpiry(now: Date, limit: number): Promise<Ad[]>;
+
+    /**
      * Every non-deleted `active` ad, orphaned or not — `ads:reconcile`
      * (M6.6) buckets them itself (message to check vs nothing to check), so
      * this intentionally does not filter on `message_id`.

@@ -73,7 +73,12 @@ describe('RenewAdHandler Integration Test', () => {
         expect(renewed.status.toString()).toBe('active');
         expect(renewed.messageId).not.toBe('old-listing-message');
         expect(renewed.bumpedAt).not.toBeNull();
-        expect(renewed.expiresAt).toBeNull();
+        // M6.9 — the 72h reply deadline is replaced by a fresh 30-day
+        // window, not cleared: a renewed ad is as fresh as one created
+        // today, and one created today has a deadline.
+        expect(renewed.expiresAt).not.toBeNull();
+        const thirtyDaysOut = renewed.bumpedAt!.getTime() + 30 * 24 * 60 * 60 * 1000;
+        expect(Math.abs(renewed.expiresAt!.getTime() - thirtyDaysOut)).toBeLessThan(1000);
 
         // Still exactly one row for this author — never a duplicate.
         const allForUser = await adRepository.findByUserId(userId);

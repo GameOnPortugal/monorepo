@@ -239,6 +239,87 @@ describe('AdsLifecycleJob Integration Test', () => {
         expect(result.details?.recipientsDmClosed).toBe(1);
     });
 
+    it('expires an ad past its own expires_at without DMing anyone', async () => {
+        const userId = '123456789012345678';
+        guildClient.registerMessage('msg-overdue');
+        const overdue = await createAd(
+            undefined,
+            'Overdue',
+            userId,
+            undefined,
+            'msg-overdue',
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            daysAgo(400),
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            daysAgo(300),
+        );
+
+        const result = await job.run(context());
+
+        expect(result.failed).toBe(0);
+        expect(result.details?.expiredPastExpiry).toBe(1);
+        // Its deadline had already passed — there is nothing left to ask.
+        expect(guildClient.sentDirectMessages).toHaveLength(0);
+
+        const expired = await adRepository.get(overdue.id);
+        expect(expired.status.toString()).toBe('expired');
+        // Expired, never deleted (cross-cutting rule 2) — and the listing
+        // message comes down, same as every other expiry path.
+        expect(expired.deletedAt).toBeNull();
+        expect(guildClient.deletedMessages).toContainEqual({
+            channelId: overdue.channelId!,
+            messageId: 'msg-overdue',
+        });
+    });
+
+    it('expires a past-expiry ad even when its owner has closed DMs — the regression this backstop exists for', async () => {
+        // Production, 2026-08-23: five ads whose expires_at passed on
+        // 2025-05-10, owned by one member with DMs closed. `ads:lifecycle`
+        // DM'd, failed, skipped and repeated daily for months, because
+        // "skip and carry on" had no exit. It does now.
+        const userId = '123456789012345678';
+        guildClient.closeDmFor(userId);
+        const stuck = await createAd(
+            undefined,
+            'Stuck since May 2025',
+            userId,
+            undefined,
+            'msg-stuck',
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            daysAgo(500),
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            daysAgo(470),
+        );
+
+        const result = await job.run(context());
+
+        expect(result.details?.expiredPastExpiry).toBe(1);
+        // Never even attempted — the DM path is not where this ad's fate is
+        // decided any more.
+        expect(result.details?.recipientsDmClosed).toBe(0);
+        expect((await adRepository.get(stuck.id)).status.toString()).toBe('expired');
+    });
+
     it('--dry-run writes nothing: no status change, no message deletion, no DM sent', async () => {
         guildClient.registerMessage('vanishing-soon');
         await createAd(
