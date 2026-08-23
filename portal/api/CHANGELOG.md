@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/GameOnPortugal/monorepo/compare/portal-api-v0.6.0...portal-api-v0.7.0) (2026-08-23)
+
+
+### Features
+
+* **bot:** persist screenshot author profiles and weekly winners ([#93](https://github.com/GameOnPortugal/monorepo/issues/93)) ([e0146cc](https://github.com/GameOnPortugal/monorepo/commit/e0146cc08283dc2defe40f7ec815a698091a28cf))
+
 ## [0.6.0](https://github.com/GameOnPortugal/monorepo/compare/portal-api-v0.5.0...portal-api-v0.6.0) (2026-08-22)
 
 
