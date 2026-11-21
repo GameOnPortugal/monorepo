@@ -47,8 +47,8 @@ cutover. Five containers:
 | -------------------- | ------------------------------------------------ |
 | `gop-bot`            | `joshlopes/game-on-portugal-bot:${APP_VERSION}`   |
 | `gop-db`             | `mariadb:11.7.2` (healthy)                        |
-| `gop-minio`          | `minio/minio` — public `gop-media` bucket         |
-| `gop-createbuckets`  | `minio/mc` — one-shot bucket setup                |
+| `gop-minio`          | `pgsty/minio` — public `gop-media` bucket         |
+| `gop-createbuckets`  | `pgsty/mc` — one-shot bucket setup                |
 | `gop-db-backup`      | `databack/mysql-backup:v0.12.0`                   |
 
 The bot is genuinely live: its log shows `Ready! Logged in as
