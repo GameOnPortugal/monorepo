@@ -24,9 +24,14 @@ import { publicScreenshotsWhere } from "./visibility";
 //     survive that filter simply does not appear.
 //  2. **`source` is passed through, never smoothed over.** An `inferred` row
 //     is a faithful copy of what was announced, but only for announcements
-//     that still exist; 41 of the 178 found had no surviving screenshot row
-//     at all. The page says which entries were reconstructed rather than
-//     implying the history is complete.
+//     that still exist — and only for weeks that were announced at all. The
+//     2026-08-23 backfill found 139 announcements and recovered 137 weeks;
+//     the remaining 2 named screenshots the old bot had itself deleted, and
+//     any week whose announcement was removed is simply absent. The page
+//     marks reconstructed entries rather than implying the history is
+//     complete. Every recovered row also has a **null `voteCount`** — the old
+//     announcement format never stated one, and the UI omits the number
+//     rather than printing "0 votos" for a week somebody genuinely won.
 
 export interface PublicWinner {
   weekStart: Date;
