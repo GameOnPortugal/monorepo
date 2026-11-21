@@ -125,6 +125,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # HTZ1's ufw admits SSH (2224) only from allowlisted IPs and from the
+      # tailnet. Hosted runners have no fixed IP, so join the tailnet as
+      # tag:ci and reach HTZ1 at its tailnet address (vars.DEPLOY_SSH_HOST).
+      - name: Connect Tailscale
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
       - name: Deploy stack to Portainer
         uses: ./.github/actions/portainer-deploy
         with:

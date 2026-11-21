@@ -64,7 +64,8 @@ All of these are created and live as of 2026-08-19, except where noted.
 | `DOCKER_USERNAME` / `DOCKER_PASSWORD` | deploy | Docker Hub creds (push to `joshlopes/game-on-portugal-*`). Pre-existing, kept |
 | `PORTAINER_ACCESS_TOKEN` | deploy | Portainer API token on HTZ1 — the *Portainer Access Token* field of `op://Personal/Ez-web - Portainer` |
 | `DEPLOY_SSH_KEY` | deploy | Private key for the tunnel-only deploy account on HTZ1 |
-| `DEPLOY_SSH_KNOWN_HOSTS` | deploy | Pinned `known_hosts` line(s) for HTZ1 |
+| `DEPLOY_SSH_KNOWN_HOSTS` | deploy | Pinned `known_hosts` line(s) for HTZ1, for both `[195.201.192.35]:2224` and the tailnet address `[100.83.159.79]:2224` (same host keys) |
+| `TS_OAUTH_CLIENT_ID` / `TS_OAUTH_SECRET` | deploy | Tailscale OAuth client "Github actions v2" (`op://Personal/Tailscale`), used to join the runner to the tailnet as `tag:ci` |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` / `TELEGRAM_THREAD_ID` | deploy, failure-notify | **Still outstanding** — optional, notifications skip silently while unset |
 
 The old `CAPROVER_DISCORD_BOT_APP`, `CAPROVER_DISCORD_BOT_TOKEN`,
@@ -90,7 +91,7 @@ stopped-but-intact TedRelayer host right now).
 
 | Variable | Value | Notes |
 | -------- | ----- | ----- |
-| `DEPLOY_SSH_HOST` | `195.201.192.35` | HTZ1 |
+| `DEPLOY_SSH_HOST` | `100.83.159.79` | HTZ1's **tailnet** address (node `htz1`, `tag:server`). HTZ1's ufw admits port 2224 only from allowlisted IPs and from `tailscale0`, so hosted runners cannot use the public IP `195.201.192.35` (changed 2026-11-21) |
 | `DEPLOY_SSH_USER` | `ezweb` | The tunnel-only account. There is **no** `portainer-deploy` user on HTZ1 despite what some SETUP drafts claim |
 | `DEPLOY_SSH_PORT` | `2224` | HTZ1 does not use 22 — confirmed by a working tunnel (this resolves plan 04's open item on the port) |
 | `PORTAINER_ENDPOINT_ID` | `3` | HTZ1 endpoint |
