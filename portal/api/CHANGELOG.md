@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/GameOnPortugal/monorepo/compare/portal-api-v0.7.0...portal-api-v0.7.1) (2026-11-21)
+
+
+### Bug Fixes
+
+* **portal-api:** bump sharp to 0.35.5 for the libheif advisories ([#105](https://github.com/GameOnPortugal/monorepo/issues/105)) ([8b9d370](https://github.com/GameOnPortugal/monorepo/commit/8b9d370a307f574c6104f7316b753f35b6537a69))
+
 ## [0.7.0](https://github.com/GameOnPortugal/monorepo/compare/portal-api-v0.6.0...portal-api-v0.7.0) (2026-08-23)
 
 
