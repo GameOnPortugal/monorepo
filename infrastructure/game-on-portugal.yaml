@@ -108,7 +108,10 @@ services:
   # which is why all 624 historical screenshot images are dead (issue #19) —
   # nothing user-visible may ever again depend on a Discord-hosted URL.
   minio:
-    image: minio/minio:latest
+    # MinIO removed minio/minio and minio/mc from Docker Hub (2026). pgsty/*
+    # are the community rebuilds of the same upstream releases. Pin a release:
+    # `latest` would upgrade the server on every deploy.
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
     container_name: gop-minio
     command: server /data --console-address ":9001"
     environment:
@@ -126,7 +129,7 @@ services:
   # One-shot: wait for MinIO, create the media bucket, make it public-read.
   # Idempotent — safe on every deploy.
   createbuckets:
-    image: minio/mc:latest
+    image: pgsty/mc:RELEASE.2026-11-12T00-00-00Z
     container_name: gop-createbuckets
     depends_on:
       - minio
